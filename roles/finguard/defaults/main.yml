@@ -1,0 +1,12 @@
+---
+# WireGuard
+wg_interface: wg0
+discovery_repo: "https://github.com/jpkribs/jellyfin-discovery-proxy.git"
+discovery_dest: "/opt/jellyfin-discovery-proxy"
+binary_dest: "/usr/local/bin/jellyfin-discovery-proxy"
+
+# Host / network
+nginx_site_name: "{{ hostname }}.local"
+
+# Timezone for system and cron
+timezone: America/Denver

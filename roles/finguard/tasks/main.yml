@@ -1,0 +1,195 @@
+---
+- name: Ensure apt cache is up to date
+  apt:
+    update_cache: yes
+
+- name: Install required packages
+  apt:
+    name:
+      - wireguard-tools
+      - nginx
+      - avahi-daemon
+      - resolvconf
+      - git
+      - golang-go
+      - cron
+    state: present
+
+- name: Set system timezone
+  timezone:
+    name: "{{ timezone }}"
+
+- name: Set system hostname
+  hostname:
+    name: "{{ hostname }}"
+
+- name: Update /etc/hosts for mDNS
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s+'
+    line: "127.0.1.1 {{ hostname }}"
+
+- name: Optionally reset pi password
+  shell: echo "pi:{{ pi_password }}" | chpasswd
+  when: pi_password is defined and pi_password != ""
+  no_log: true
+
+- name: Deploy WireGuard config
+  copy:
+    dest: "/etc/wireguard/{{ wg_interface }}.conf"
+    content: "{{ wg_conf }}"
+    mode: '0600'
+
+- name: Enable & start WireGuard
+  systemd:
+    name: "wg-quick@{{ wg_interface }}"
+    enabled: true
+    state: started
+
+# — Systemd overrides for auto-restart —
+
+- name: Create override dir for WireGuard service
+  file:
+    path: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d"
+    state: directory
+    mode: '0755'
+
+- name: Ensure WireGuard auto-restart on failure
+  copy:
+    dest: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d/override.conf"
+    content: |
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+  notify: Reload systemd
+
+- name: Create override dir for NGINX
+  file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+    mode: '0755'
+
+- name: Ensure NGINX auto-restart on failure
+  copy:
+    dest: /etc/systemd/system/nginx.service.d/override.conf
+    content: |
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+  notify: Reload systemd
+
+# — NGINX setup —
+
+- name: Deploy NGINX vhost
+  template:
+    src: nginx.conf.j2
+    dest: "/etc/nginx/sites-available/{{ nginx_site_name }}.conf"
+
+- name: Enable NGINX site
+  file:
+    src: "/etc/nginx/sites-available/{{ nginx_site_name }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}.conf"
+    state: link
+
+- name: Test NGINX configuration
+  command: nginx -t
+  register: nginx_test
+  failed_when: nginx_test.rc != 0
+
+- name: Reload NGINX if valid
+  systemd:
+    name: nginx
+    state: reloaded
+
+# — Avahi —
+
+- name: Ensure Avahi is running
+  systemd:
+    name: avahi-daemon
+    enabled: true
+    state: started
+
+# — Discovery Proxy —
+
+- name: Clone Jellyfin Discovery Proxy
+  git:
+    repo: "{{ discovery_repo }}"
+    dest: "{{ discovery_dest }}"
+    update: yes
+  register: git_clone
+
+- name: Build Discovery Proxy
+  command: ./build.sh --linux
+  args:
+    chdir: "{{ discovery_dest }}"
+  when: git_clone.changed
+
+- name: Install Discovery Proxy binary
+  shell: |
+    cp {{ discovery_dest }}/build/jellyfin-discovery-proxy_*_linux-amd64 {{ binary_dest }}
+    chmod +x {{ binary_dest }}
+  args:
+    executable: /bin/bash
+
+- name: Deploy systemd service for Discovery Proxy
+  template:
+    src: jellyfin-discovery-proxy.service.j2
+    dest: /etc/systemd/system/jellyfin-discovery-proxy.service
+  notify:
+    - Reload systemd
+    - Restart Discovery Proxy
+
+- name: Ensure Discovery Proxy service is enabled & started
+  systemd:
+    name: jellyfin-discovery-proxy
+    enabled: true
+    state: started
+
+- name: Create override dir for Discovery Proxy
+  file:
+    path: /etc/systemd/system/jellyfin-discovery-proxy.service.d
+    state: directory
+    mode: '0755'
+
+- name: Ensure Discovery Proxy auto-restart on failure
+  copy:
+    dest: /etc/systemd/system/jellyfin-discovery-proxy.service.d/override.conf
+    content: |
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+  notify: Reload systemd
+
+# — Weekly update script & cron —
+
+- name: Deploy FinGuard update script
+  template:
+    src: fin_guard_update.sh.j2
+    dest: /usr/local/bin/fin_guard_update.sh
+    mode: '0755'
+
+- name: Ensure cron service is enabled and running
+  systemd:
+    name: cron
+    enabled: true
+    state: started
+
+- name: Install weekly maintenance cron job
+  cron:
+    name: "FinGuard weekly update"
+    user: root
+    minute: 0
+    hour: 3
+    weekday: 3
+    job: "/usr/local/bin/fin_guard_update.sh >> /var/log/finguard-update.log 2>&1"
+
+# — Handlers —
+
+handlers:
+  - name: Reload systemd
+    command: systemctl daemon-reload
+
+  - name: Restart Discovery Proxy
+    systemd:
+      name: jellyfin-discovery-proxy
+      state: restarted

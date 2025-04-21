@@ -1,0 +1,4 @@
+- hosts: finguard
+  become: true
+  roles:
+    - finguard

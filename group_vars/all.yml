@@ -1,0 +1,30 @@
+# FinGuard configuration
+
+# 1) Host identity
+hostname: jellyfin # bare hostname (no .local)
+
+# 2) WireGuard (full wg0.conf text)
+wg_conf: |
+  [Interface]
+  PrivateKey = <YOUR_PRIVATE_KEY>
+  Address    = 10.0.0.50/24
+  DNS        = 1.1.1.1
+
+  [Peer]
+  PublicKey           = <SERVER_PUBLIC_KEY>
+  Endpoint            = vpn.example.com:51820
+  AllowedIPs          = 10.0.0.0/24
+  PersistentKeepalive = 25
+
+# 3) Upstream service IPs (include port if non‑standard)
+jellyfin_ip: 10.0.0.123:8096
+overseerr_ip: 10.0.0.124:5055
+jfa_go_ip: 10.0.0.125:6600
+jellyfin_vue_ip: 10.0.0.126:8080
+
+# 4) Optional: set new password for 'pi'; leave blank to skip
+pi_password: ""
+
+# 5) For Discovery Proxy
+jellyfin_server_url: "http://10.0.0.123:8096"
+# PROXY_URL will be set to http://{{ hostname }}.local automatically
