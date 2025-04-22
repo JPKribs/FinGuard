@@ -13,7 +13,7 @@ Minimal Debian SBC “boot & run” project to:
 FinGuard turns any small single-board computer (SBC) running Debian into a **dedicated WireGuard bridge** for your media ecosystem. Instead of installing a WireGuard client on every device or reconfiguring your router, you point all media clients at `http://<hostname>.local` and let FinGuard handle:
 
 - **WireGuard**: Securely tunnel traffic from local devices into your remote network.
-- **NGINX**: Proxy paths under `/watch` to Jellyfin and `/request` to your Requests service from port 80.
+- **NGINX**: Proxy paths under `/` to Jellyfin and `/request` to your Requests service from port 80.
 - **mDNS Discovery**: Advertise your Jellyfin server automatically to clients via the Discovery Proxy.
 
 ### Why a dedicated bridge?
