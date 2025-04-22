@@ -93,6 +93,11 @@
     dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}.conf"
     state: link
 
+- name: Disable NGINX default site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
 - name: Test NGINX configuration
   command: nginx -t
   register: nginx_test
