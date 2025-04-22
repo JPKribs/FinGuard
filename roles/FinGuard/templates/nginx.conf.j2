@@ -3,28 +3,21 @@ server {
     listen [::]:80 default_server;
     server_name {{ hostname }} {{ hostname }}.local;
 
-    {% if jellyfin_ip %}
-    # Jellyfin UI
-    location / {
-        proxy_pass         http://{{ jellyfin_ip }};
+    {% for service in services %}
+    # {{ service.name | title }} service
+    location {{ service.path }} {
+        {% if service.path != "/" %}
+        rewrite ^{{ service.path }}(.*)$ $1 break;
+        {% endif %}
+
+        proxy_pass         http://{{ service.ip }};
         proxy_set_header   Host            $host;
         proxy_set_header   X-Real-IP       $remote_addr;
+        {% if service.path != "/" %}
+        proxy_set_header   X-Forwarded-Prefix {{ service.path }};
+        {% endif %}
         proxy_http_version 1.1;
         proxy_set_header   Connection      "";
     }
-    {% endif %}
-
-    {% if requests_ip %}
-    # Requests service
-    location /requests/ {
-        rewrite ^/requests(/.*)$ $1 break;
-
-        proxy_pass         http://{{ requests_ip }};
-        proxy_set_header   Host            $host;
-        proxy_set_header   X-Real-IP       $remote_addr;
-        proxy_set_header   X-Forwarded-Prefix /requests;
-        proxy_http_version 1.1;
-        proxy_set_header   Connection      "";
-    }
-    {% endif %}
+    {% endfor %}
 }

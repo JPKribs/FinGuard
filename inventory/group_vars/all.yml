@@ -15,12 +15,13 @@ wg_conf: |
   AllowedIPs          = 10.192.1.254/32
   PersistentKeepalive = 60
 
-# 3) Upstream service IPs (include port if non‑standard)
-jellyfin_ip: 10.192.1.254:8096
-requests_ip: 10.192.1.254:5055
+# 3) Services configuration
+services:
+  - { ip: "10.192.1.254:8096", name: "jellyfin", path: "/" }
+  - { ip: "10.192.1.254:5055", name: "requests", path: "/requests/" }
 
 # 4) Optional: set new password for 'pi'; leave blank to skip
 pi_password: ""
 
 # 5) For Discovery Proxy
-jellyfin_server_url: "http://{{ jellyfin_ip }}"
+jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='ip') | first }}"

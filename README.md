@@ -3,7 +3,7 @@
 Minimal Debian SBC “boot & run” project to:
 
 1. Install WireGuard (client).
-2. Configure an NGINX reverse‑proxy for Jellyfin and a Requests service.
+2. Configure an NGINX reverse‑proxy for your defined services.
 3. Advertise your Jellyfin server via mDNS using the Jellyfin Discovery Proxy.
 
 ---
@@ -13,7 +13,7 @@ Minimal Debian SBC “boot & run” project to:
 FinGuard turns any small single-board computer (SBC) running Debian into a **dedicated WireGuard bridge** for your media ecosystem. Instead of installing a WireGuard client on every device or reconfiguring your router, you point all media clients at `http://<hostname>.local` and let FinGuard handle:
 
 - **WireGuard**: Securely tunnel traffic from local devices into your remote network.
-- **NGINX**: Proxy paths under `/` to Jellyfin and `/request` to your Requests service from port 80.
+- **NGINX**: Proxy paths dynamically based on your defined services (default includes Jellyfin at `/` and optionally other services).
 - **mDNS Discovery**: Advertise your Jellyfin server automatically to clients via the Discovery Proxy.
 
 ### Why a dedicated bridge?
@@ -26,7 +26,7 @@ FinGuard turns any small single-board computer (SBC) running Debian into a **ded
 
 ## Prerequisites
 
-On the SBC (NanoPi Zero2, Raspberry Pi, etc.)
+On the SBC (NanoPi Zero2, Raspberry Pi, etc.)
 
 1. **Debian-based OS** (Raspberry Pi OS, Ubuntu, etc.)
 2. **git**, **python3**, **python3-pip**
@@ -63,13 +63,9 @@ Site-specific values live in `inventory/group_vars/all.yml`. Edit that file to c
 ```yaml
 # inventory/group_vars/all.yml
 
-# 1) Host identity (no .local)
 hostname: jellyfin
-
-# 2) System timezone (used for cron schedules)
 timezone: America/Denver
 
-# 3) Full WireGuard client config (wg0.conf)
 wg_conf: |
   [Interface]
   PrivateKey = <YOUR_PRIVATE_KEY>
@@ -82,35 +78,34 @@ wg_conf: |
   AllowedIPs          = 10.192.1.254/32
   PersistentKeepalive = 60
 
-# 4) Upstream service endpoints (IP:port). Leave blank to skip
-jellyfin_ip: 10.192.1.254:8096
-requests_ip: 10.192.1.254:5055
+services:
+  - { ip: "10.192.1.254:8096", name: "jellyfin", path: "/" }
+  - { ip: "10.192.1.254:5055", name: "other", path: "/other/" } # Ensure the path does not conflict with Jellyfin path. Use Jellyfin's Base URL to prevent conflicts.
 
-# 5) Optional: reset the 'pi' user password; leave empty to skip
 pi_password: ""
 
-# 6) URL for Discovery Proxy to point at
-jellyfin_server_url: "http://{{ jellyfin_ip }}"
+jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='ip') | first }}"
 ```
 
-Defaults for other values (e.g. `wg_interface`, `discovery_repo`, paths, etc.) are defined in `roles/FinGuard/defaults/main.yml` and generally don't need editing.
+Defaults for other values (e.g., `wg_interface`, `discovery_repo`, paths, etc.) are defined in `roles/FinGuard/defaults/main.yml`.
 
 ---
 
 ## Deployment Steps
 
-### A) Local execution
+### Local execution
 
 1. SSH into the SBC:
    ```bash
    ssh pi@<sbc-ip>
    ```
-2. Install prerequisites (including locales, US mirror, and Ansible):
+2. Prepare and fix the OS environment:
    ```bash
    sudo apt update
    sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
    sudo sed -i 's|bookworm main contrib non-free|bookworm main contrib non-free non-free-firmware|g' /etc/apt/sources.list
    sudo apt update
+   sudo apt --fix-broken install -y
    sudo apt install -y python3 python3-pip git locales ansible
    sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
    sudo locale-gen
@@ -129,28 +124,6 @@ Defaults for other values (e.g. `wg_interface`, `discovery_repo`, paths, etc.) a
 5. Run the playbook:
    ```bash
    sudo ansible-playbook -c local playbook.yml
-   ```
-
-### B) Remote execution
-
-1. Install Ansible on your Mac:
-   ```bash
-   brew install ansible
-   ```
-2. Edit the inventory (`inventory/hosts`):
-   ```ini
-   [FinGuard]
-   192.168.1.42 ansible_user=pi ansible_ssh_private_key_file=~/.ssh/id_rsa
-   ```
-3. Clone and configure:
-   ```bash
-   git clone https://github.com/jpkribs/FinGuard.git
-   cd FinGuard
-   nano inventory/group_vars/all.yml
-   ```
-4. Run the playbook:
-   ```bash
-   ansible-playbook -i inventory/hosts playbook.yml
    ```
 
 ---
@@ -185,8 +158,8 @@ Cron logs are appended to `/var/log/FinGuard-update.log`.
 
 After deployment, access the following URLs:
 
-- `http://<hostname>.local/` → Jellyfin
-- `http://<hostname>.local/request` → Requests service (if `requests_ip` is set)
+- `http://<hostname>.local/` → Root Services
+- `http://<hostname>.local/service-path` → Other Services
 
 Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 
@@ -207,9 +180,9 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359)
   ```
   Confirm both devices are on the same subnet.
 
+
 ---
 
 ## License
 
-This project is licensed under the MIT License.
-
+This project is licensed under the [MIT License](https://github.com/JPKribs/FinGuard/blob/main/LICENSE).
