@@ -110,7 +110,6 @@ Defaults for other values (e.g., `wg_interface`, `discovery_repo`, paths, etc.) 
    sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
    sudo locale-gen
    sudo update-locale LANG=en_US.UTF-8
-   export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
    ```
 3. Clone the FinGuard repository:
    ```bash
