@@ -28,9 +28,24 @@ FinGuard turns any small single-board computer (SBC) running Debian into a **ded
 
 On the SBC (NanoPi Zero2, Raspberry Pi, etc.):
 
-- Debian-based OS (Raspberry Pi OS, Ubuntu, etc.)
-- `git`, `python3`, `python3-pip`
-- Ansible (`pip3 install --user ansible`)
+1. **Debian-based OS** (Raspberry Pi OS, Ubuntu, etc.)
+2. **git**, **python3**, **python3-pip**
+3. **Ansible**: `pip3 install --user ansible`
+4. **Locales support** (for proper shell environment):
+   ```bash
+   sudo apt update
+   sudo apt install -y locales
+   sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+   sudo locale-gen
+   sudo update-locale LANG=en_US.UTF-8
+   export LANG=en_US.UTF-8
+   export LC_ALL=en_US.UTF-8
+   ```
+5. **Configure apt sources** to use a US Debian mirror (instead of Aliyun):
+   ```bash
+   sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
+   sudo apt update
+   ```
 
 ---
 
@@ -108,9 +123,18 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```bash
    ssh pi@<sbc-ip>
    ```
-2. Install prerequisites:
+2. Install prerequisites (including locales and apt mirror):
    ```bash
-   sudo apt update && sudo apt install -y python3 python3-pip git
+   # locales and US mirror setup
+   sudo apt update
+   sudo apt install -y python3 python3-pip git locales
+   sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
+   sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
+   sudo locale-gen
+   sudo update-locale LANG=en_US.UTF-8
+   export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
+
+   # ansible
    pip3 install --user ansible
    export PATH=$HOME/.local/bin:$PATH
    ```
@@ -130,7 +154,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
 
 ### B) Remote execution
 
-1. Install Ansible:
+1. Install Ansible on your Mac:
    ```bash
    brew install ansible
    ```
@@ -211,3 +235,4 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 ## License
 
 This project is licensed under the MIT License.
+

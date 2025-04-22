@@ -1,4 +1,16 @@
-- hosts: finguard
-  become: true
+---
+- name: FinGuard Setup
+  hosts: FinGuard
+  become: yes
+
   roles:
     - finguard
+
+  handlers:
+    - name: Reload systemd
+      command: systemctl daemon-reload
+
+    - name: Restart Discovery Proxy
+      systemd:
+        name: jellyfin-discovery-proxy
+        state: restarted
