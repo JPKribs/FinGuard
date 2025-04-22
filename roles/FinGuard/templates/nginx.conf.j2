@@ -1,31 +1,11 @@
 server {
-    listen 80;
+    listen 80 default_server;
+    listen [::]:80 default_server;
     server_name {{ hostname }}.local;
 
     {% if jellyfin_ip %}
     location / {
         proxy_pass         http://{{ jellyfin_ip }};
-        proxy_set_header   Host            $host;
-        proxy_set_header   X-Real-IP       $remote_addr;
-        proxy_http_version 1.1;
-        proxy_set_header   Connection      "";
-    }
-    {% endif %}
-
-    {% if overseerr_ip %}
-    # Note the trailing slashes on both `location` and `proxy_pass`
-    location /request/ {
-        proxy_pass         http://{{ overseerr_ip }}/;
-        proxy_set_header   Host            $host;
-        proxy_set_header   X-Real-IP       $remote_addr;
-        proxy_http_version 1.1;
-        proxy_set_header   Connection      "";
-    }
-    {% endif %}
-
-    {% if jellyfin_vue_ip %}
-    location /vue/ {
-        proxy_pass         http://{{ jellyfin_vue_ip }}/;
         proxy_set_header   Host            $host;
         proxy_set_header   X-Real-IP       $remote_addr;
         proxy_http_version 1.1;

@@ -3,7 +3,7 @@
 Minimal Debian SBC “boot & run” project to:
 
 1. Install WireGuard (client).
-2. Configure an NGINX reverse‑proxy for Jellyfin, Overseerr/Jellyseerr, JFA‑GO, Jellyfin Vue.
+2. Configure an NGINX reverse‑proxy for Jellyfin.
 3. Advertise your Jellyfin server via mDNS using the Jellyfin Discovery Proxy.
 
 ---
@@ -13,7 +13,7 @@ Minimal Debian SBC “boot & run” project to:
 FinGuard turns any small single-board computer (SBC) running Debian into a **dedicated WireGuard bridge** for your media ecosystem. Instead of installing a WireGuard client on every device or reconfiguring your router, you point all media clients at `http://<hostname>.local` and let FinGuard handle:
 
 - **WireGuard**: Securely tunnel traffic from local devices into your remote network.
-- **NGINX**: Proxy paths to Jellyfin, Overseerr/Jellyseerr, JFA‑GO, or Jellyfin Vue based on URL.
+- **NGINX**: Proxy paths to Jellyfin from port 80.
 - **mDNS Discovery**: Advertise your Jellyfin server automatically to clients via the Discovery Proxy.
 
 ### Why a dedicated bridge?
@@ -80,19 +80,16 @@ wg_conf: |
 
 # Upstream service endpoints (IP:port). Leave blank to skip
 jellyfin_ip: 10.0.0.123:8096
-jellyfin_vue_ip: 10.0.0.126:8080
-overseerr_ip: 10.0.0.124:5055
 
 # Optionally reset the 'pi' user password; leave empty to skip
 pi_password: ""
 
 # URL for Discovery Proxy to point at
-jellyfin_server_url: "http://10.0.0.123:8096"
+jellyfin_server_url: "http://{{ jellyfin_ip }}"
 ```
 
 - `timezone`: Defaults to `America/Denver`. Controls the system timezone and cron scheduling.
 - `wg_conf`: Paste your complete `wg0.conf`; the role writes it to `/etc/wireguard/wg0.conf`.
-- Service IPs: Only non-empty entries generate NGINX locations.
 - `pi_password`: If set, updates the `pi` user password.
 
 ---
@@ -183,11 +180,9 @@ Cron logs are appended to `/var/log/FinGuard-update.log`.
 
 ## Verification
 
-After deployment, access the following URLs:
+After deployment, access the following URL:
 
 - `http://<hostname>.local/` → Jellyfin
-- `http://<hostname>.local/request` → Overseerr/Jellyseerr
-- `http://<hostname>.local/vue` → Jellyfin Vue
 
 Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 

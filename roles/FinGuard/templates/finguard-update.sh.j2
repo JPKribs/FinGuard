@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Pull latest proxy code and rebuild
 cd {{ discovery_dest }}
 git pull --ff-only
 ./build.sh --linux
 
-# Update OS and packages
 apt update && apt upgrade -y
 
-# Reboot to apply kernel or security updates
 reboot

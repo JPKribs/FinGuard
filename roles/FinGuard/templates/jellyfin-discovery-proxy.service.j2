@@ -5,7 +5,7 @@ After=network.target
 [Service]
 ExecStart={{ binary_dest }}
 Environment=JELLYFIN_SERVER_URL={{ jellyfin_server_url }}
-Environment=PROXY_URL=http://{{ hostname }}.local   # {{ hostname }}.local advertised via mDNS
+Environment=PROXY_URL=http://{{ hostname }}.local
 Restart=on-failure
 
 [Install]
