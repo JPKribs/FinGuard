@@ -41,6 +41,8 @@ FinGuard/
 ├── ansible.cfg
 ├── inventory/
 │   └── hosts
+│   └── group_vars
+│       └── all.yml
 ├── playbook.yml
 ├── roles/
 │   └── FinGuard/
