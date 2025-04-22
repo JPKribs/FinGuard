@@ -12,8 +12,6 @@
       - nginx
       - avahi-daemon
       - resolvconf
-      - git
-      - golang-go
       - cron
     state: present
 
@@ -133,25 +131,26 @@
       RestartSec=5
   notify: Reload systemd
 
-- name: Clone Jellyfin Discovery Proxy
-  git:
-    repo: "{{ discovery_repo }}"
-    dest: "{{ discovery_dest }}"
-    update: yes
-  register: git_clone
+- name: Get latest release info from GitHub
+  uri:
+    url: "https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest"
+    method: GET
+    return_content: yes
+    status_code: 200
+    body_format: json
+    validate_certs: yes
+  register: github_latest_release
 
-- name: Build Discovery Proxy
-  command: ./make linux
-  args:
-    chdir: "{{ discovery_dest }}"
-  when: git_clone.changed
-
-- name: Install Discovery Proxy binary
-  shell: |
-    cp {{ discovery_dest }}/build/jellyfin-discovery-proxy_*_linux-arm64 {{ binary_dest }}
-    chmod +x {{ binary_dest }}
-  args:
-    executable: /bin/bash
+- name: Set Discovery Proxy version from latest release
+  set_fact:
+    release_version: "{{ github_latest_release.json.tag_name }}"
+  
+- name: Download Discovery Proxy binary
+  get_url:
+    url: "https://github.com/JPKribs/jellyfin-discovery-proxy/releases/download/{{ release_version }}/jellyfin-discovery-proxy_{{ release_version }}_linux-arm64"
+    dest: "{{ binary_dest }}"
+    mode: '0755'
+  register: binary_download
 
 - name: Deploy Discovery Proxy systemd service
   template:
