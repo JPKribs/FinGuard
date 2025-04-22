@@ -26,7 +26,7 @@ FinGuard turns any small single-board computer (SBC) running Debian into a **ded
 
 ## Prerequisites
 
-On the SBC (NanoPi Zero2, Raspberry Pi, etc.):
+On the SBC (NanoPi Zero2, Raspberry Pi, etc.)
 
 1. **Debian-based OS** (Raspberry Pi OS, Ubuntu, etc.)
 2. **git**, **python3**, **python3-pip**
@@ -54,42 +54,44 @@ FinGuard/
 
 ---
 
-## Configuration (`roles/FinGuard/defaults/main.yml`)
+## Configuration
 
-Edit only these values to customize your bridge:
+Site-specific values live in `inventory/group_vars/all.yml`. Edit that file to configure your bridge:
 
 ```yaml
-# Host identity (no .local)
+# inventory/group_vars/all.yml
+
+# 1) Host identity (no .local)
 hostname: jellyfin
 
-# System timezone (used for cron schedules)
+# 2) System timezone (used for cron schedules)
 timezone: America/Denver
 
-# Full WireGuard client config (wg0.conf)
+# 3) Full WireGuard client config (wg0.conf)
 wg_conf: |
   [Interface]
   PrivateKey = <YOUR_PRIVATE_KEY>
-  Address    = 10.0.0.50/24
+  Address    = 10.192.1.X/32
   DNS        = 1.1.1.1
 
   [Peer]
   PublicKey           = <SERVER_PUBLIC_KEY>
   Endpoint            = vpn.example.com:51820
-  AllowedIPs          = 10.0.0.0/24
-  PersistentKeepalive = 25
+  AllowedIPs          = 10.192.1.254/32
+  PersistentKeepalive = 60
 
-# Upstream service endpoints (IP:port). Leave blank to skip
+# 4) Upstream service endpoints (IP:port). Leave blank to skip
 jellyfin_ip: 10.192.1.254:8096
 requests_ip: 10.192.1.254:5055
 
-# Optionally reset the 'pi' user password; leave empty to skip
+# 5) Optional: reset the 'pi' user password; leave empty to skip
 pi_password: ""
 
-# URL for Discovery Proxy to point at
+# 6) URL for Discovery Proxy to point at
 jellyfin_server_url: "http://{{ jellyfin_ip }}"
 ```
 
-- `requests_ip`: If set, creates an NGINX location for `/request` pointing here.
+Defaults for other values (e.g. `wg_interface`, `discovery_repo`, paths, etc.) are defined in `roles/FinGuard/defaults/main.yml` and generally don't need editing.
 
 ---
 
@@ -118,9 +120,9 @@ jellyfin_server_url: "http://{{ jellyfin_ip }}"
    git clone https://github.com/jpkribs/FinGuard.git
    cd FinGuard
    ```
-4. Edit variables:
+4. Edit site vars:
    ```bash
-   nano roles/FinGuard/defaults/main.yml
+   nano inventory/group_vars/all.yml
    ```
 5. Run the playbook:
    ```bash
@@ -142,7 +144,7 @@ jellyfin_server_url: "http://{{ jellyfin_ip }}"
    ```bash
    git clone https://github.com/jpkribs/FinGuard.git
    cd FinGuard
-   nano roles/FinGuard/defaults/main.yml
+   nano inventory/group_vars/all.yml
    ```
 4. Run the playbook:
    ```bash
@@ -181,8 +183,7 @@ Cron logs are appended to `/var/log/FinGuard-update.log`.
 
 After deployment, access the following URLs:
 
-- `http://<hostname>.local/` → Redirects to `/watch` (Jellyfin)
-- `http://<hostname>.local/watch` → Jellyfin UI
+- `http://<hostname>.local/` → Jellyfin
 - `http://<hostname>.local/request` → Requests service (if `requests_ip` is set)
 
 Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
@@ -192,7 +193,7 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359)
 ## Troubleshooting
 
 - **Ansible errors**: Rerun with `-vvv` and verify SSH/`sudo` access.
-- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
+- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
 - **Discovery Proxy**: Check service status:
   ```bash
   systemctl status jellyfin-discovery-proxy
