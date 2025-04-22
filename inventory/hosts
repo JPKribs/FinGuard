@@ -1,2 +1,2 @@
-[finguard]
+[FinGuard]
 localhost ansible_connection=local

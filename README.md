@@ -102,7 +102,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
 
 ## Deployment Steps
 
-### A) Local execution (on the SBC)
+### A) Local execution
 
 1. SSH into the SBC:
    ```bash
@@ -116,7 +116,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```
 3. Clone the FinGuard repository:
    ```bash
-   git clone https://github.com/youruser/fin_guard.git
+   git clone https://github.com/jpkribs/FinGuard.git
    cd fin_guard
    ```
 4. Edit variables:
@@ -128,7 +128,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ansible-playbook -c local playbook.yml
    ```
 
-### B) Remote execution (from your Mac)
+### B) Remote execution
 
 1. Install Ansible:
    ```bash
@@ -136,18 +136,18 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```
 2. Edit the inventory (`inventory/hosts`):
    ```ini
-   [fin_guard]
+   [FinGuard]
    192.168.1.42 ansible_user=pi ansible_ssh_private_key_file=~/.ssh/id_rsa
    ```
 3. Clone and configure:
    ```bash
-   git clone https://github.com/youruser/fin_guard.git
+   git clone https://github.com/jpkribs/FinGuard.git
    cd fin_guard
    nano group_vars/all.yml
    ```
 4. Run the playbook:
    ```bash
-   ansible-playbook playbook.yml
+   ansible-playbook -i inventory/hosts playbook.yml
    ```
 
 ---

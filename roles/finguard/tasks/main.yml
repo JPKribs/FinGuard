@@ -53,15 +53,9 @@
         enabled: true
         state: started
 
-    # — Systemd overrides for auto-restart —
+    # — Systemd overrides for auto‑restart —
 
-    - name: Create override dir for WireGuard service
-      file:
-        path: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d"
-        state: directory
-        mode: '0755'
-
-    - name: Ensure WireGuard auto-restart on failure
+    - name: Ensure WireGuard auto‑restart on failure
       copy:
         dest: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d/override.conf"
         content: |
@@ -70,13 +64,7 @@
           RestartSec=5
       notify: Reload systemd
 
-    - name: Create override dir for NGINX
-      file:
-        path: /etc/systemd/system/nginx.service.d
-        state: directory
-        mode: '0755'
-
-    - name: Ensure NGINX auto-restart on failure
+    - name: Ensure NGINX auto‑restart on failure
       copy:
         dest: "/etc/systemd/system/nginx.service.d/override.conf"
         content: |
@@ -152,27 +140,12 @@
         enabled: true
         state: started
 
-    - name: Create override dir for Discovery Proxy
-      file:
-        path: /etc/systemd/system/jellyfin-discovery-proxy.service.d
-        state: directory
-        mode: '0755'
-
-    - name: Ensure Discovery Proxy auto-restart on failure
-      copy:
-        dest: "/etc/systemd/system/jellyfin-discovery-proxy.service.d/override.conf"
-        content: |
-          [Service]
-          Restart=on-failure
-          RestartSec=5
-      notify: Reload systemd
-
     # — Weekly update script & cron —
 
     - name: Deploy FinGuard update script
       template:
-        src: fin_guard_update.sh.j2
-        dest: /usr/local/bin/fin_guard_update.sh
+        src: FinGuard_update.sh.j2
+        dest: /usr/local/bin/FinGuard_update.sh
         mode: '0755'
 
     - name: Ensure cron service is enabled and running
@@ -188,7 +161,7 @@
         minute: 0
         hour: 3
         weekday: 3
-        job: "/usr/local/bin/fin_guard_update.sh >> /var/log/finguard-update.log 2>&1"
+        job: "/usr/local/bin/FinGuard_update.sh >> /var/log/FinGuard-update.log 2>&1"
 
   handlers:
     - name: Reload systemd
