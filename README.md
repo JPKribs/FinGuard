@@ -3,7 +3,7 @@
 Minimal Debian SBC “boot & run” project to:
 
 1. Install WireGuard (client).
-2. Configure an NGINX reverse‑proxy for Jellyfin.
+2. Configure an NGINX reverse‑proxy for Jellyfin and a Requests service.
 3. Advertise your Jellyfin server via mDNS using the Jellyfin Discovery Proxy.
 
 ---
@@ -13,7 +13,7 @@ Minimal Debian SBC “boot & run” project to:
 FinGuard turns any small single-board computer (SBC) running Debian into a **dedicated WireGuard bridge** for your media ecosystem. Instead of installing a WireGuard client on every device or reconfiguring your router, you point all media clients at `http://<hostname>.local` and let FinGuard handle:
 
 - **WireGuard**: Securely tunnel traffic from local devices into your remote network.
-- **NGINX**: Proxy paths to Jellyfin from port 80.
+- **NGINX**: Proxy paths under `/watch` to Jellyfin and `/request` to your Requests service from port 80.
 - **mDNS Discovery**: Advertise your Jellyfin server automatically to clients via the Discovery Proxy.
 
 ### Why a dedicated bridge?
@@ -26,7 +26,7 @@ FinGuard turns any small single-board computer (SBC) running Debian into a **ded
 
 ## Prerequisites
 
-On the SBC (NanoPi Zero2, Raspberry Pi, etc.):
+On the SBC (NanoPi Zero2, Raspberry Pi, etc.):
 
 1. **Debian-based OS** (Raspberry Pi OS, Ubuntu, etc.)
 2. **git**, **python3**, **python3-pip**
@@ -79,7 +79,8 @@ wg_conf: |
   PersistentKeepalive = 25
 
 # Upstream service endpoints (IP:port). Leave blank to skip
-jellyfin_ip: 10.0.0.123:8096
+jellyfin_ip: 10.192.1.254:8096
+requests_ip: 10.192.1.254:5055
 
 # Optionally reset the 'pi' user password; leave empty to skip
 pi_password: ""
@@ -88,9 +89,7 @@ pi_password: ""
 jellyfin_server_url: "http://{{ jellyfin_ip }}"
 ```
 
-- `timezone`: Defaults to `America/Denver`. Controls the system timezone and cron scheduling.
-- `wg_conf`: Paste your complete `wg0.conf`; the role writes it to `/etc/wireguard/wg0.conf`.
-- `pi_password`: If set, updates the `pi` user password.
+- `requests_ip`: If set, creates an NGINX location for `/request` pointing here.
 
 ---
 
@@ -180,18 +179,20 @@ Cron logs are appended to `/var/log/FinGuard-update.log`.
 
 ## Verification
 
-After deployment, access the following URL:
+After deployment, access the following URLs:
 
-- `http://<hostname>.local/` → Jellyfin
+- `http://<hostname>.local/` → Redirects to `/watch` (Jellyfin)
+- `http://<hostname>.local/watch` → Jellyfin UI
+- `http://<hostname>.local/request` → Requests service (if `requests_ip` is set)
 
-Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
+Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 
 ---
 
 ## Troubleshooting
 
 - **Ansible errors**: Rerun with `-vvv` and verify SSH/`sudo` access.
-- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
+- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
 - **Discovery Proxy**: Check service status:
   ```bash
   systemctl status jellyfin-discovery-proxy
@@ -208,3 +209,4 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 ## License
 
 This project is licensed under the MIT License.
+

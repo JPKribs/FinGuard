@@ -3,9 +3,26 @@ server {
     listen [::]:80 default_server;
     server_name {{ hostname }}.local;
 
+    # Redirect root to /watch
+    location = / {
+        return 302 /watch;
+    }
+
     {% if jellyfin_ip %}
-    location / {
+    # Jellyfin UI
+    location /watch {
         proxy_pass         http://{{ jellyfin_ip }};
+        proxy_set_header   Host            $host;
+        proxy_set_header   X-Real-IP       $remote_addr;
+        proxy_http_version 1.1;
+        proxy_set_header   Connection      "";
+    }
+    {% endif %}
+
+    {% if requests_ip %}
+    # Requests service
+    location /request {
+        proxy_pass         http://{{ requests_ip }};
         proxy_set_header   Host            $host;
         proxy_set_header   X-Real-IP       $remote_addr;
         proxy_http_version 1.1;

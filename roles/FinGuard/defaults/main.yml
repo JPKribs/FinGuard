@@ -17,6 +17,7 @@ wg_conf: |
 
 # 3) Upstream service IPs (include port if non‑standard)
 jellyfin_ip: 10.192.1.254:8096
+requests_ip: 10.192.1.254:5055
 
 # 4) Optional: set new password for 'pi'; leave blank to skip
 pi_password: ""
