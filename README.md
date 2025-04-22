@@ -109,6 +109,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```bash
    sudo apt update
    sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
+   sudo sed -i 's|bookworm main contrib non-free|bookworm main contrib non-free non-free-firmware|g' /etc/apt/sources.list
    sudo apt update
    sudo apt install -y python3 python3-pip git locales ansible
    sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
