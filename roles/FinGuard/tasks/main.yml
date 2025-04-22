@@ -148,7 +148,7 @@
 
 - name: Install Discovery Proxy binary
   shell: |
-    cp {{ discovery_dest }}/build/jellyfin-discovery-proxy_*_linux-amd64 {{ binary_dest }}
+    cp {{ discovery_dest }}/build/jellyfin-discovery-proxy_*_linux-arm64 {{ binary_dest }}
     chmod +x {{ binary_dest }}
   args:
     executable: /bin/bash
