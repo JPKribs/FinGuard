@@ -124,7 +124,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```
 4. Edit variables:
    ```bash
-   nano group_vars/all.yml
+   nano roles/FinGuard/defaults/main.yml
    ```
 5. Run the playbook:
    ```bash
@@ -146,7 +146,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```bash
    git clone https://github.com/jpkribs/FinGuard.git
    cd FinGuard
-   nano group_vars/all.yml
+   nano roles/FinGuard/defaults/main.yml
    ```
 4. Run the playbook:
    ```bash
