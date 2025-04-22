@@ -31,21 +31,6 @@ On the SBC (NanoPi Zero2, Raspberry Pi, etc.):
 1. **Debian-based OS** (Raspberry Pi OS, Ubuntu, etc.)
 2. **git**, **python3**, **python3-pip**
 3. **Ansible**: `pip3 install --user ansible`
-4. **Locales support** (for proper shell environment):
-   ```bash
-   sudo apt update
-   sudo apt install -y locales
-   sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
-   sudo locale-gen
-   sudo update-locale LANG=en_US.UTF-8
-   export LANG=en_US.UTF-8
-   export LC_ALL=en_US.UTF-8
-   ```
-5. **Configure apt sources** to use a US Debian mirror (instead of Aliyun):
-   ```bash
-   sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
-   sudo apt update
-   ```
 
 ---
 
@@ -123,21 +108,16 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```bash
    ssh pi@<sbc-ip>
    ```
-2. Install prerequisites (including locales and apt mirror):
+2. Install prerequisites (including locales, US mirror, and Ansible):
    ```bash
-   # locales and US mirror setup
    sudo apt update
    sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
    sudo apt update
-   sudo apt install -y python3 python3-pip git locales
+   sudo apt install -y python3 python3-pip git locales ansible
    sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
    sudo locale-gen
    sudo update-locale LANG=en_US.UTF-8
    export LANG=en_US.UTF-8 LC_ALL=en_US.UTF-8
-
-   # ansible
-   pip3 install --user ansible
-   export PATH=$HOME/.local/bin:$PATH
    ```
 3. Clone the FinGuard repository:
    ```bash
@@ -150,7 +130,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```
 5. Run the playbook:
    ```bash
-   ansible-playbook -c local playbook.yml
+   sudo ansible-playbook -c local playbook.yml
    ```
 
 ### B) Remote execution
@@ -219,7 +199,7 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 ## Troubleshooting
 
 - **Ansible errors**: Rerun with `-vvv` and verify SSH/`sudo` access.
-- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
+- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
 - **Discovery Proxy**: Check service status:
   ```bash
   systemctl status jellyfin-discovery-proxy
@@ -236,4 +216,3 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 ## License
 
 This project is licensed under the MIT License.
-
