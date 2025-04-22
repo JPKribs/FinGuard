@@ -141,7 +141,7 @@
   register: git_clone
 
 - name: Build Discovery Proxy
-  command: ./build.sh --linux
+  command: ./make linux
   args:
     chdir: "{{ discovery_dest }}"
   when: git_clone.changed
