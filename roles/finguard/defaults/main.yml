@@ -17,9 +17,8 @@ wg_conf: |
 
 # 3) Upstream service IPs (include port if non‑standard)
 jellyfin_ip: 10.192.1.254:8096
-overseerr_ip: 10.192.1.254:5055
-jfa_go_ip: 10.192.1.254:6600
 jellyfin_vue_ip: 10.192.1.254:8080
+overseerr_ip: 10.192.1.254:5055
 
 # 4) Optional: set new password for 'pi'; leave blank to skip
 pi_password: ""

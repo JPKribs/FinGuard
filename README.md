@@ -41,11 +41,9 @@ FinGuard/
 ├── ansible.cfg
 ├── inventory/
 │   └── hosts
-├── group_vars/
-│   └── all.yml
 ├── playbook.yml
 ├── roles/
-│   └── finguard/
+│   └── FinGuard/
 │       ├── defaults/main.yml
 │       ├── tasks/main.yml
 │       └── templates/
@@ -56,7 +54,7 @@ FinGuard/
 
 ---
 
-## Configuration (`group_vars/all.yml`)
+## Configuration (`roles/FinGuard/defaults/main.yml`)
 
 Edit only these values to customize your bridge:
 
@@ -82,9 +80,8 @@ wg_conf: |
 
 # Upstream service endpoints (IP:port). Leave blank to skip
 jellyfin_ip: 10.0.0.123:8096
-overseerr_ip: 10.0.0.124:5055
-jfa_go_ip: 10.0.0.125:6600
 jellyfin_vue_ip: 10.0.0.126:8080
+overseerr_ip: 10.0.0.124:5055
 
 # Optionally reset the 'pi' user password; leave empty to skip
 pi_password: ""
@@ -189,7 +186,6 @@ After deployment, access the following URLs:
 
 - `http://<hostname>.local/` → Jellyfin
 - `http://<hostname>.local/request` → Overseerr/Jellyseerr
-- `http://<hostname>.local/account` → JFA‑GO
 - `http://<hostname>.local/vue` → Jellyfin Vue
 
 Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).

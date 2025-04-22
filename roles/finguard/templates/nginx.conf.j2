@@ -22,16 +22,6 @@ server {
     }
     {% endif %}
 
-    {% if jfa_go_ip %}
-    location /account {
-        proxy_pass         http://{{ jfa_go_ip }};
-        proxy_set_header   Host $host;
-        proxy_set_header   X-Real-IP $remote_addr;
-        proxy_http_version 1.1;
-        proxy_set_header   Connection "";
-    }
-    {% endif %}
-
     {% if jellyfin_vue_ip %}
     location /vue {
         proxy_pass         http://{{ jellyfin_vue_ip }};
