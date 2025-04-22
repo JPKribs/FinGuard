@@ -127,8 +127,9 @@ jellyfin_server_url: "http://10.0.0.123:8096"
    ```bash
    # locales and US mirror setup
    sudo apt update
-   sudo apt install -y python3 python3-pip git locales
    sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
+   sudo apt update
+   sudo apt install -y python3 python3-pip git locales
    sudo sed -i 's/^# *\(en_US.UTF-8 UTF-8\)/\1/' /etc/locale.gen
    sudo locale-gen
    sudo update-locale LANG=en_US.UTF-8
