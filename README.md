@@ -3,7 +3,7 @@
 Minimal Debian SBC “boot & run” project to:
 
 1. Install WireGuard (client).
-2. Configure an NGINX reverse-proxy for Jellyfin, Overseerr/Jellyseerr, JFA‑GO, Jellyfin Vue.
+2. Configure an NGINX reverse‑proxy for Jellyfin, Overseerr/Jellyseerr, JFA‑GO, Jellyfin Vue.
 3. Advertise your Jellyfin server via mDNS using the Jellyfin Discovery Proxy.
 
 ---
@@ -13,7 +13,7 @@ Minimal Debian SBC “boot & run” project to:
 FinGuard turns any small single-board computer (SBC) running Debian into a **dedicated WireGuard bridge** for your media ecosystem. Instead of installing a WireGuard client on every device or reconfiguring your router, you point all media clients at `http://<hostname>.local` and let FinGuard handle:
 
 - **WireGuard**: Securely tunnel traffic from local devices into your remote network.
-- **NGINX**: Proxy paths to Jellyfin, Overseerr/Jellyseerr, JFA‑GO, or Jellyfin Vue based on URL.
+- **NGINX**: Proxy paths to Jellyfin, Overseerr/Jellyseerr, JFA‑GO, or Jellyfin Vue based on URL.
 - **mDNS Discovery**: Advertise your Jellyfin server automatically to clients via the Discovery Proxy.
 
 ### Why a dedicated bridge?
@@ -37,7 +37,7 @@ On the SBC (NanoPi Zero2, Raspberry Pi, etc.):
 ## Project Layout
 
 ```
-fin_guard/
+FinGuard/
 ├── ansible.cfg
 ├── inventory/
 │   └── hosts
@@ -117,7 +117,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
 3. Clone the FinGuard repository:
    ```bash
    git clone https://github.com/jpkribs/FinGuard.git
-   cd fin_guard
+   cd FinGuard
    ```
 4. Edit variables:
    ```bash
@@ -142,7 +142,7 @@ jellyfin_server_url: "http://10.0.0.123:8096"
 3. Clone and configure:
    ```bash
    git clone https://github.com/jpkribs/FinGuard.git
-   cd fin_guard
+   cd FinGuard
    nano group_vars/all.yml
    ```
 4. Run the playbook:
@@ -174,7 +174,7 @@ A cron job runs every Wednesday at 03:00 (timezone as specified) to:
    ```
 3. Reboot the device to apply updates.
 
-Cron logs are appended to `/var/log/fin_guard_update.log`.
+Cron logs are appended to `/var/log/FinGuard-update.log`.
 
 ---
 
@@ -211,4 +211,3 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 ## License
 
 This project is licensed under the MIT License.
-
