@@ -8,6 +8,7 @@ Environment=JELLYFIN_SERVER_URL={{ jellyfin_server_url }}
 Environment=PROXY_URL=http://{{ hostname }}.local
 Environment=CACHE_DURATION=0
 Restart=on-failure
+RestartSec=5
 
 [Install]
 WantedBy=multi-user.target

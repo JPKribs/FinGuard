@@ -3,10 +3,12 @@ set -euo pipefail
 
 # Get latest release info from GitHub
 LATEST_RELEASE=$(curl -sL https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest)
-LATEST_VERSION=$(echo $LATEST_RELEASE | grep -Po '"tag_name": "\K[^"]*')
+# Extract the tag_name value
+LATEST_VERSION=$(echo "$LATEST_RELEASE" | grep -Po '"tag_name": "\K[^"]*')
 
 # Download the latest binary
-curl -sL "https://github.com/JPKribs/jellyfin-discovery-proxy/releases/download/${LATEST_VERSION}/jellyfin-discovery-proxy_${LATEST_VERSION}_linux-arm64" -o /tmp/jellyfin-discovery-proxy
+curl -sL "https://github.com/JPKribs/jellyfin-discovery-proxy/releases/download/${LATEST_VERSION}/jellyfin-discovery-proxy_${LATEST_VERSION}_linux-arm64" \
+     -o /tmp/jellyfin-discovery-proxy
 chmod +x /tmp/jellyfin-discovery-proxy
 
 # Move to destination
@@ -15,7 +17,8 @@ mv /tmp/jellyfin-discovery-proxy {{ binary_dest }}
 # Update system packages
 apt update && apt upgrade -y
 
-# Restart the service (optional, depending on your needs)
+# Restart the discovery proxy
 systemctl restart jellyfin-discovery-proxy
 
+# Reboot the system
 reboot

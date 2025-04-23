@@ -1,0 +1,13 @@
+[Unit]
+Description=FinGuard weekly update
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/FinGuard-update.sh
+StandardOutput=append:/var/log/FinGuard-update.log
+StandardError=inherit
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
