@@ -1,5 +1,3 @@
-# inventory/group_vars/all.yml
-
 # 1) Host identity
 hostname: jellyfin
 
@@ -25,3 +23,7 @@ pi_password: ""
 
 # 5) For Discovery Proxy
 jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='ip') | first }}"
+
+# 6) FinGuard weekly‐update schedule
+finguard_update_day: Wed # e.g. Mon, Tue, Wed, Thu, Fri, Sat, Sun
+finguard_update_time: "03:00:00" # HH:MM:SS

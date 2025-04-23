@@ -1,8 +1,8 @@
 [Unit]
-Description=Run FinGuard update every Wednesday at 03:00
+Description=Run FinGuard update every {{ finguard_update_day }} at {{ finguard_update_time }}
 
 [Timer]
-OnCalendar=Wed *-*-* 03:00:00
+OnCalendar={{ finguard_update_day }} *-*-* {{ finguard_update_time }}
 Persistent=true
 
 [Install]

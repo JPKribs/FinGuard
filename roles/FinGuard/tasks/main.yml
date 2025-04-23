@@ -1,3 +1,5 @@
+# — Ensure hostname on every boot —
+
 - name: Ensure apt cache is up to date
   apt:
     update_cache: yes
@@ -30,6 +32,19 @@
   shell: echo "pi:{{ pi_password }}" | chpasswd
   when: pi_password is defined and pi_password != ""
   no_log: true
+
+# — Ensure hostname on every boot —
+- name: Deploy set-hostname systemd service
+  template:
+    src: set-hostname.service.j2
+    dest: /etc/systemd/system/set-hostname.service
+  notify: Reload systemd
+
+- name: Enable set-hostname service
+  systemd:
+    name: set-hostname.service
+    enabled: true
+    state: started
 
 - name: Deploy WireGuard config
   copy:
@@ -111,7 +126,7 @@
     enabled: true
     state: started
 
-# — Discovery Proxy — 
+# — Discovery Proxy —
 
 - name: Get latest release info from GitHub
   uri:
