@@ -11,6 +11,7 @@
             padding: 20px;
             background-color: #f5f5f5;
             color: #333;
+            transition: background-color 0.3s, color 0.3s;
         }
         .container {
             max-width: 800px;
@@ -19,6 +20,7 @@
             padding: 20px;
             border-radius: 5px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: background-color 0.3s, box-shadow 0.3s;
         }
         h1 {
             color: #2c3e50;
@@ -30,6 +32,7 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             padding: 15px;
+            transition: border-color 0.3s, background-color 0.3s;
         }
         .card h2 {
             margin-top: 0;
@@ -72,11 +75,57 @@
         .progress-fill {
             height: 100%;
             background-color: #3498db;
+            transition: background-color 0.3s;
+        }
+        body.dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        body.dark-mode .container {
+            background-color: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
+        }
+        body.dark-mode h1, body.dark-mode .card h2 {
+            color: #90caf9;
+        }
+        body.dark-mode .card {
+            border-color: #333;
+        }
+        body.dark-mode .progress-bar {
+            background-color: #333;
+        }
+        body.dark-mode .progress-fill {
+            background-color: #90caf9;
+        }
+        body.dark-mode .status-online {
+            background-color: #66bb6a;
+        }
+        body.dark-mode .status-offline {
+            background-color: #ef5350;
+        }
+        body.dark-mode .refresh-time {
+            color: #aaa;
+        }
+        #darkModeToggle {
+            float: right;
+            margin-top: -10px;
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            border: none;
+            background-color: #3498db;
+            color: white;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        body.dark-mode #darkModeToggle {
+            background-color: #555;
         }
     </style>
 </head>
 <body>
     <div class="container">
+        <button id="darkModeToggle">🌙</button>
         <h1>Status Dashboard</h1>
         
         <div class="card">
@@ -155,11 +204,9 @@
                     <th>IP Address</th>
                     <th>Status</th>
                 </tr>
-                <!-- Will be populated by JavaScript -->
             </table>
         </div>
 
-        <!-- Add the new System Timers card here -->
         <div class="card">
             <h2>System Timers</h2>
             <table>
@@ -184,5 +231,23 @@
         <div class="refresh-time">Last updated: <span id="last-updated">Loading...</span></div>
     </div>
     <script src="status.js"></script>
+    <script>
+    const darkModeToggle = document.getElementById('darkModeToggle');
+    if (localStorage.getItem('darkMode') === 'enabled' || 
+        (localStorage.getItem('darkMode') === null && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+        document.body.classList.add('dark-mode');
+        darkModeToggle.textContent = '🌞';
+    }
+    darkModeToggle.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        if (document.body.classList.contains('dark-mode')) {
+            localStorage.setItem('darkMode', 'enabled');
+            darkModeToggle.textContent = '🌞';
+        } else {
+            localStorage.setItem('darkMode', 'disabled');
+            darkModeToggle.textContent = '🌙';
+        }
+    });
+    </script>
 </body>
 </html>
