@@ -6,6 +6,8 @@ function updateStatus() {
     fetch('status.json?' + new Date().getTime())
         .then(response => response.json())
         .then(data => {
+            console.log("Data loaded:", data); // Add debugging
+            
             // System information
             document.getElementById('uptime').textContent = data.uptime;
             
@@ -20,7 +22,7 @@ function updateStatus() {
                 data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_usage + '%)';
             document.getElementById('disk-bar').style.width = data.disk_usage + '%';
             
-            // Service status
+            // Service status - Show Running when status is "running" or "active"
             updateServiceStatus('wireguard-status', data.services.wireguard);
             updateServiceStatus('nginx-status', data.services.nginx);
             updateServiceStatus('jellyfin-proxy-status', data.services.jellyfin_proxy);
@@ -33,27 +35,29 @@ function updateStatus() {
             }
             
             // Add network interfaces
-            data.network.forEach(iface => {
-                const row = networkTable.insertRow();
-                const nameCell = row.insertCell(0);
-                const ipCell = row.insertCell(1);
-                const statusCell = row.insertCell(2);
-                
-                nameCell.textContent = iface.name;
-                ipCell.textContent = iface.ip || 'N/A';
-                
-                const statusIndicator = document.createElement('span');
-                statusIndicator.className = 'status-indicator ' + 
-                    (iface.status === 'up' ? 'status-online' : 'status-offline');
-                
-                statusCell.appendChild(statusIndicator);
-                statusCell.appendChild(document.createTextNode(
-                    iface.status === 'up' ? 'Up' : 'Down'
-                ));
-            });
+            if (data.network && data.network.length > 0) {
+                data.network.forEach(iface => {
+                    const row = networkTable.insertRow();
+                    const nameCell = row.insertCell(0);
+                    const ipCell = row.insertCell(1);
+                    const statusCell = row.insertCell(2);
+                    
+                    nameCell.textContent = iface.name || 'Unknown';
+                    ipCell.textContent = iface.ip || 'N/A';
+                    
+                    const statusIndicator = document.createElement('span');
+                    statusIndicator.className = 'status-indicator ' + 
+                        ((iface.status === 'up') ? 'status-online' : 'status-offline');
+                    
+                    statusCell.appendChild(statusIndicator);
+                    statusCell.appendChild(document.createTextNode(
+                        (iface.status === 'up') ? 'Up' : 'Down'
+                    ));
+                });
+            }
             
             // Update last updated time
-            document.getElementById('last-updated').textContent = new Date().toLocaleString();
+            document.getElementById('last-updated').textContent = data.last_updated || new Date().toLocaleString();
         })
         .catch(error => {
             console.error('Error fetching status data:', error);
@@ -63,10 +67,16 @@ function updateStatus() {
 // Helper function to update service status in the UI
 function updateServiceStatus(elementId, status) {
     const element = document.getElementById(elementId);
+    if (!element) return; // Skip if element not found
+    
     const indicator = element.querySelector('.status-indicator');
+    if (!indicator) return; // Skip if indicator not found
+    
+    // Consider both "running" and "active" as online status
+    const isRunning = (status === 'running' || status === 'active');
     
     indicator.className = 'status-indicator ' + 
-        (status === 'active' ? 'status-online' : 'status-offline');
+        (isRunning ? 'status-online' : 'status-offline');
     
     // Remove old text node
     while (element.lastChild) {
@@ -78,7 +88,7 @@ function updateServiceStatus(elementId, status) {
     
     // Add new text node
     element.appendChild(document.createTextNode(
-        status === 'active' ? 'Running' : 'Stopped'
+        isRunning ? 'Running' : 'Stopped'
     ));
 }
 
