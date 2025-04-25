@@ -1,41 +1,24 @@
 #!/bin/bash
-# Generate status data for the entire dashboard
 
-# Get the remaining time for the next timer trigger
 get_timer_remaining() {
   local timer_name=$1
-
-  # Get the next trigger time of the timer in microseconds
   next_trigger=$(systemctl show "$timer_name" -p NextElapseUSec | awk -F= '{print $2}' || echo 0)
-
-  # If the timer has no next trigger, return "Never"
-  if [ "$next_trigger" -eq 0 ]; then
+  if [[ "$next_trigger" -eq 0 ]]; then
     echo "Never"
     return
   fi
-
-  # Get current time in seconds
   current_time=$(date +%s)
-
-  # Convert next trigger to seconds
   next_trigger_seconds=$((next_trigger / 1000000))
-
-  # Calculate remaining time (in seconds)
   remaining_seconds=$((next_trigger_seconds - current_time))
-
-  # Output remaining time in seconds
-  echo "$remaining_seconds seconds left"
+  minutes=$((remaining_seconds / 60))
+  seconds=$((remaining_seconds % 60))
+  echo "$minutes minutes $seconds seconds left"
 }
 
-# Get the last runs for services and timers
 UPDATE_LAST_RUN=$(systemctl show "status-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
 SSL_LAST_RUN=$(systemctl show "renew-ssl-cert.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
 FINGUARD_LAST_RUN=$(systemctl show "finguard-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
-
-# Get the remaining time for the status update timer
 STATUS_UPDATE_REMAINING=$(get_timer_remaining "status-update.timer")
-
-# Get system information
 UPTIME=$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")
 CPU_USAGE=$(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0)
 MEMORY_TOTAL=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0)
@@ -45,7 +28,6 @@ DISK_TOTAL=$(df -h / 2>/dev/null | awk '/\// {print $2}' | sed 's/G//' || echo 0
 DISK_USED=$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)
 DISK_USAGE=$(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0)
 
-# Create JSON structure with all data
 cat > /var/www/html/status/status.json << EOF
 {
   "uptime": "$UPTIME",
@@ -71,5 +53,4 @@ cat > /var/www/html/status/status.json << EOF
 }
 EOF
 
-# Set permissions for the status file
 chmod 644 /var/www/html/status/status.json
