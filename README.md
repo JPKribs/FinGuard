@@ -1,6 +1,6 @@
 # FinGuard
 
-Minimal Debian SBC “boot & run” project to:
+Minimal Debian SBC "boot & run" project to:
 
 1. Install WireGuard (client).
 2. Configure an NGINX reverse‑proxy for your defined services.
@@ -43,6 +43,7 @@ FinGuard/
 │   └── hosts
 │   └── group_vars
 │       └── all.yml
+│       └── favicon.ico
 ├── playbook.yml
 ├── roles/
 │   └── FinGuard/
@@ -158,16 +159,17 @@ Cron logs are appended to `/var/log/FinGuard-update.log`.
 After deployment, access the following URLs:
 
 - `http://<hostname>.local/` → Root Services
+- `http://<hostname>.local/status` → Bridge Dashboard
 - `http://<hostname>.local/service-path` → Other Services
 
-Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
+Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 
 ---
 
 ## Troubleshooting
 
 - **Ansible errors**: Rerun with `-vvv` and verify SSH/`sudo` access.
-- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
+- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
 - **Discovery Proxy**: Check service status:
   ```bash
   systemctl status jellyfin-discovery-proxy
