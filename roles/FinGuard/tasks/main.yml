@@ -92,7 +92,7 @@
       RestartSec=5
   notify: Reload systemd
 
-# — RAM-based logging —
+# — Ensure ALL logging uses RAM —
 - name: Create tmpfs mount points in fstab
   lineinfile:
     path: /etc/fstab
@@ -100,12 +100,34 @@
     state: present
   register: tmpfs_config
 
+- name: Create additional tmpfs mount points for all potential log directories
+  lineinfile:
+    path: /etc/fstab
+    line: "{{ item }}"
+    state: present
+  loop:
+    - "tmpfs /var/log/apt tmpfs defaults,noatime,mode=0755,size=10M 0 0"
+    - "tmpfs /var/www/html/status tmpfs defaults,noatime,mode=0755,size=5M 0 0"
+    - "tmpfs /var/cache/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0"
+  register: additional_tmpfs_config
+
 # Added to fix the mount error
 - name: Ensure nginx log directory exists
   file:
     path: /var/log/nginx
     state: directory
     mode: '0755'
+
+- name: Ensure all log directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /var/log/apt
+    - /var/cache/apt
+    - /var/cache/apt/archives
+    - /var/cache/apt/archives/partial
 
 - name: Create tmpfs mount for nginx logs
   lineinfile:
@@ -116,7 +138,7 @@
 
 - name: Mount tmpfs filesystems if fstab was changed
   command: mount -a
-  when: tmpfs_config.changed or nginx_log_config.changed
+  when: tmpfs_config.changed or nginx_log_config.changed or additional_tmpfs_config.changed
 
 # Added to fix nginx test error
 - name: Create required NGINX log files
@@ -129,6 +151,48 @@
   loop:
     - /var/log/nginx/access.log
     - /var/log/nginx/error.log
+
+- name: Configure NGINX to log minimally
+  copy:
+    dest: /etc/nginx/conf.d/minimal-logging.conf
+    content: |
+      # Minimize NGINX logging
+      access_log off;
+      error_log /var/log/nginx/error.log crit;
+  notify:
+    - Test NGINX configuration
+    - Reload NGINX if valid
+
+- name: Configure APT to minimize writes
+  copy:
+    dest: /etc/apt/apt.conf.d/02compress-indexes
+    content: |
+      Acquire::GzipIndexes "true";
+      Acquire::CompressionTypes::Order:: "gz";
+
+- name: Disable APT periodic activities
+  copy:
+    dest: /etc/apt/apt.conf.d/02periodic
+    content: |
+      APT::Periodic::Enable "0";
+
+- name: Set swappiness to reduce disk writes
+  sysctl:
+    name: vm.swappiness
+    value: '1'
+    state: present
+    reload: yes
+
+- name: Disable swap in fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s+sw\s.*)$'
+    replace: '# \1'
+  register: swap_disabled
+
+- name: Turn off swap
+  command: swapoff -a
+  when: swap_disabled.changed
 
 - name: Configure journald to store logs in volatile memory
   copy:

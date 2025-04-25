@@ -66,7 +66,7 @@ function updateServiceStatus(elementId, status) {
     const indicator = element.querySelector('.status-indicator');
     
     indicator.className = 'status-indicator ' + 
-        (status === 'running' ? 'status-online' : 'status-offline');
+        (status === 'active' ? 'status-online' : 'status-offline');
     
     // Remove old text node
     while (element.lastChild) {
@@ -78,7 +78,7 @@ function updateServiceStatus(elementId, status) {
     
     // Add new text node
     element.appendChild(document.createTextNode(
-        status === 'running' ? 'Running' : 'Stopped'
+        status === 'active' ? 'Running' : 'Stopped'
     ));
 }
 

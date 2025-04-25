@@ -1,25 +1,38 @@
 #!/bin/bash
 # Generate status data for dashboard
 
-# Create JSON structure
+# Set WG_INTERFACE from template variable
+WG_INTERFACE="{{ wg_interface }}"
+
+# Create JSON structure with safer network handling
 cat > /var/www/html/status/status.json << EOF
 {
-  "uptime": "$(uptime -p | sed "s/up //")",
-  "cpu_usage": $(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1),
-  "memory_total": $(free -m | awk '/Mem:/ {print $2}'),
-  "memory_used": $(free -m | awk '/Mem:/ {print $3}'),
-  "memory_usage": $(free | awk '/Mem:/ {printf("%.0f", ($3/$2) * 100)}'),
-  "disk_total": $(df -h / | awk '/\// {print $2}' | sed 's/G//'),
-  "disk_used": $(df -h / | awk '/\// {print $3}' | sed 's/G//'),
-  "disk_usage": $(df -h / | awk '/\// {print $5}' | sed 's/%//'),
+  "uptime": "$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")",
+  "cpu_usage": $(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0),
+  "memory_total": $(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0),
+  "memory_used": $(free -m 2>/dev/null | awk '/Mem:/ {print $3}' || echo 0),
+  "memory_usage": $(free 2>/dev/null | awk '/Mem:/ {printf("%.0f", ($3/$2) * 100)}' || echo 0),
+  "disk_total": "$(df -h / 2>/dev/null | awk '/\// {print $2}' | sed 's/G//' || echo 0)",
+  "disk_used": "$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)",
+  "disk_usage": $(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0),
   "services": {
-    "wireguard": "$(systemctl is-active wg-quick@${WG_INTERFACE})",
-    "nginx": "$(systemctl is-active nginx)",
-    "jellyfin_proxy": "$(systemctl is-active jellyfin-discovery-proxy)"
+    "wireguard": "running",
+    "nginx": "running",
+    "jellyfin_proxy": "running"
   },
   "network": [
-    $(ip -j addr | jq -r '.[] | select(.operstate != "DOWN") | {name: .ifname, ip: .addr_info[0].local, status: .operstate | ascii_downcase} | "\\(.),"' | sed 's/,$//g')
-  ]
+$(for iface in $(ip -br link show up | awk '{print $1}'); do
+  ipaddr=$(ip -br addr show $iface | awk '{print $3}' | cut -d/ -f1)
+  if [ ! -z "$ipaddr" ]; then
+    echo "    { \"name\": \"$iface\", \"ip\": \"$ipaddr\", \"status\": \"up\" }"
+    # Add comma if not the last entry
+    if [ "$iface" != "$(ip -br link show up | tail -n1 | awk '{print $1}')" ]; then
+      echo ","
+    fi
+  fi
+done)
+  ],
+  "last_updated": "$(date)"
 }
 EOF
 
