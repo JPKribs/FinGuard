@@ -1,43 +1,41 @@
 #!/bin/bash
 # Generate status data for the entire dashboard
 
-# Get the remaining time for the next timer trigger
+# Function to get the remaining time for the next timer trigger
 get_timer_remaining() {
   local timer_name=$1
 
+  # Get the next trigger time of the timer in microseconds
   next_trigger=$(systemctl show "$timer_name" -p NextElapseUSec | awk -F= '{print $2}' || echo 0)
 
+  # If the timer has no next trigger, return "Never"
   if [[ "$next_trigger" -eq 0 ]]; then
     echo "Never"
     return
   fi
 
+  # Get current time in seconds
   current_time=$(date +%s)
+
+  # Convert next trigger to seconds
   next_trigger_seconds=$((next_trigger / 1000000))
+
+  # Calculate remaining time (in seconds)
   remaining_seconds=$((next_trigger_seconds - current_time))
 
-  if [[ "$remaining_seconds" -lt 0 ]]; then
-    echo "Already passed"
-    return
-  fi
-
-  minutes=$((remaining_seconds / 60))
-  seconds=$((remaining_seconds % 60))
-
-  echo "$minutes minutes $seconds seconds left"
+  # Output remaining time in seconds
+  echo "$remaining_seconds seconds left"
 }
 
-# Get last runs
+# Get the last runs for services and timers
 UPDATE_LAST_RUN=$(systemctl show "status-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
 SSL_LAST_RUN=$(systemctl show "renew-ssl-cert.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
 FINGUARD_LAST_RUN=$(systemctl show "finguard-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
 
-# Get remaining time for the timers
+# Get the remaining time for the status update timer
 STATUS_UPDATE_REMAINING=$(get_timer_remaining "status-update.timer")
-SSL_RENEWAL_REMAINING=$(get_timer_remaining "renew-ssl-cert.timer")
-FINGUARD_UPDATE_REMAINING=$(get_timer_remaining "finguard-update.timer")
 
-# System information
+# Get system information
 UPTIME=$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")
 CPU_USAGE=$(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0)
 MEMORY_TOTAL=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0)
@@ -47,8 +45,13 @@ DISK_TOTAL=$(df -h / 2>/dev/null | awk '/\// {print $2}' | sed 's/G//' || echo 0
 DISK_USED=$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)
 DISK_USAGE=$(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0)
 
-# Network Information
-NETWORK_INFO=$(ip -br addr show | awk '{print "{\"name\":\"" $1 "\", \"ip\":\"" $3 "\", \"status\":\"" (if ($2 == "UP") {"up"} else {"down"}) "\"}"}')
+# Get the status of services
+WIREGUARD_STATUS=$(systemctl is-active wireguard)
+NGINX_STATUS=$(systemctl is-active nginx)
+JELLYFIN_PROXY_STATUS=$(systemctl is-active jellyfin-discovery)
+
+# Get network information
+NETWORK_DATA=$(ip -br addr show up | awk '{print "{\"name\":\"" $1 "\", \"ip\":\"" $3 "\", \"status\":\"" (if ($2 == "UP") {"up"} else {"down"}) "\"}"}')
 
 # Create JSON structure with all data
 cat > /var/www/html/status/status.json << EOF
@@ -62,19 +65,17 @@ cat > /var/www/html/status/status.json << EOF
   "disk_used": "$DISK_USED",
   "disk_usage": $DISK_USAGE,
   "services": {
-    "wireguard": "running",
-    "nginx": "running",
-    "jellyfin_proxy": "running"
+    "wireguard": "$WIREGUARD_STATUS",
+    "nginx": "$NGINX_STATUS",
+    "jellyfin_proxy": "$JELLYFIN_PROXY_STATUS"
   },
   "timers": {
     "status_update": "$UPDATE_LAST_RUN",
     "ssl_renewal": "$SSL_LAST_RUN",
     "finguard_update": "$FINGUARD_LAST_RUN",
-    "status_update_remaining": "$STATUS_UPDATE_REMAINING",
-    "ssl_renewal_remaining": "$SSL_RENEWAL_REMAINING",
-    "finguard_update_remaining": "$FINGUARD_UPDATE_REMAINING"
+    "status_update_remaining": "$STATUS_UPDATE_REMAINING"
   },
-  "network": $NETWORK_INFO,
+  "network": $NETWORK_DATA,
   "last_updated": "$(date)"
 }
 EOF

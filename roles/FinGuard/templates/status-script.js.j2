@@ -7,7 +7,7 @@ function updateStatus() {
             console.log("Data loaded:", data); 
 
             // System information
-            document.getElementById('uptime').textContent = data.uptime;
+            document.getElementById('uptime').textContent = data.uptime || 'Loading...';
             document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
             document.getElementById('cpu-bar').style.width = data.cpu_usage + '%';
             document.getElementById('memory-usage').textContent = 
