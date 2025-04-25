@@ -100,6 +100,13 @@
     state: present
   register: tmpfs_config
 
+# Added to fix the mount error
+- name: Ensure nginx log directory exists
+  file:
+    path: /var/log/nginx
+    state: directory
+    mode: '0755'
+
 - name: Create tmpfs mount for nginx logs
   lineinfile:
     path: /etc/fstab
@@ -110,6 +117,18 @@
 - name: Mount tmpfs filesystems if fstab was changed
   command: mount -a
   when: tmpfs_config.changed or nginx_log_config.changed
+
+# Added to fix nginx test error
+- name: Create required NGINX log files
+  file:
+    path: "{{ item }}"
+    state: touch
+    owner: www-data
+    group: adm
+    mode: '0640'
+  loop:
+    - /var/log/nginx/access.log
+    - /var/log/nginx/error.log
 
 - name: Configure journald to store logs in volatile memory
   copy:
