@@ -4,10 +4,32 @@
 # Set WG_INTERFACE from template variable
 WG_INTERFACE="{{ wg_interface }}"
 
-# Get timer last run information
-UPDATE_TIMER_LAST_RUN=$(systemctl show -p LastTriggerUSec status-update.timer | sed 's/LastTriggerUSec=//' | xargs -I{} date -d "@$(({}/1000000))" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Never")
-SSL_TIMER_LAST_RUN=$(systemctl show -p LastTriggerUSec renew-ssl-cert.timer | sed 's/LastTriggerUSec=//' | xargs -I{} date -d "@$(({}/1000000))" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Never")
-FINGUARD_TIMER_LAST_RUN=$(systemctl show -p LastTriggerUSec finguard-update.timer | sed 's/LastTriggerUSec=//' | xargs -I{} date -d "@$(({}/1000000))" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Never")
+# Function to get the most recent run between service and timer
+get_last_run() {
+  local service_name=$1
+  local timer_name=$2
+
+  service_time=$(systemctl show -p ExecMainStartTimestampMonotonic "${service_name}" | awk -F= '{print $2}')
+  timer_time=$(systemctl show -p LastTriggerUSec "${timer_name}" | awk -F= '{print $2}')
+
+  # Default to zero if unset
+  service_time=${service_time:-0}
+  timer_time=${timer_time:-0}
+
+  # Pick the latest
+  if [ "$service_time" -gt "$timer_time" ]; then
+    date -d "@$((service_time / 1000000))" "+%Y-%m-%d %H:%M:%S"
+  elif [ "$timer_time" -gt 0 ]; then
+    date -d "@$((timer_time / 1000000))" "+%Y-%m-%d %H:%M:%S"
+  else
+    echo "Never"
+  fi
+}
+
+# Get last runs
+UPDATE_LAST_RUN=$(get_last_run "status-update.service" "status-update.timer")
+SSL_LAST_RUN=$(get_last_run "renew-ssl-cert.service" "renew-ssl-cert.timer")
+FINGUARD_LAST_RUN=$(get_last_run "finguard-update.service" "finguard-update.timer")
 
 # Create JSON structure with safer network handling
 cat > /var/www/html/status/status.json << EOF
@@ -26,16 +48,15 @@ cat > /var/www/html/status/status.json << EOF
     "jellyfin_proxy": "running"
   },
   "timers": {
-    "status_update": "${UPDATE_TIMER_LAST_RUN}",
-    "ssl_renewal": "${SSL_TIMER_LAST_RUN}",
-    "finguard_update": "${FINGUARD_TIMER_LAST_RUN}"
+    "status_update": "${UPDATE_LAST_RUN}",
+    "ssl_renewal": "${SSL_LAST_RUN}",
+    "finguard_update": "${FINGUARD_LAST_RUN}"
   },
   "network": [
 $(for iface in $(ip -br link show up | awk '{print $1}'); do
   ipaddr=$(ip -br addr show $iface | awk '{print $3}' | cut -d/ -f1)
   if [ ! -z "$ipaddr" ]; then
     echo "    { \"name\": \"$iface\", \"ip\": \"$ipaddr\", \"status\": \"up\" }"
-    # Add comma if not the last entry
     if [ "$iface" != "$(ip -br link show up | tail -n1 | awk '{print $1}')" ]; then
       echo ","
     fi
