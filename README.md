@@ -162,6 +162,10 @@ After deployment, access the following URLs:
 - `http://<hostname>.local/status` → Bridge Dashboard
 - `http://<hostname>.local/service-path` → Other Services
 
+Metrics and bridge status can be seen from the Bridge Dashboard
+
+https://github.com/JPKribs/FinGuard/blob/main/dashboard.png
+
 Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 
 ---
