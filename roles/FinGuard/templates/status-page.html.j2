@@ -254,6 +254,22 @@
             document.getElementById('disk-usage').textContent = data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_usage + '%)';
             document.getElementById('disk-bar').style.width = data.disk_usage + '%';
             document.getElementById('last-updated').textContent = data.last_updated;
+
+            const networkTable = document.getElementById('network-table');
+            while (networkTable.rows.length > 1) {
+                networkTable.deleteRow(1);
+            }
+
+            data.network.forEach((iface) => {
+                const row = networkTable.insertRow();
+                row.insertCell(0).textContent = iface.name;
+                row.insertCell(1).textContent = iface.ip;
+                const statusCell = row.insertCell(2);
+                const statusIndicator = document.createElement('span');
+                statusIndicator.className = 'status-indicator ' + (iface.status === 'up' ? 'status-online' : 'status-offline');
+                statusCell.appendChild(statusIndicator);
+                statusCell.appendChild(document.createTextNode(iface.status === 'up' ? 'Up' : 'Down'));
+            });
         })
         .catch(error => console.error('Error fetching status data:', error));
     }
