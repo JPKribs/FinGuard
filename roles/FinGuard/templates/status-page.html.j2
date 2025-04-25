@@ -68,7 +68,7 @@
         <div class="card">
             <h2>System Timers</h2>
             <table>
-                <tr><th>Timer</th><th>Last Run</th><th>Interval</th></tr>
+                <tr><th>Timer</th><th>Next Run</th><th>Interval</th></tr>
                 <tr><td>Status Update</td><td id="status-update-timer">Loading...</td><td>60 seconds</td></tr>
                 <tr><td>SSL Renewal</td><td id="ssl-renewal-timer">Loading...</td><td>1 year</td></tr>
                 <tr><td>FinGuard Update</td><td id="finguard-update-timer">Loading...</td><td>7 days</td></tr>
@@ -112,9 +112,9 @@
                         statusCell.appendChild(document.createTextNode(iface.status === 'up' ? 'Up' : 'Down'));
                     });
 
-                    document.getElementById('status-update-timer').textContent = data.timers.status_update || '-';
-                    document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal || '-';
-                    document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update || '-';
+                    document.getElementById('status-update-timer').textContent = data.timers.status_update.next_run || '-';
+                    document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal.next_run || '-';
+                    document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update.next_run || '-';
                     document.getElementById('last-updated').textContent = data.last_updated || new Date().toLocaleString();
                 })
                 .catch(error => console.error('Error fetching status data:', error));

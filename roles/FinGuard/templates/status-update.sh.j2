@@ -11,10 +11,46 @@ get_last_run() {
   fi
 }
 
-STATUS_UPDATE_LAST_RUN=$(get_last_run "status-update.service")
-SSL_RENEWAL_LAST_RUN=$(get_last_run "renew-ssl-cert.service")
-FINGUARD_UPDATE_LAST_RUN=$(get_last_run "finguard-update.service")
+get_next_run() {
+  local timer_name=$1
+  next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}')
+  if [[ -z "$next_run" || "$next_run" == "n/a" ]]; then
+    echo "-"
+  else
+    # Only try to format if we have data
+    local seconds=$(echo "$next_run" | awk '{print substr($1, 1, length($1)-6)}')
+    if [[ -n "$seconds" && "$seconds" != "0" ]]; then
+      date -d "@$seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-"
+    else
+      echo "-"
+    fi
+  fi
+}
 
+get_next_static_run() {
+  local timer_name=$1
+  next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}')
+  if [[ -z "$next_run" ]]; then
+    echo "-"
+  else
+    echo "$next_run"
+  fi
+}
+
+# Special case for status-update
+STATUS_UPDATE_LAST_RUN=$(get_last_run "status-update.service")
+if [[ "$STATUS_UPDATE_LAST_RUN" != "-" ]]; then
+  # Add 60 seconds to the last run
+  STATUS_UPDATE_NEXT_RUN=$(date -d "$STATUS_UPDATE_LAST_RUN + 60 seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-")
+else
+  STATUS_UPDATE_NEXT_RUN="-"
+fi
+
+# Simple approach for SSL and FinGuard - just get next run time
+SSL_RENEWAL_NEXT_RUN=$(get_next_static_run "renew-ssl-cert.timer")
+FINGUARD_UPDATE_NEXT_RUN=$(get_next_static_run "finguard-update.timer")
+
+# Rest of your script remains unchanged
 UPTIME=$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")
 CPU_USAGE=$(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0)
 MEMORY_TOTAL=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0)
@@ -53,9 +89,15 @@ cat > /run/status/status.json << EOF
     "jellyfin_proxy": "$JELLYFIN_PROXY_STATUS"
   },
   "timers": {
-    "status_update": "$STATUS_UPDATE_LAST_RUN",
-    "ssl_renewal": "$SSL_RENEWAL_LAST_RUN",
-    "finguard_update": "$FINGUARD_UPDATE_LAST_RUN"
+    "status_update": {
+      "next_run": "$STATUS_UPDATE_NEXT_RUN"
+    },
+    "ssl_renewal": {
+      "next_run": "$SSL_RENEWAL_NEXT_RUN"
+    },
+    "finguard_update": {
+      "next_run": "$FINGUARD_UPDATE_NEXT_RUN"
+    }
   },
   "network": $NETWORK_DATA,
   "last_updated": "$(date)"
