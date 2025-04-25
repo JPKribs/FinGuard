@@ -212,19 +212,11 @@
             <table>
                 <tr>
                     <th>Timer</th>
-                    <th>Last Run</th>
+                    <th>Next Run</th>
                 </tr>
                 <tr>
                     <td>Status Update</td>
-                    <td id="status-update-timer">Loading...</td>
-                </tr>
-                <tr>
-                    <td>SSL Certificate Renewal</td>
-                    <td id="ssl-renewal-timer">Loading...</td>
-                </tr>
-                <tr>
-                    <td>FinGuard Update</td>
-                    <td id="finguard-update-timer">Loading...</td>
+                    <td id="status-update-remaining">Loading...</td>
                 </tr>
             </table>
         </div>  
@@ -248,6 +240,26 @@
             darkModeToggle.textContent = '🌙';
         }
     });
+
+    function updateStatus() {
+        fetch('status.json')
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('status-update-remaining').textContent = data.timers.status_update_remaining;
+            document.getElementById('uptime').textContent = data.uptime;
+            document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
+            document.getElementById('cpu-bar').style.width = data.cpu_usage + '%';
+            document.getElementById('memory-usage').textContent = data.memory_used + ' / ' + data.memory_total + ' MB (' + data.memory_usage + '%)';
+            document.getElementById('memory-bar').style.width = data.memory_usage + '%';
+            document.getElementById('disk-usage').textContent = data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_usage + '%)';
+            document.getElementById('disk-bar').style.width = data.disk_usage + '%';
+            document.getElementById('last-updated').textContent = data.last_updated;
+        })
+        .catch(error => console.error('Error fetching status data:', error));
+    }
+
+    updateStatus();
+    setInterval(updateStatus, 30000);
     </script>
 </body>
 </html>

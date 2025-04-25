@@ -3,11 +3,11 @@ const statusDataPath = '/var/www/html/status/status.json';
 
 // Function to update the UI with status data
 function updateStatus() {
-    fetch('status.json?' + new Date().getTime())
+    fetch(statusDataPath + '?' + new Date().getTime())
         .then(response => response.json())
         .then(data => {
             console.log("Data loaded:", data); // Add debugging
-            
+
             // System information
             document.getElementById('uptime').textContent = data.uptime;
             
@@ -58,7 +58,7 @@ function updateStatus() {
 
             // Timer information
             if (data.timers) {
-                document.getElementById('status-update-timer').textContent = data.timers.status_update || 'Never';
+                document.getElementById('status-update-remaining').textContent = data.timers.status_update_remaining || 'Never';
                 document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal || 'Never';
                 document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update || 'Never';
             }
@@ -103,4 +103,4 @@ function updateServiceStatus(elementId, status) {
 updateStatus();
 
 // Update every 30 seconds
-setInterval(updateStatus, 30000);
+setInterval(updateStatus, 30000);  

@@ -1,41 +1,11 @@
 #!/bin/bash
-# Generate status data for dashboard
+# Generate status data for the entire dashboard
 
-# Set WG_INTERFACE from template variable
-WG_INTERFACE="{{ wg_interface }}"
-
-# Function to get the most recent run between service and timer
-get_last_run() {
-  local service_name=$1
-  local timer_name=$2
-
-  # Get monotonic timestamps (microseconds since boot)
-  service_epoch=$(systemctl show "$service_name" -p ActiveEnterTimestampMonotonic | awk -F= '{print $2}')
-  timer_epoch=$(systemctl show "$timer_name" -p LastTriggerUSec | awk -F= '{print $2}')
-
-  # Fallbacks if unset
-  service_epoch=${service_epoch:-0}
-  timer_epoch=${timer_epoch:-0}
-
-  # Pick latest monotonic timestamp
-  if [ "$service_epoch" -gt "$timer_epoch" ]; then
-    timestamp=$(systemctl show "$service_name" -p ActiveEnterTimestamp | awk -F= '{print $2}')
-  elif [ "$timer_epoch" -gt 0 ]; then
-    timestamp=$(systemctl show "$timer_name" -p LastTriggerTimestamp | awk -F= '{print $2}')
-  else
-    echo "Never"
-    return
-  fi
-
-  # Output human-readable
-  echo "$timestamp"
-}
-
-# Function to get the remaining time for the next timer trigger
+# Get the remaining time for the next timer trigger
 get_timer_remaining() {
   local timer_name=$1
 
-  # Get the next trigger time of the timer
+  # Get the next trigger time of the timer in microseconds
   next_trigger=$(systemctl show "$timer_name" -p NextElapseUSec | awk -F= '{print $2}' || echo 0)
 
   # If the timer has no next trigger, return "Never"
@@ -44,7 +14,7 @@ get_timer_remaining() {
     return
   fi
 
-  # Get the current time in seconds
+  # Get current time in seconds
   current_time=$(date +%s)
 
   # Convert next trigger to seconds
@@ -53,54 +23,53 @@ get_timer_remaining() {
   # Calculate remaining time (in seconds)
   remaining_seconds=$((next_trigger_seconds - current_time))
 
-  # Return remaining time
+  # Output remaining time in seconds
   echo "$remaining_seconds seconds left"
 }
 
-# Get last runs
-UPDATE_LAST_RUN=$(get_last_run "status-update.service" "status-update.timer")
-SSL_LAST_RUN=$(get_last_run "renew-ssl-cert.service" "renew-ssl-cert.timer")
-FINGUARD_LAST_RUN=$(get_last_run "finguard-update.service" "finguard-update.timer")
+# Get the last runs for services and timers
+UPDATE_LAST_RUN=$(systemctl show "status-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
+SSL_LAST_RUN=$(systemctl show "renew-ssl-cert.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
+FINGUARD_LAST_RUN=$(systemctl show "finguard-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
 
-# Get remaining time for the status update timer
+# Get the remaining time for the status update timer
 STATUS_UPDATE_REMAINING=$(get_timer_remaining "status-update.timer")
 
-# Create JSON structure with safer network handling
+# Get system information
+UPTIME=$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")
+CPU_USAGE=$(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0)
+MEMORY_TOTAL=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0)
+MEMORY_USED=$(free -m 2>/dev/null | awk '/Mem:/ {print $3}' || echo 0)
+MEMORY_USAGE=$(free 2>/dev/null | awk '/Mem:/ {printf("%.0f", ($3/$2) * 100)}' || echo 0)
+DISK_TOTAL=$(df -h / 2>/dev/null | awk '/\// {print $2}' | sed 's/G//' || echo 0)
+DISK_USED=$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)
+DISK_USAGE=$(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0)
+
+# Create JSON structure with all data
 cat > /var/www/html/status/status.json << EOF
 {
-  "uptime": "$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")",
-  "cpu_usage": $(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0),
-  "memory_total": $(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0),
-  "memory_used": $(free -m 2>/dev/null | awk '/Mem:/ {print $3}' || echo 0),
-  "memory_usage": $(free 2>/dev/null | awk '/Mem:/ {printf("%.0f", ($3/$2) * 100)}' || echo 0),
-  "disk_total": "$(df -h / 2>/dev/null | awk '/\// {print $2}' | sed 's/G//' || echo 0)",
-  "disk_used": "$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)",
-  "disk_usage": $(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0),
+  "uptime": "$UPTIME",
+  "cpu_usage": $CPU_USAGE,
+  "memory_total": $MEMORY_TOTAL,
+  "memory_used": $MEMORY_USED,
+  "memory_usage": $MEMORY_USAGE,
+  "disk_total": "$DISK_TOTAL",
+  "disk_used": "$DISK_USED",
+  "disk_usage": $DISK_USAGE,
   "services": {
     "wireguard": "running",
     "nginx": "running",
     "jellyfin_proxy": "running"
   },
   "timers": {
-    "status_update": "${UPDATE_LAST_RUN}",
-    "ssl_renewal": "${SSL_LAST_RUN}",
-    "finguard_update": "${FINGUARD_LAST_RUN}",
-    "status_update_remaining": "${STATUS_UPDATE_REMAINING}"
+    "status_update": "$UPDATE_LAST_RUN",
+    "ssl_renewal": "$SSL_LAST_RUN",
+    "finguard_update": "$FINGUARD_LAST_RUN",
+    "status_update_remaining": "$STATUS_UPDATE_REMAINING"
   },
-  "network": [
-$(for iface in $(ip -br link show up | awk '{print $1}'); do
-  ipaddr=$(ip -br addr show $iface | awk '{print $3}' | cut -d/ -f1)
-  if [ ! -z "$ipaddr" ]; then
-    echo "    { \"name\": \"$iface\", \"ip\": \"$ipaddr\", \"status\": \"up\" }"
-    if [ "$iface" != "$(ip -br link show up | tail -n1 | awk '{print $1}')" ]; then
-      echo ","
-    fi
-  fi
-done)
-  ],
   "last_updated": "$(date)"
 }
 EOF
 
-# Set permissions
+# Set permissions for the status file
 chmod 644 /var/www/html/status/status.json
