@@ -10,6 +10,12 @@ server {
         index index.html;
     }
 
+    # Serve status.json from /run/status
+    location /status/status.json {
+        alias /run/status/status.json;
+        default_type application/json;
+    }
+
     {% for service in services %}
     # {{ service.name | title }} service
     location {{ service.path }} {
@@ -49,6 +55,12 @@ server {
     location /status {
         alias /var/www/html/status;
         index index.html;
+    }
+
+    # Serve status.json from /run/status
+    location /status/status.json {
+        alias /run/status/status.json;
+        default_type application/json;
     }
 
     # SSL certificate and key paths
