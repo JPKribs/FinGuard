@@ -1,0 +1,27 @@
+#!/bin/bash
+# Generate status data for dashboard
+
+# Create JSON structure
+cat > /var/www/html/status/status.json << EOF
+{
+  "uptime": "$(uptime -p | sed "s/up //")",
+  "cpu_usage": $(top -bn1 | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1),
+  "memory_total": $(free -m | awk '/Mem:/ {print $2}'),
+  "memory_used": $(free -m | awk '/Mem:/ {print $3}'),
+  "memory_usage": $(free | awk '/Mem:/ {printf("%.0f", ($3/$2) * 100)}'),
+  "disk_total": $(df -h / | awk '/\// {print $2}' | sed 's/G//'),
+  "disk_used": $(df -h / | awk '/\// {print $3}' | sed 's/G//'),
+  "disk_usage": $(df -h / | awk '/\// {print $5}' | sed 's/%//'),
+  "services": {
+    "wireguard": "$(systemctl is-active wg-quick@${WG_INTERFACE})",
+    "nginx": "$(systemctl is-active nginx)",
+    "jellyfin_proxy": "$(systemctl is-active jellyfin-discovery-proxy)"
+  },
+  "network": [
+    $(ip -j addr | jq -r '.[] | select(.operstate != "DOWN") | {name: .ifname, ip: .addr_info[0].local, status: .operstate | ascii_downcase} | "\\(.),"' | sed 's/,$//g')
+  ]
+}
+EOF
+
+# Set permissions
+chmod 644 /var/www/html/status/status.json

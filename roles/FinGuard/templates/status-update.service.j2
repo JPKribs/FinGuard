@@ -1,0 +1,11 @@
+[Unit]
+Description=Update system status information for web dashboard
+After=network.target
+
+[Service]
+Type=oneshot
+Environment="WG_INTERFACE={{ wg_interface }}"
+ExecStart=/usr/local/bin/status-update.sh
+
+[Install]
+WantedBy=multi-user.target

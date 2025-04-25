@@ -1,0 +1,89 @@
+// Status data file path
+const statusDataPath = '/var/www/html/status/status.json';
+
+// Function to update the UI with status data
+function updateStatus() {
+    fetch('status.json?' + new Date().getTime())
+        .then(response => response.json())
+        .then(data => {
+            // System information
+            document.getElementById('uptime').textContent = data.uptime;
+            
+            document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
+            document.getElementById('cpu-bar').style.width = data.cpu_usage + '%';
+            
+            document.getElementById('memory-usage').textContent = 
+                data.memory_used + ' / ' + data.memory_total + ' MB (' + data.memory_usage + '%)';
+            document.getElementById('memory-bar').style.width = data.memory_usage + '%';
+            
+            document.getElementById('disk-usage').textContent = 
+                data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_usage + '%)';
+            document.getElementById('disk-bar').style.width = data.disk_usage + '%';
+            
+            // Service status
+            updateServiceStatus('wireguard-status', data.services.wireguard);
+            updateServiceStatus('nginx-status', data.services.nginx);
+            updateServiceStatus('jellyfin-proxy-status', data.services.jellyfin_proxy);
+            
+            // Network information
+            const networkTable = document.getElementById('network-table');
+            // Clear existing rows except header
+            while (networkTable.rows.length > 1) {
+                networkTable.deleteRow(1);
+            }
+            
+            // Add network interfaces
+            data.network.forEach(iface => {
+                const row = networkTable.insertRow();
+                const nameCell = row.insertCell(0);
+                const ipCell = row.insertCell(1);
+                const statusCell = row.insertCell(2);
+                
+                nameCell.textContent = iface.name;
+                ipCell.textContent = iface.ip || 'N/A';
+                
+                const statusIndicator = document.createElement('span');
+                statusIndicator.className = 'status-indicator ' + 
+                    (iface.status === 'up' ? 'status-online' : 'status-offline');
+                
+                statusCell.appendChild(statusIndicator);
+                statusCell.appendChild(document.createTextNode(
+                    iface.status === 'up' ? 'Up' : 'Down'
+                ));
+            });
+            
+            // Update last updated time
+            document.getElementById('last-updated').textContent = new Date().toLocaleString();
+        })
+        .catch(error => {
+            console.error('Error fetching status data:', error);
+        });
+}
+
+// Helper function to update service status in the UI
+function updateServiceStatus(elementId, status) {
+    const element = document.getElementById(elementId);
+    const indicator = element.querySelector('.status-indicator');
+    
+    indicator.className = 'status-indicator ' + 
+        (status === 'running' ? 'status-online' : 'status-offline');
+    
+    // Remove old text node
+    while (element.lastChild) {
+        if (element.lastChild.nodeType === Node.ELEMENT_NODE) {
+            break;
+        }
+        element.removeChild(element.lastChild);
+    }
+    
+    // Add new text node
+    element.appendChild(document.createTextNode(
+        status === 'running' ? 'Running' : 'Stopped'
+    ));
+}
+
+// Initial update
+updateStatus();
+
+// Update every 30 seconds
+setInterval(updateStatus, 30000);

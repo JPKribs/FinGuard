@@ -1,0 +1,12 @@
+[Unit]
+Description=Update system status information every minute
+RefuseManualStart=no
+RefuseManualStop=no
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+Unit=status-update.service
+
+[Install]
+WantedBy=timers.target

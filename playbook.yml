@@ -14,3 +14,20 @@
       systemd:
         name: jellyfin-discovery-proxy
         state: restarted
+        
+    - name: Restart journald
+      systemd:
+        name: systemd-journald
+        state: restarted
+        
+    - name: Test NGINX configuration
+      command: nginx -t
+      register: nginx_test_result
+      failed_when: nginx_test_result.rc != 0
+      changed_when: false
+      
+    - name: Reload NGINX if valid
+      systemd:
+        name: nginx
+        state: reloaded
+      when: nginx_test_result is success
