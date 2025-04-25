@@ -31,10 +31,39 @@ get_last_run() {
   echo "$timestamp"
 }
 
+# Function to get the remaining time for the next timer trigger
+get_timer_remaining() {
+  local timer_name=$1
+
+  # Get the next trigger time of the timer
+  next_trigger=$(systemctl show "$timer_name" -p NextElapseUSec | awk -F= '{print $2}' || echo 0)
+
+  # If the timer has no next trigger, return "Never"
+  if [ "$next_trigger" -eq 0 ]; then
+    echo "Never"
+    return
+  fi
+
+  # Get the current time in seconds
+  current_time=$(date +%s)
+
+  # Convert next trigger to seconds
+  next_trigger_seconds=$((next_trigger / 1000000))
+
+  # Calculate remaining time (in seconds)
+  remaining_seconds=$((next_trigger_seconds - current_time))
+
+  # Return remaining time
+  echo "$remaining_seconds seconds left"
+}
+
 # Get last runs
 UPDATE_LAST_RUN=$(get_last_run "status-update.service" "status-update.timer")
 SSL_LAST_RUN=$(get_last_run "renew-ssl-cert.service" "renew-ssl-cert.timer")
 FINGUARD_LAST_RUN=$(get_last_run "finguard-update.service" "finguard-update.timer")
+
+# Get remaining time for the status update timer
+STATUS_UPDATE_REMAINING=$(get_timer_remaining "status-update.timer")
 
 # Create JSON structure with safer network handling
 cat > /var/www/html/status/status.json << EOF
@@ -55,7 +84,8 @@ cat > /var/www/html/status/status.json << EOF
   "timers": {
     "status_update": "${UPDATE_LAST_RUN}",
     "ssl_renewal": "${SSL_LAST_RUN}",
-    "finguard_update": "${FINGUARD_LAST_RUN}"
+    "finguard_update": "${FINGUARD_LAST_RUN}",
+    "status_update_remaining": "${STATUS_UPDATE_REMAINING}"
   },
   "network": [
 $(for iface in $(ip -br link show up | awk '{print $1}'); do
