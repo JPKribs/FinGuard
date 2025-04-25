@@ -12,8 +12,8 @@
       - avahi-daemon
       - resolvconf
       - cron
-      - openssl # Added for SSL certificate generation
-      - jq # Added for status page and JSON handling
+      - openssl
+      - jq
     state: present
 
 - name: Set system timezone
@@ -36,6 +36,7 @@
   no_log: true
 
 # — Ensure hostname on every boot —
+
 - name: Deploy set-hostname systemd service
   template:
     src: set-hostname.service.j2
@@ -85,7 +86,7 @@
 
 - name: Ensure NGINX auto-restart on failure
   copy:
-    dest: "/etc/systemd/system/nginx.service.d/override.conf"
+    dest: /etc/systemd/system/nginx.service.d/override.conf
     content: |
       [Service]
       Restart=on-failure
@@ -93,6 +94,7 @@
   notify: Reload systemd
 
 # — Ensure ALL logging uses RAM —
+
 - name: Create tmpfs mount points in fstab
   lineinfile:
     path: /etc/fstab
@@ -107,11 +109,15 @@
     state: present
   loop:
     - "tmpfs /var/log/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0"
-    - "tmpfs /var/www/html/status tmpfs defaults,noatime,mode=0755,size=100M 0 0"
     - "tmpfs /var/cache/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0"
+    - "tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=100M 0 0"
+    - "tmpfs /run/status tmpfs defaults,noatime,mode=0755,size=100M 0 0"
   register: additional_tmpfs_config
 
-# Added to fix the mount error
+- name: Mount tmpfs filesystems if fstab was changed
+  command: mount -a
+  when: tmpfs_config.changed or additional_tmpfs_config.changed
+
 - name: Ensure nginx log directory exists
   file:
     path: /var/log/nginx
@@ -128,19 +134,8 @@
     - /var/cache/apt
     - /var/cache/apt/archives
     - /var/cache/apt/archives/partial
+    - /run/status
 
-- name: Create tmpfs mount for nginx logs
-  lineinfile:
-    path: /etc/fstab
-    line: "tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=100M 0 0"
-    state: present
-  register: nginx_log_config
-
-- name: Mount tmpfs filesystems if fstab was changed
-  command: mount -a
-  when: tmpfs_config.changed or nginx_log_config.changed or additional_tmpfs_config.changed
-
-# Added to fix nginx test error
 - name: Create required NGINX log files
   file:
     path: "{{ item }}"
@@ -206,6 +201,7 @@
     - Restart journald
 
 # — SSL Certificate Generation —
+
 - name: Ensure SSL private key directory exists
   file:
     path: /etc/ssl/private
@@ -231,9 +227,10 @@
     privatekey_path: /etc/ssl/private/{{ hostname }}.key
     csr_path: /etc/ssl/certs/{{ hostname }}.csr
     provider: selfsigned
-    selfsigned_not_after: "+370d"  # Valid for 370 days
+    selfsigned_not_after: "+370d" 
 
 # — Status Page —
+
 - name: Create status page directory
   file:
     path: /var/www/html/status
@@ -252,7 +249,7 @@
     dest: /var/www/html/status/index.html
     mode: '0644'
 
-- name: Deploy status update script
+- name: Deploy status update script (writes to /run/status/status.json)
   template:
     src: status-update.sh.j2
     dest: /usr/local/bin/status-update.sh
@@ -262,15 +259,13 @@
   template:
     src: status-update.service.j2
     dest: /etc/systemd/system/status-update.service
-  notify:
-    - Reload systemd
+  notify: Reload systemd
 
 - name: Deploy status update timer
   template:
     src: status-update.timer.j2
     dest: /etc/systemd/system/status-update.timer
-  notify:
-    - Reload systemd
+  notify: Reload systemd
 
 - name: Enable status update timer
   systemd:
@@ -279,6 +274,7 @@
     state: started
 
 # — NGINX setup —
+
 - name: Deploy NGINX vhost
   template:
     src: nginx.conf.j2
@@ -318,6 +314,7 @@
     state: reloaded
 
 # — Avahi —
+
 - name: Ensure Avahi is running
   systemd:
     name: avahi-daemon
@@ -325,6 +322,7 @@
     state: started
 
 # — Discovery Proxy —
+
 - name: Get latest release info from GitHub
   uri:
     url: "https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest"
@@ -363,6 +361,7 @@
 # — Weekly maintenance via systemd timer & script —
 
 # — SSL Certificate Renewal —
+
 - name: Deploy SSL certificate renewal script
   template:
     src: renew-ssl-cert.sh.j2
