@@ -106,8 +106,8 @@
     line: "{{ item }}"
     state: present
   loop:
-    - "tmpfs /var/log/apt tmpfs defaults,noatime,mode=0755,size=10M 0 0"
-    - "tmpfs /var/www/html/status tmpfs defaults,noatime,mode=0755,size=5M 0 0"
+    - "tmpfs /var/log/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0"
+    - "tmpfs /var/www/html/status tmpfs defaults,noatime,mode=0755,size=100M 0 0"
     - "tmpfs /var/cache/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0"
   register: additional_tmpfs_config
 
@@ -200,7 +200,7 @@
     content: |
       [Journal]
       Storage=volatile
-      RuntimeMaxUse=10M
+      RuntimeMaxUse=100M
       ForwardToSyslog=yes
   notify:
     - Restart journald
