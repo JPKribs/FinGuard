@@ -237,12 +237,6 @@
     state: directory
     mode: '0755'
 
-- name: Deploy status page script
-  template:
-    src: status-script.js.j2
-    dest: /var/www/html/status/status.js
-    mode: '0644'
-
 - name: Deploy status page HTML
   template:
     src: status-page.html.j2
