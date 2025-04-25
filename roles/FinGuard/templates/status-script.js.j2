@@ -7,7 +7,7 @@ function updateStatus() {
             console.log("Data loaded:", data); 
 
             // System information
-            document.getElementById('uptime').textContent = data.uptime || 'Loading...';
+            document.getElementById('uptime').textContent = data.uptime || '-';
             document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
             document.getElementById('cpu-bar').style.width = data.cpu_usage + '%';
             document.getElementById('memory-usage').textContent = 
@@ -49,11 +49,11 @@ function updateStatus() {
                 });
             }
 
-            // Timer information
+            // Timer (last run) information
             if (data.timers) {
-                document.getElementById('status-update-remaining').textContent = data.timers.status_update_remaining || 'Never';
-                document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal || 'Never';
-                document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update || 'Never';
+                document.getElementById('status-update-timer').textContent = data.timers.status_update || '-';
+                document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal || '-';
+                document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update || '-';
             }
 
             // Update last updated time

@@ -1,23 +1,19 @@
 #!/bin/bash
 # Generate status data for the entire dashboard
 
-get_timer_remaining() {
-  local timer_name=$1
-  next_trigger=$(systemctl show "$timer_name" -p NextElapseUSec | awk -F= '{print $2}' || echo 0)
-  if [[ "$next_trigger" -eq 0 ]]; then
-    echo "Never"
-    return
+get_last_run() {
+  local service_name=$1
+  last_run=$(systemctl show "$service_name" -p ExecMainStartTimestamp | awk -F= '{print $2}')
+  if [[ -z "$last_run" ]]; then
+    echo "-"
+  else
+    echo "$last_run"
   fi
-  current_time=$(date +%s)
-  next_trigger_seconds=$((next_trigger / 1000000))
-  remaining_seconds=$((next_trigger_seconds - current_time))
-  echo "$remaining_seconds seconds left"
 }
 
-UPDATE_LAST_RUN=$(systemctl show "status-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
-SSL_LAST_RUN=$(systemctl show "renew-ssl-cert.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
-FINGUARD_LAST_RUN=$(systemctl show "finguard-update.service" -p ActiveEnterTimestamp | awk -F= '{print $2}')
-STATUS_UPDATE_REMAINING=$(get_timer_remaining "status-update.timer")
+STATUS_UPDATE_LAST_RUN=$(get_last_run "status-update.service")
+SSL_RENEWAL_LAST_RUN=$(get_last_run "renew-ssl-cert.service")
+FINGUARD_UPDATE_LAST_RUN=$(get_last_run "finguard-update.service")
 
 UPTIME=$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")
 CPU_USAGE=$(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0)
@@ -28,14 +24,15 @@ DISK_TOTAL=$(df -h / 2>/dev/null | awk '/\// {print $2}' | sed 's/G//' || echo 0
 DISK_USED=$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)
 DISK_USAGE=$(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0)
 
-WIREGUARD_STATUS=$(systemctl is-active wireguard)
+WIREGUARD_STATUS=$(systemctl is-active wg-quick@wg0)
 NGINX_STATUS=$(systemctl is-active nginx)
 JELLYFIN_PROXY_STATUS=$(systemctl is-active jellyfin-discovery-proxy)
 
 NETWORK_DATA=$(ip -br addr | awk '
 {
     split($3, ip, "/");
-    printf("{\"name\":\"%s\",\"ip\":\"%s\",\"status\":\"%s\"},", $1, ip[1], ($2 == "UP") ? "up" : "down");
+    status = ($2 == "UP" || $2 == "UNKNOWN") ? "up" : "down";
+    printf("{\"name\":\"%s\",\"ip\":\"%s\",\"status\":\"%s\"},", $1, ip[1], status);
 }
 ' | sed 's/,$//')
 NETWORK_DATA="[$NETWORK_DATA]"
@@ -56,10 +53,9 @@ cat > /run/status/status.json << EOF
     "jellyfin_proxy": "$JELLYFIN_PROXY_STATUS"
   },
   "timers": {
-    "status_update": "$UPDATE_LAST_RUN",
-    "ssl_renewal": "$SSL_LAST_RUN",
-    "finguard_update": "$FINGUARD_LAST_RUN",
-    "status_update_remaining": "$STATUS_UPDATE_REMAINING"
+    "status_update": "$STATUS_UPDATE_LAST_RUN",
+    "ssl_renewal": "$SSL_RENEWAL_LAST_RUN",
+    "finguard_update": "$FINGUARD_UPDATE_LAST_RUN"
   },
   "network": $NETWORK_DATA,
   "last_updated": "$(date)"
