@@ -3,6 +3,12 @@ server {
     listen 80 default_server;
     listen [::]:80 default_server;
     server_name {{ hostname }} {{ hostname }}.local;
+    
+    # Status page
+    location /status {
+        alias /var/www/html/status;
+        index index.html;
+    }
 
     {% for service in services %}
     # {{ service.name | title }} service
@@ -38,6 +44,12 @@ server {
     listen 443 ssl default_server;
     listen [::]:443 ssl default_server;
     server_name {{ hostname }} {{ hostname }}.local;
+    
+    # Status page
+    location /status {
+        alias /var/www/html/status;
+        index index.html;
+    }
 
     # SSL certificate and key paths
     ssl_certificate /etc/ssl/certs/{{ hostname }}.crt;
