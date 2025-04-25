@@ -96,7 +96,7 @@
 - name: Create tmpfs mount points in fstab
   lineinfile:
     path: /etc/fstab
-    line: "tmpfs /var/log tmpfs defaults,noatime,mode=0755,size=50M 0 0"
+    line: "tmpfs /var/log tmpfs defaults,noatime,mode=0755,size=100M 0 0"
     state: present
   register: tmpfs_config
 
@@ -132,7 +132,7 @@
 - name: Create tmpfs mount for nginx logs
   lineinfile:
     path: /etc/fstab
-    line: "tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=10M 0 0"
+    line: "tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=100M 0 0"
     state: present
   register: nginx_log_config
 
