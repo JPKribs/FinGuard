@@ -4,6 +4,11 @@
 # Set WG_INTERFACE from template variable
 WG_INTERFACE="{{ wg_interface }}"
 
+# Get timer last run information
+UPDATE_TIMER_LAST_RUN=$(systemctl show -p LastTriggerUSec status-update.timer | sed 's/LastTriggerUSec=//' | xargs -I{} date -d "@$(({}/1000000))" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Never")
+SSL_TIMER_LAST_RUN=$(systemctl show -p LastTriggerUSec renew-ssl-cert.timer | sed 's/LastTriggerUSec=//' | xargs -I{} date -d "@$(({}/1000000))" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Never")
+FINGUARD_TIMER_LAST_RUN=$(systemctl show -p LastTriggerUSec finguard-update.timer | sed 's/LastTriggerUSec=//' | xargs -I{} date -d "@$(({}/1000000))" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "Never")
+
 # Create JSON structure with safer network handling
 cat > /var/www/html/status/status.json << EOF
 {
@@ -19,6 +24,11 @@ cat > /var/www/html/status/status.json << EOF
     "wireguard": "running",
     "nginx": "running",
     "jellyfin_proxy": "running"
+  },
+  "timers": {
+    "status_update": "${UPDATE_TIMER_LAST_RUN}",
+    "ssl_renewal": "${SSL_TIMER_LAST_RUN}",
+    "finguard_update": "${FINGUARD_TIMER_LAST_RUN}"
   },
   "network": [
 $(for iface in $(ip -br link show up | awk '{print $1}'); do

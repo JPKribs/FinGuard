@@ -55,6 +55,13 @@ function updateStatus() {
                     ));
                 });
             }
+
+            // Timer information
+            if (data.timers) {
+                document.getElementById('status-update-timer').textContent = data.timers.status_update || 'Never';
+                document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal || 'Never';
+                document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update || 'Never';
+            }
             
             // Update last updated time
             document.getElementById('last-updated').textContent = data.last_updated || new Date().toLocaleString();

@@ -147,7 +147,6 @@
                 </tr>
             </table>
         </div>
-        
         <div class="card">
             <h2>Network Information</h2>
             <table id="network-table">
@@ -159,8 +158,30 @@
                 <!-- Will be populated by JavaScript -->
             </table>
         </div>
-        
-        <div class="refresh-time">Last updated: <span id="last-updated">Loading...</span></div>
+
+        <!-- Add the new System Timers card here -->
+        <div class="card">
+            <h2>System Timers</h2>
+            <table>
+                <tr>
+                    <th>Timer</th>
+                    <th>Last Run</th>
+                </tr>
+                <tr>
+                    <td>Status Update</td>
+                    <td id="status-update-timer">Loading...</td>
+                </tr>
+                <tr>
+                    <td>SSL Certificate Renewal</td>
+                    <td id="ssl-renewal-timer">Loading...</td>
+                </tr>
+                <tr>
+                    <td>FinGuard Update</td>
+                    <td id="finguard-update-timer">Loading...</td>
+                </tr>
+            </table>
+        </div>  
+        <div class="refresh-time">Last updated: <span id="last-updated">Loading...</span></div>    <div class="refresh-time">Last updated: <span id="last-updated">Loading...</span></div>
     </div>
     
     <script src="status.js"></script>
