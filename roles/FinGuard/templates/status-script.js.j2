@@ -4,89 +4,63 @@ function updateStatus() {
     fetch(statusDataPath + '?' + new Date().getTime())
         .then(response => response.json())
         .then(data => {
-            console.log("Data loaded:", data); 
-
-            // System information
             document.getElementById('uptime').textContent = data.uptime || '-';
             document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
             document.getElementById('cpu-bar').style.width = data.cpu_usage + '%';
-            document.getElementById('memory-usage').textContent = 
-                data.memory_used + ' / ' + data.memory_total + ' MB (' + data.memory_usage + '%)';
+            document.getElementById('memory-usage').textContent = data.memory_used + ' / ' + data.memory_total + ' MB (' + data.memory_usage + '%)';
             document.getElementById('memory-bar').style.width = data.memory_usage + '%';
-            document.getElementById('disk-usage').textContent = 
-                data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_usage + '%)';
+            document.getElementById('disk-usage').textContent = data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_usage + '%)';
             document.getElementById('disk-bar').style.width = data.disk_usage + '%';
 
-            // Service status
             updateServiceStatus('wireguard-status', data.services.wireguard);
             updateServiceStatus('nginx-status', data.services.nginx);
             updateServiceStatus('jellyfin-proxy-status', data.services.jellyfin_proxy);
 
-            // Network information
             const networkTable = document.getElementById('network-table');
             while (networkTable.rows.length > 1) {
-                networkTable.deleteRow(1); // Clear existing rows
+                networkTable.deleteRow(1);
             }
+            data.network.forEach(iface => {
+                const row = networkTable.insertRow();
+                row.insertCell(0).textContent = iface.name || 'Unknown';
+                row.insertCell(1).textContent = iface.ip || 'N/A';
+                const statusCell = row.insertCell(2);
+                const indicator = document.createElement('span');
+                indicator.className = 'status-indicator ' + (iface.status === 'up' ? 'status-online' : 'status-offline');
+                statusCell.appendChild(indicator);
+                statusCell.appendChild(document.createTextNode(iface.status === 'up' ? 'Up' : 'Down'));
+            });
 
-            if (data.network && data.network.length > 0) {
-                data.network.forEach(iface => {
-                    const row = networkTable.insertRow();
-                    const nameCell = row.insertCell(0);
-                    const ipCell = row.insertCell(1);
-                    const statusCell = row.insertCell(2);
-
-                    nameCell.textContent = iface.name || 'Unknown';
-                    ipCell.textContent = iface.ip || 'N/A';
-
-                    const statusIndicator = document.createElement('span');
-                    statusIndicator.className = 'status-indicator ' + 
-                        ((iface.status === 'up') ? 'status-online' : 'status-offline');
-
-                    statusCell.appendChild(statusIndicator);
-                    statusCell.appendChild(document.createTextNode(
-                        (iface.status === 'up') ? 'Up' : 'Down'
-                    ));
-                });
-            }
-
-            // Timer (last run) information
-            if (data.timers) {
-                document.getElementById('status-update-timer').textContent = data.timers.status_update || '-';
-                document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal || '-';
-                document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update || '-';
-            }
-
-            // Update last updated time
+            document.getElementById('status-update-timer').textContent = data.timers.status_update || '-';
+            document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal || '-';
+            document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update || '-';
             document.getElementById('last-updated').textContent = data.last_updated || new Date().toLocaleString();
         })
-        .catch(error => {
-            console.error('Error fetching status data:', error);
-        });
+        .catch(error => console.error('Error fetching status data:', error));
 }
 
 function updateServiceStatus(elementId, status) {
     const element = document.getElementById(elementId);
-    if (!element) return;
-
     const indicator = element.querySelector('.status-indicator');
-    if (!indicator) return;
-
-    const isRunning = (status === 'running' || status === 'active');
-    
-    indicator.className = 'status-indicator ' + 
-        (isRunning ? 'status-online' : 'status-offline');
-
-    while (element.lastChild) {
-        if (element.lastChild.nodeType === Node.ELEMENT_NODE) {
-            break;
-        }
-        element.removeChild(element.lastChild);
-    }
-
-    element.appendChild(document.createTextNode(
-        isRunning ? 'Running' : 'Stopped'
-    ));
+    const isRunning = status === 'running' || status === 'active';
+    indicator.className = 'status-indicator ' + (isRunning ? 'status-online' : 'status-offline');
+    element.lastChild.textContent = isRunning ? 'Running' : 'Stopped';
 }
 
+function setupDarkMode() {
+    const toggle = document.getElementById('darkModeToggle');
+    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    if (localStorage.getItem('darkMode') === 'enabled' || (localStorage.getItem('darkMode') === null && prefersDark)) {
+        document.body.classList.add('dark-mode');
+        toggle.textContent = '☀️';
+    }
+    toggle.addEventListener('click', () => {
+        document.body.classList.toggle('dark-mode');
+        localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'enabled' : 'disabled');
+        toggle.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+    });
+}
+
+setupDarkMode();
 updateStatus();
 setInterval(updateStatus, 30000);
