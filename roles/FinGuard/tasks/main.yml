@@ -249,6 +249,12 @@
     dest: /var/www/html/status/index.html
     mode: '0644'
 
+- name: Deploy favicon for status page
+  copy:
+    src: inventory/group_vars/favicon.ico
+    dest: /var/www/html/status/favicon.ico
+    mode: '0644'
+
 - name: Deploy status update script (writes to /run/status/status.json)
   template:
     src: status-update.sh.j2
