@@ -9,26 +9,26 @@ get_last_run() {
   local service_name=$1
   local timer_name=$2
 
-  # Get service epoch
-  service_epoch=$(systemctl show "$service_name" -p ExecMainStartTimestampMonotonic | awk -F= '{print $2}')
-  if [ "$service_epoch" -eq 0 ]; then
-    service_epoch=$(systemctl show "$service_name" -p ActiveEnterTimestampMonotonic | awk -F= '{print $2}')
-  fi
-
-  # Get timer epoch
+  # Get monotonic timestamps (microseconds since boot)
+  service_epoch=$(systemctl show "$service_name" -p ActiveEnterTimestampMonotonic | awk -F= '{print $2}')
   timer_epoch=$(systemctl show "$timer_name" -p LastTriggerUSec | awk -F= '{print $2}')
 
-  service_epoch=$((service_epoch / 1000000))
-  timer_epoch=$((timer_epoch / 1000000))
+  # Fallbacks if unset
+  service_epoch=${service_epoch:-0}
+  timer_epoch=${timer_epoch:-0}
 
-  # Return latest
+  # Pick latest monotonic timestamp
   if [ "$service_epoch" -gt "$timer_epoch" ]; then
-    date -d "@$service_epoch" "+%Y-%m-%d %H:%M:%S"
+    timestamp=$(systemctl show "$service_name" -p ActiveEnterTimestamp | awk -F= '{print $2}')
   elif [ "$timer_epoch" -gt 0 ]; then
-    date -d "@$timer_epoch" "+%Y-%m-%d %H:%M:%S"
+    timestamp=$(systemctl show "$timer_name" -p LastTriggerTimestamp | awk -F= '{print $2}')
   else
     echo "Never"
+    return
   fi
+
+  # Output human-readable
+  echo "$timestamp"
 }
 
 # Get last runs
