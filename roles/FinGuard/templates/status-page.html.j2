@@ -242,7 +242,7 @@
     });
 
     function updateStatus() {
-        fetch('status.json')
+        fetch('/run/status/status.json')
         .then(response => response.json())
         .then(data => {
             document.getElementById('status-update-remaining').textContent = data.timers.status_update_remaining;

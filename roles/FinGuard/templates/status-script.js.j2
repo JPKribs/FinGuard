@@ -1,4 +1,4 @@
-const statusDataPath = '/var/www/html/status/status.json';
+const statusDataPath = '/status/status.json';
 
 function updateStatus() {
     fetch(statusDataPath + '?' + new Date().getTime())
