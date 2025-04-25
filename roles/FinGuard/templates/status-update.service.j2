@@ -1,10 +1,12 @@
 [Unit]
 Description=Update system status information for web dashboard
-Before=network.target
+After=local-fs.target network.target nginx.service
+Wants=nginx.service
 
 [Service]
 Type=oneshot
 Environment="WG_INTERFACE={{ wg_interface }}"
+ExecStartPre=/bin/mkdir -p /run/status
 ExecStart=/usr/local/bin/status-update.sh
 
 [Install]
