@@ -12,6 +12,7 @@
       - avahi-daemon
       - resolvconf
       - cron
+      - openssl # Added for SSL certificate generation
     state: present
 
 - name: Set system timezone
@@ -92,6 +93,34 @@
 
 # — NGINX setup —
 
+# — SSL Certificate Generation —
+- name: Ensure SSL private key directory exists
+  file:
+    path: /etc/ssl/private
+    state: directory
+    mode: '0700'
+
+- name: Generate private key for self-signed SSL certificate
+  openssl_privatekey:
+    path: /etc/ssl/private/{{ hostname }}.key
+    size: 2048
+    mode: '0600'
+
+- name: Generate CSR for self-signed SSL certificate
+  openssl_csr:
+    path: /etc/ssl/certs/{{ hostname }}.csr
+    privatekey_path: /etc/ssl/private/{{ hostname }}.key
+    common_name: "{{ hostname }}"
+    subject_alt_name: "DNS:{{ hostname }},DNS:{{ hostname }}.local"
+
+- name: Generate self-signed SSL certificate
+  openssl_certificate:
+    path: /etc/ssl/certs/{{ hostname }}.crt
+    privatekey_path: /etc/ssl/private/{{ hostname }}.key
+    csr_path: /etc/ssl/certs/{{ hostname }}.csr
+    provider: selfsigned
+    selfsigned_not_after: "+370d"  # Valid for 370 days
+
 - name: Deploy NGINX vhost
   template:
     src: nginx.conf.j2
@@ -164,6 +193,33 @@
     state: started
 
 # — Weekly maintenance via systemd timer & script —
+
+# — SSL Certificate Renewal —
+- name: Deploy SSL certificate renewal script
+  template:
+    src: renew-ssl-cert.sh.j2
+    dest: /usr/local/bin/renew-ssl-cert.sh
+    mode: '0755'
+
+- name: Deploy SSL certificate renewal systemd service
+  template:
+    src: renew-ssl-cert.service.j2
+    dest: /etc/systemd/system/renew-ssl-cert.service
+  notify:
+    - Reload systemd
+
+- name: Deploy SSL certificate renewal systemd timer
+  template:
+    src: renew-ssl-cert.timer.j2
+    dest: /etc/systemd/system/renew-ssl-cert.timer
+  notify:
+    - Reload systemd
+
+- name: Enable SSL certificate renewal timer
+  systemd:
+    name: renew-ssl-cert.timer
+    enabled: true
+    state: started
 
 - name: Deploy FinGuard update script
   template:

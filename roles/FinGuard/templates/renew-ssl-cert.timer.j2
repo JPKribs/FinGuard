@@ -1,0 +1,12 @@
+[Unit]
+Description=Renew SSL certificate on January 1st
+RefuseManualStart=no
+RefuseManualStop=no
+
+[Timer]
+OnCalendar=*-01-01 00:00:00
+Persistent=true
+Unit=renew-ssl-cert.service
+
+[Install]
+WantedBy=timers.target

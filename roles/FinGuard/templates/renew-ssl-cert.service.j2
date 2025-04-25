@@ -1,0 +1,11 @@
+[Unit]
+Description=Renew self-signed SSL certificate for {{ hostname }}
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/renew-ssl-cert.sh
+User=root
+
+[Install]
+WantedBy=multi-user.target
