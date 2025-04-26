@@ -17,14 +17,13 @@
         .refresh-time { font-size: 12px; color: #7f8c8d; text-align: right; }
         table { width: 100%; border-collapse: collapse; }
         table td, table th { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-        .progress-bar { height: 10px; background-color: #ecf0f1; border-radius: 5px; overflow: hidden; }
-        .progress-fill { height: 100%; background-color: #3498db; transition: background-color 0.3s; }
+        .progress-bar { height: 10px; background-color: #ecf0f1; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
+        .progress-fill { height: 100%; transition: background-color 0.3s, width 0.3s; }
         body.dark-mode { background-color: #121212; color: #e0e0e0; }
         body.dark-mode .container { background-color: #1e1e1e; box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1); }
         body.dark-mode h1, body.dark-mode .card h2 { color: #90caf9; }
         body.dark-mode .card { border-color: #333; }
         body.dark-mode .progress-bar { background-color: #333; }
-        body.dark-mode .progress-fill { background-color: #90caf9; }
         body.dark-mode .status-online { background-color: #66bb6a; }
         body.dark-mode .status-offline { background-color: #ef5350; }
         body.dark-mode .refresh-time { color: #aaa; }
@@ -43,6 +42,7 @@
                 <tr><td>Hostname:</td><td id="hostname">{{ hostname }}</td></tr>
                 <tr><td>Uptime:</td><td id="uptime">Loading...</td></tr>
                 <tr><td>CPU Usage:</td><td><div class="progress-bar"><div id="cpu-bar" class="progress-fill" style="width: 0%"></div></div><span id="cpu-usage">Loading...</span></td></tr>
+                <tr><td>CPU Temperature:</td><td><div class="progress-bar"><div id="temp-bar" class="progress-fill" style="width: 0%"></div></div><span id="cpu-temp">Loading...</span></td></tr>
                 <tr><td>Memory Usage:</td><td><div class="progress-bar"><div id="memory-bar" class="progress-fill" style="width: 0%"></div></div><span id="memory-usage">Loading...</span></td></tr>
                 <tr><td>Disk Usage:</td><td><div class="progress-bar"><div id="disk-bar" class="progress-fill" style="width: 0%"></div></div><span id="disk-usage">Loading...</span></td></tr>
             </table>
@@ -86,12 +86,31 @@
                 .then(response => response.json())
                 .then(data => {
                     document.getElementById('uptime').textContent = data.uptime || '-';
-                    document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
-                    document.getElementById('cpu-bar').style.width = data.cpu_usage + '%';
-                    document.getElementById('memory-usage').textContent = data.memory_used + ' / ' + data.memory_total + ' MB (' + data.memory_usage + '%)';
-                    document.getElementById('memory-bar').style.width = data.memory_usage + '%';
-                    document.getElementById('disk-usage').textContent = data.disk_used + ' / ' + data.disk_total + ' GB (' + data.disk_usage + '%)';
-                    document.getElementById('disk-bar').style.width = data.disk_usage + '%';
+                    
+                    const cpuUsage = parseInt(data.cpu_usage) || 0;
+                    document.getElementById('cpu-usage').textContent = cpuUsage + '%';
+                    const cpuBar = document.getElementById('cpu-bar');
+                    cpuBar.style.width = cpuUsage + '%';
+                    setBarColor(cpuBar, cpuUsage);
+                    
+                    const tempValue = parseFloat(data.cpu_temp) || 0;
+                    const tempPercentage = (tempValue / 80) * 100;
+                    document.getElementById('cpu-temp').textContent = tempValue + '°C';
+                    const tempBar = document.getElementById('temp-bar');
+                    tempBar.style.width = tempPercentage + '%';
+                    setBarColor(tempBar, tempPercentage);
+                    
+                    const memoryUsage = parseInt(data.memory_usage) || 0;
+                    document.getElementById('memory-usage').textContent = data.memory_used + ' / ' + data.memory_total + ' MB (' + memoryUsage + '%)';
+                    const memoryBar = document.getElementById('memory-bar');
+                    memoryBar.style.width = memoryUsage + '%';
+                    setBarColor(memoryBar, memoryUsage);
+                    
+                    const diskUsage = parseInt(data.disk_usage) || 0;
+                    document.getElementById('disk-usage').textContent = data.disk_used + ' / ' + data.disk_total + ' GB (' + diskUsage + '%)';
+                    const diskBar = document.getElementById('disk-bar');
+                    diskBar.style.width = diskUsage + '%';
+                    setBarColor(diskBar, diskUsage);
 
                     updateServiceStatus('wireguard-status', data.services.wireguard);
                     updateServiceStatus('nginx-status', data.services.nginx);
@@ -118,6 +137,13 @@
                     document.getElementById('last-updated').textContent = data.last_updated || new Date().toLocaleString();
                 })
                 .catch(error => console.error('Error fetching status data:', error));
+        }
+
+        function setBarColor(barElement, percentage) {
+            // Calculate color: green (low) to red (high)
+            const green = Math.max(0, 255 - (percentage * 2.55));
+            const red = Math.min(255, percentage * 2.55);
+            barElement.style.backgroundColor = `rgb(${red}, ${green}, 0)`;
         }
 
         function updateServiceStatus(elementId, status) {

@@ -1,5 +1,4 @@
 #!/bin/bash
-# Generate status data for the entire dashboard
 
 get_last_run() {
   local service_name=$1
@@ -17,7 +16,6 @@ get_next_run() {
   if [[ -z "$next_run" || "$next_run" == "n/a" ]]; then
     echo "-"
   else
-    # Only try to format if we have data
     local seconds=$(echo "$next_run" | awk '{print substr($1, 1, length($1)-6)}')
     if [[ -n "$seconds" && "$seconds" != "0" ]]; then
       date -d "@$seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-"
@@ -37,20 +35,38 @@ get_next_static_run() {
   fi
 }
 
-# Special case for status-update
+# Get CPU temperature
+get_temperature() {
+  if [ -d "/sys/class/thermal" ]; then
+    for zone in /sys/class/thermal/thermal_zone*; do
+      if [ -f "$zone/temp" ]; then
+        temp=$(cat "$zone/temp" 2>/dev/null || echo 0)
+        temp_c=$(echo "scale=1; $temp / 1000" | bc 2>/dev/null || echo 0)
+        echo "$temp_c"
+        return
+      fi
+    done
+  fi
+  if [ -f "/sys/devices/virtual/thermal/thermal_zone0/temp" ]; then
+    temp=$(cat "/sys/devices/virtual/thermal/thermal_zone0/temp" 2>/dev/null || echo 0)
+    temp_c=$(echo "scale=1; $temp / 1000" | bc 2>/dev/null || echo 0)
+    echo "$temp_c"
+    return
+  fi
+  echo "0"
+}
+
+# Get timer statuses
 STATUS_UPDATE_LAST_RUN=$(get_last_run "status-update.service")
 if [[ "$STATUS_UPDATE_LAST_RUN" != "-" ]]; then
-  # Add 60 seconds to the last run
   STATUS_UPDATE_NEXT_RUN=$(date -d "$STATUS_UPDATE_LAST_RUN + 60 seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-")
 else
   STATUS_UPDATE_NEXT_RUN="-"
 fi
-
-# Simple approach for SSL and FinGuard - just get next run time
 SSL_RENEWAL_NEXT_RUN=$(get_next_static_run "renew-ssl-cert.timer")
 FINGUARD_UPDATE_NEXT_RUN=$(get_next_static_run "finguard-update.timer")
 
-# Rest of your script remains unchanged
+# Get system metrics
 UPTIME=$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")
 CPU_USAGE=$(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0)
 MEMORY_TOTAL=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0)
@@ -59,11 +75,14 @@ MEMORY_USAGE=$(free 2>/dev/null | awk '/Mem:/ {printf("%.0f", ($3/$2) * 100)}' |
 DISK_TOTAL=$(df -h / 2>/dev/null | awk '/\// {print $2}' | sed 's/G//' || echo 0)
 DISK_USED=$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)
 DISK_USAGE=$(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0)
+CPU_TEMP=$(get_temperature)
 
+# Get service statuses
 WIREGUARD_STATUS=$(systemctl is-active wg-quick@wg0)
 NGINX_STATUS=$(systemctl is-active nginx)
 JELLYFIN_PROXY_STATUS=$(systemctl is-active jellyfin-discovery-proxy)
 
+# Get network statuses
 NETWORK_DATA=$(ip -br addr | awk '
 {
     split($3, ip, "/");
@@ -73,10 +92,12 @@ NETWORK_DATA=$(ip -br addr | awk '
 ' | sed 's/,$//')
 NETWORK_DATA="[$NETWORK_DATA]"
 
+# Write to JSON
 cat > /run/status/status.json << EOF
 {
   "uptime": "$UPTIME",
   "cpu_usage": $CPU_USAGE,
+  "cpu_temp": $CPU_TEMP,
   "memory_total": $MEMORY_TOTAL,
   "memory_used": $MEMORY_USED,
   "memory_usage": $MEMORY_USAGE,
