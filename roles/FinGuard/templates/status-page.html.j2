@@ -304,7 +304,7 @@
             <h2>System Timers</h2>
             <table>
                 <tr><th>Timer</th><th>Next Run</th><th>Interval</th></tr>
-                <tr><td>Status Update</td><td id="status-update-timer">Loading...</td><td>60 seconds</td></tr>
+                <tr><td>Status Update</td><td id="status-update-timer">Loading...</td><td>30 seconds</td></tr>
                 <tr><td>SSL Renewal</td><td id="ssl-renewal-timer">Loading...</td><td>1 year</td></tr>
                 <tr><td>FinGuard Update</td><td id="finguard-update-timer">Loading...</td><td>7 days</td></tr>
             </table>
@@ -350,10 +350,30 @@
                     maintainAspectRatio: false,
                     animation: { duration: 0 },
                     scales: {
-                        y: { beginAtZero: true, ticks: { callback: v => v + ' Mbps', color: document.body.classList.contains('dark-mode') ? '#aaa' : '#666' }, grid: { color: document.body.classList.contains('dark-mode') ? '#333' : '#ddd' } },
+                        y: { 
+                            beginAtZero: true, 
+                            min: 0,
+                            max: 10,
+                            ticks: { 
+                                callback: v => v + ' Mbps', 
+                                color: document.body.classList.contains('dark-mode') ? '#aaa' : '#666' 
+                            }, 
+                            grid: { 
+                                color: document.body.classList.contains('dark-mode') ? '#333' : '#ddd' 
+                            } 
+                        },
                         x: { display: false }
                     },
-                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' Mbps' } } }
+                    plugins: { 
+                        legend: { display: false }, 
+                        tooltip: { 
+                            mode: 'index', 
+                            intersect: false, 
+                            callbacks: { 
+                                label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' Mbps' 
+                            } 
+                        } 
+                    }
                 }
             });
             document.getElementById('interface-select').addEventListener('change', e => {
@@ -493,11 +513,17 @@
             document.getElementById('max-rx').textContent = maxRx.toFixed(2);
             document.getElementById('max-tx').textContent = maxTx.toFixed(2);
             
-            // Update chart data
-            trafficChart.data.labels = trafficHistory.timestamps;
-            trafficChart.data.datasets[0].data = interfaceData.rx;
-            trafficChart.data.datasets[1].data = interfaceData.tx;
-            trafficChart.update();
+            // Create new array references to force update
+            trafficChart.data.labels = [...trafficHistory.timestamps];
+            trafficChart.data.datasets[0].data = [...interfaceData.rx];
+            trafficChart.data.datasets[1].data = [...interfaceData.tx];
+            
+            // Force Y-axis to auto-scale based on data
+            const maxValue = Math.max(maxRx, maxTx, 1); // At least 1 Mbps to start
+            trafficChart.options.scales.y.max = Math.ceil(maxValue * 1.2); // Add 20% headroom
+            
+            // Force update with no animation
+            trafficChart.update({ duration: 0 });
         } catch (error) {
             showError('Error updating chart: ' + error.message);
         }
@@ -561,7 +587,7 @@
             setupDarkMode();
             initializeChart();
             updateStatus();
-            setInterval(updateStatus, 10000);
+            setInterval(updateStatus, 30000);
         } catch (error) {
             showError('Error during initialization: ' + error.message);
         }
