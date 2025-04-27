@@ -3,6 +3,7 @@ set -euo pipefail
 
 # Get latest release info from GitHub
 LATEST_RELEASE=$(curl -sL https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest)
+
 # Extract the tag_name value
 LATEST_VERSION=$(echo "$LATEST_RELEASE" | grep -Po '"tag_name": "\K[^"]*')
 

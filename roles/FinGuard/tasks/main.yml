@@ -1,5 +1,3 @@
-# — Ensure hostname on every boot —
-
 - name: Ensure apt cache is up to date
   apt:
     update_cache: yes
@@ -35,8 +33,6 @@
   when: pi_password is defined and pi_password != ""
   no_log: true
 
-# — Ensure hostname on every boot —
-
 - name: Deploy set-hostname systemd service
   template:
     src: set-hostname.service.j2
@@ -60,8 +56,6 @@
     name: "wg-quick@{{ wg_interface }}"
     enabled: true
     state: started
-
-# — Systemd overrides for auto-restart —
 
 - name: Create override dir for WireGuard service
   file:
@@ -92,8 +86,6 @@
       Restart=on-failure
       RestartSec=5
   notify: Reload systemd
-
-# — Ensure ALL logging uses RAM —
 
 - name: Create tmpfs mount points in fstab
   lineinfile:
@@ -200,8 +192,6 @@
   notify:
     - Restart journald
 
-# — SSL Certificate Generation —
-
 - name: Ensure SSL private key directory exists
   file:
     path: /etc/ssl/private
@@ -228,8 +218,6 @@
     csr_path: /etc/ssl/certs/{{ hostname }}.csr
     provider: selfsigned
     selfsigned_not_after: "+370d" 
-
-# — Status Page —
 
 - name: Create status page directory
   file:
@@ -273,8 +261,6 @@
     enabled: true
     state: started
 
-# — NGINX setup —
-
 - name: Deploy NGINX vhost
   template:
     src: nginx.conf.j2
@@ -313,15 +299,11 @@
     name: nginx
     state: reloaded
 
-# — Avahi —
-
 - name: Ensure Avahi is running
   systemd:
     name: avahi-daemon
     enabled: true
     state: started
-
-# — Discovery Proxy —
 
 - name: Get latest release info from GitHub
   uri:
@@ -357,10 +339,6 @@
     name: jellyfin-discovery-proxy
     enabled: true
     state: started
-
-# — Weekly maintenance via systemd timer & script —
-
-# — SSL Certificate Renewal —
 
 - name: Deploy SSL certificate renewal script
   template:

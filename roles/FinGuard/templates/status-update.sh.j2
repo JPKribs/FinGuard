@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Get last run
 get_last_run() {
   local service_name=$1
   last_run=$(systemctl show "$service_name" -p ExecMainStartTimestamp | awk -F= '{print $2}')
@@ -10,6 +11,7 @@ get_last_run() {
   fi
 }
 
+# Get next run based on timing
 get_next_run() {
   local timer_name=$1
   next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}')
@@ -25,6 +27,7 @@ get_next_run() {
   fi
 }
 
+# Get next run based on schedule
 get_next_static_run() {
   local timer_name=$1
   next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}')
@@ -56,10 +59,40 @@ get_temperature() {
   echo "0"
 }
 
+# Network bitrate
+get_network_bitrate() {
+  local interface=$1
+  local stats_file="/sys/class/net/$interface/statistics"
+  local sample_time=1  # Default sampling time in seconds
+  
+  if [[ "$interface" == wg* ]]; then
+    sample_time=5
+  fi
+
+  if [[ ! -d "$stats_file" ]]; then
+    echo "{\"rx\":\"0\",\"tx\":\"0\"}"
+    return
+  fi
+
+  local rx_bytes_start=$(cat "$stats_file/rx_bytes" 2>/dev/null || echo 0)
+  local tx_bytes_start=$(cat "$stats_file/tx_bytes" 2>/dev/null || echo 0)
+
+  sleep $sample_time
+
+  local rx_bytes_end=$(cat "$stats_file/rx_bytes" 2>/dev/null || echo 0)
+  local tx_bytes_end=$(cat "$stats_file/tx_bytes" 2>/dev/null || echo 0)
+  local rx_bps=$(( (rx_bytes_end - rx_bytes_start) * 8 / sample_time ))
+  local tx_bps=$(( (tx_bytes_end - tx_bytes_start) * 8 / sample_time ))
+  local rx_mbps=$(echo "scale=2; $rx_bps / 1000000" | bc 2>/dev/null || echo 0)
+  local tx_mbps=$(echo "scale=2; $tx_bps / 1000000" | bc 2>/dev/null || echo 0)
+
+  echo "{\"rx\":\"$rx_mbps\",\"tx\":\"$tx_mbps\"}"
+}
+
 # Get timer statuses
 STATUS_UPDATE_LAST_RUN=$(get_last_run "status-update.service")
 if [[ "$STATUS_UPDATE_LAST_RUN" != "-" ]]; then
-  STATUS_UPDATE_NEXT_RUN=$(date -d "$STATUS_UPDATE_LAST_RUN + 60 seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-")
+  STATUS_UPDATE_NEXT_RUN=$(date -d "$STATUS_UPDATE_LAST_RUN + 10 seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-")
 else
   STATUS_UPDATE_NEXT_RUN="-"
 fi
@@ -87,7 +120,15 @@ NETWORK_DATA=$(ip -br addr | awk '
 {
     split($3, ip, "/");
     status = ($2 == "UP" || $2 == "UNKNOWN") ? "up" : "down";
-    printf("{\"name\":\"%s\",\"ip\":\"%s\",\"status\":\"%s\"},", $1, ip[1], status);
+    printf("{\"name\":\"%s\",\"ip\":\"%s\",\"status\":\"%s\"", $1, ip[1], status);
+    if (status == "up") {
+        printf(",\"bitrate\":");
+        system(get_network_bitrate $1);
+        printf("}");
+    } else {
+        printf(",\"bitrate\":{\"rx\":\"0\",\"tx\":\"0\"}}");
+    }
+    printf(",");
 }
 ' | sed 's/,$//')
 NETWORK_DATA="[$NETWORK_DATA]"

@@ -1,5 +1,4 @@
 #!/bin/bash
-# Script to renew the self-signed SSL certificate for {{ hostname }}
 
 # Generate CSR
 openssl req -new -key /etc/ssl/private/{{ hostname }}.key -out /etc/ssl/certs/{{ hostname }}.csr -subj "/CN={{ hostname }}" -addext "subjectAltName = DNS:{{ hostname }},DNS:{{ hostname }}.local"

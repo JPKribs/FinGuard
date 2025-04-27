@@ -4,13 +4,11 @@ server {
     listen [::]:80 default_server;
     server_name {{ hostname }} {{ hostname }}.local;
     
-    # Status page
     location /status {
         alias /var/www/html/status;
         index index.html;
     }
 
-    # Serve status.json from /run/status
     location /status/status.json {
         alias /run/status/status.json;
         default_type application/json;
@@ -51,23 +49,19 @@ server {
     listen [::]:443 ssl default_server;
     server_name {{ hostname }} {{ hostname }}.local;
     
-    # Status page
     location /status {
         alias /var/www/html/status;
         index index.html;
     }
 
-    # Serve status.json from /run/status
     location /status/status.json {
         alias /run/status/status.json;
         default_type application/json;
     }
 
-    # SSL certificate and key paths
     ssl_certificate /etc/ssl/certs/{{ hostname }}.crt;
     ssl_certificate_key /etc/ssl/private/{{ hostname }}.key;
     
-    # SSL configuration
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
     ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;

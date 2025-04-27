@@ -6,48 +6,289 @@
     <title>FinGuard Status</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
-        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background-color: #f5f5f5; color: #333; transition: background-color 0.3s, color 0.3s; }
-        .container { max-width: 800px; margin: 0 auto; background-color: white; padding: 20px; border-radius: 5px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); transition: background-color 0.3s, box-shadow 0.3s; }
-        h1 { color: #2c3e50; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-        .card { margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; padding: 15px; transition: border-color 0.3s, background-color 0.3s; }
-        .card h2 { margin-top: 0; font-size: 18px; color: #3498db; }
-        .status-indicator { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 5px; }
-        .status-online { background-color: #2ecc71; }
-        .status-offline { background-color: #e74c3c; }
-        .refresh-time { font-size: 12px; color: #7f8c8d; text-align: right; }
-        table { width: 100%; border-collapse: collapse; }
-        table td, table th { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
-        .progress-bar { height: 10px; background-color: #ecf0f1; border-radius: 5px; overflow: hidden; margin-bottom: 8px; }
-        .progress-fill { height: 100%; transition: background-color 0.3s, width 0.3s; }
-        body.dark-mode { background-color: #121212; color: #e0e0e0; }
-        body.dark-mode .container { background-color: #1e1e1e; box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1); }
-        body.dark-mode h1, body.dark-mode .card h2 { color: #90caf9; }
-        body.dark-mode .card { border-color: #333; }
-        body.dark-mode .progress-bar { background-color: #333; }
-        body.dark-mode .status-online { background-color: #66bb6a; }
-        body.dark-mode .status-offline { background-color: #ef5350; }
-        body.dark-mode .refresh-time { color: #aaa; }
-        #darkModeToggle { float: right; margin-top: -10px; margin-bottom: 10px; padding: 5px 10px; border: none; background-color: #3498db; color: white; border-radius: 3px; cursor: pointer; transition: background-color 0.3s; }
-        body.dark-mode #darkModeToggle { background-color: #555; }
+
+        /* ========== BASE STYLES ========== */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+            transition: background-color 0.3s, color 0.3s;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: background-color 0.3s, box-shadow 0.3s;
+        }
+
+        h1 {
+            color: #2c3e50;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 10px;
+        }
+
+        .card {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            transition: border-color 0.3s, background-color 0.3s;
+        }
+
+        .card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #3498db;
+        }
+
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 5px;
+        }
+
+        .status-online {
+            background-color: #2ecc71;
+        }
+
+        .status-offline {
+            background-color: #e74c3c;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table td,
+        table th {
+            padding: 8px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        .progress-bar {
+            height: 10px;
+            background-color: #ecf0f1;
+            border-radius: 5px;
+            overflow: hidden;
+            margin-bottom: 8px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            transition: background-color 0.3s, width 0.3s;
+        }
+
+        .network-graphs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .graph-container {
+            flex: 1;
+            min-width: 300px;
+            height: auto;
+            max-height: 300px;
+            margin-bottom: 10px;
+        }
+
+        .traffic-legend {
+            display: flex;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin: 0 10px;
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+            margin-right: 5px;
+        }
+
+        .rx-color {
+            background-color: #3498db;
+        }
+
+        .tx-color {
+            background-color: #2ecc71;
+        }
+
+        .interface-selector {
+            margin-bottom: 15px;
+        }
+
+        .interface-selector select {
+            padding: 5px;
+            border-radius: 4px;
+        }
+
+        .network-stats {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5px;
+        }
+
+        .network-stat {
+            text-align: center;
+            flex: 1;
+        }
+
+        .stat-value {
+            font-weight: bold;
+            font-size: 16px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #7f8c8d;
+        }
+
+        .refresh-time {
+            font-size: 12px;
+            color: #7f8c8d;
+            text-align: right;
+        }
+
+        /* ========== DARK MODE STYLES ========== */
+        body.dark-mode {
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+
+        body.dark-mode .container {
+            background-color: #1e1e1e;
+            box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
+        }
+
+        body.dark-mode h1,
+        body.dark-mode .card h2 {
+            color: #90caf9;
+        }
+
+        body.dark-mode .card {
+            border-color: #333;
+        }
+
+        body.dark-mode .progress-bar {
+            background-color: #333;
+        }
+
+        body.dark-mode .status-online {
+            background-color: #66bb6a;
+        }
+
+        body.dark-mode .status-offline {
+            background-color: #ef5350;
+        }
+
+        body.dark-mode .refresh-time {
+            color: #aaa;
+        }
+
+        #darkModeToggle {
+            float: right;
+            margin-top: -10px;
+            margin-bottom: 10px;
+            padding: 5px 10px;
+            border: none;
+            background-color: #3498db;
+            color: white;
+            border-radius: 3px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        body.dark-mode #darkModeToggle {
+            background-color: #555;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <button id="darkModeToggle">🌙</button>
         <h1>Status Dashboard</h1>
-        
+
+        <!-- System Information Card -->
         <div class="card">
             <h2>System Information</h2>
             <table>
                 <tr><td>Hostname:</td><td id="hostname">{{ hostname }}</td></tr>
                 <tr><td>Uptime:</td><td id="uptime">Loading...</td></tr>
-                <tr><td>CPU Usage:</td><td><div class="progress-bar"><div id="cpu-bar" class="progress-fill" style="width: 0%"></div></div><span id="cpu-usage">Loading...</span></td></tr>
-                <tr><td>CPU Temperature:</td><td><div class="progress-bar"><div id="temp-bar" class="progress-fill" style="width: 0%"></div></div><span id="cpu-temp">Loading...</span></td></tr>
-                <tr><td>Memory Usage:</td><td><div class="progress-bar"><div id="memory-bar" class="progress-fill" style="width: 0%"></div></div><span id="memory-usage">Loading...</span></td></tr>
-                <tr><td>Disk Usage:</td><td><div class="progress-bar"><div id="disk-bar" class="progress-fill" style="width: 0%"></div></div><span id="disk-usage">Loading...</span></td></tr>
+                <tr>
+                    <td>CPU Usage:</td>
+                    <td>
+                        <div class="progress-bar"><div id="cpu-bar" class="progress-fill" style="width: 0%"></div></div>
+                        <span id="cpu-usage">Loading...</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>CPU Temperature:</td>
+                    <td>
+                        <div class="progress-bar"><div id="temp-bar" class="progress-fill" style="width: 0%"></div></div>
+                        <span id="cpu-temp">Loading...</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Memory Usage:</td>
+                    <td>
+                        <div class="progress-bar"><div id="memory-bar" class="progress-fill" style="width: 0%"></div></div>
+                        <span id="memory-usage">Loading...</span>
+                    </td>
+                </tr>
+                <tr>
+                    <td>Disk Usage:</td>
+                    <td>
+                        <div class="progress-bar"><div id="disk-bar" class="progress-fill" style="width: 0%"></div></div>
+                        <span id="disk-usage">Loading...</span>
+                    </td>
+                </tr>
             </table>
         </div>
-        
+
+        <!-- Network Traffic Card -->
+        <div class="card">
+            <h2>Network Traffic</h2>
+            <div class="interface-selector">
+                <select id="interface-select"><option value="all">All Interfaces</option></select>
+            </div>
+            <canvas id="network-graph" class="graph-container"></canvas>
+            <div class="traffic-legend">
+                <div class="legend-item"><div class="legend-color rx-color"></div><span>Download (Rx)</span></div>
+                <div class="legend-item"><div class="legend-color tx-color"></div><span>Upload (Tx)</span></div>
+            </div>
+            <div class="network-stats">
+                <div class="network-stat"><div class="stat-value" id="current-rx">0.00</div><div class="stat-label">Download (Mbps)</div></div>
+                <div class="network-stat"><div class="stat-value" id="current-tx">0.00</div><div class="stat-label">Upload (Mbps)</div></div>
+                <div class="network-stat"><div class="stat-value" id="max-rx">0.00</div><div class="stat-label">Max Download</div></div>
+                <div class="network-stat"><div class="stat-value" id="max-tx">0.00</div><div class="stat-label">Max Upload</div></div>
+            </div>
+        </div>
+
+        <!-- Network Information Card -->
+        <div class="card">
+            <h2>Network Information</h2>
+            <table id="network-table">
+                <tr><th>Interface</th><th>IP Address</th><th>Status</th><th>Download</th><th>Upload</th></tr>
+            </table>
+        </div>
+
+        <!-- Service Status Card -->
         <div class="card">
             <h2>Service Status</h2>
             <table id="services-table">
@@ -58,13 +299,7 @@
             </table>
         </div>
 
-        <div class="card">
-            <h2>Network Information</h2>
-            <table id="network-table">
-                <tr><th>Interface</th><th>IP Address</th><th>Status</th></tr>
-            </table>
-        </div>
-
+        <!-- System Timers Card -->
         <div class="card">
             <h2>System Timers</h2>
             <table>
@@ -76,101 +311,261 @@
         </div>
 
         <div class="refresh-time">Last updated: <span id="last-updated">Loading...</span></div>
+        <div id="error-message" style="color: red; margin-top: 10px;"></div>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
     <script>
-        const statusDataPath = '/status/status.json';
 
-        function updateStatus() {
-            fetch(statusDataPath + '?' + new Date().getTime())
-                .then(response => response.json())
-                .then(data => {
-                    document.getElementById('uptime').textContent = data.uptime || '-';
-                    
-                    const cpuUsage = parseInt(data.cpu_usage) || 0;
-                    document.getElementById('cpu-usage').textContent = cpuUsage + '%';
-                    const cpuBar = document.getElementById('cpu-bar');
-                    cpuBar.style.width = cpuUsage + '%';
-                    setBarColor(cpuBar, cpuUsage);
-                    
-                    const tempValue = parseFloat(data.cpu_temp) || 0;
-                    const tempPercentage = (tempValue / 80) * 100;
-                    document.getElementById('cpu-temp').textContent = tempValue + '°C';
-                    const tempBar = document.getElementById('temp-bar');
-                    tempBar.style.width = tempPercentage + '%';
-                    setBarColor(tempBar, tempPercentage);
-                    
-                    const memoryUsage = parseInt(data.memory_usage) || 0;
-                    document.getElementById('memory-usage').textContent = data.memory_used + ' / ' + data.memory_total + ' MB (' + memoryUsage + '%)';
-                    const memoryBar = document.getElementById('memory-bar');
-                    memoryBar.style.width = memoryUsage + '%';
-                    setBarColor(memoryBar, memoryUsage);
-                    
-                    const diskUsage = parseInt(data.disk_usage) || 0;
-                    document.getElementById('disk-usage').textContent = data.disk_used + ' / ' + data.disk_total + ' GB (' + diskUsage + '%)';
-                    const diskBar = document.getElementById('disk-bar');
-                    diskBar.style.width = diskUsage + '%';
-                    setBarColor(diskBar, diskUsage);
+    // ========== CONFIGURATION ==========
+    const statusDataPath = '/status/status.json';
+    let trafficChart = null;
+    let networkInterfaces = [];
+    let selectedInterface = 'all';
+    const trafficHistory = { timestamps: [], interfaces: {} };
+    const maxDataPoints = 30;
+    
+    // ========== ERROR DISPLAY FUNCTION ==========
+    function showError(message) {
+        const errorElement = document.getElementById('error-message');
+        errorElement.textContent = message;
+        console.error(message);
+    }
 
-                    updateServiceStatus('wireguard-status', data.services.wireguard);
-                    updateServiceStatus('nginx-status', data.services.nginx);
-                    updateServiceStatus('jellyfin-proxy-status', data.services.jellyfin_proxy);
-
-                    const networkTable = document.getElementById('network-table');
-                    while (networkTable.rows.length > 1) {
-                        networkTable.deleteRow(1);
-                    }
-                    data.network.forEach(iface => {
-                        const row = networkTable.insertRow();
-                        row.insertCell(0).textContent = iface.name || 'Unknown';
-                        row.insertCell(1).textContent = iface.ip || 'N/A';
-                        const statusCell = row.insertCell(2);
-                        const indicator = document.createElement('span');
-                        indicator.className = 'status-indicator ' + (iface.status === 'up' ? 'status-online' : 'status-offline');
-                        statusCell.appendChild(indicator);
-                        statusCell.appendChild(document.createTextNode(iface.status === 'up' ? 'Up' : 'Down'));
-                    });
-
-                    document.getElementById('status-update-timer').textContent = data.timers.status_update.next_run || '-';
-                    document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal.next_run || '-';
-                    document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update.next_run || '-';
-                    document.getElementById('last-updated').textContent = data.last_updated || new Date().toLocaleString();
-                })
-                .catch(error => console.error('Error fetching status data:', error));
-        }
-
-        function setBarColor(barElement, percentage) {
-            // Calculate color: green (low) to red (high)
-            const green = Math.max(0, 255 - (percentage * 2.55));
-            const red = Math.min(255, percentage * 2.55);
-            barElement.style.backgroundColor = `rgb(${red}, ${green}, 0)`;
-        }
-
-        function updateServiceStatus(elementId, status) {
-            const element = document.getElementById(elementId);
-            const indicator = element.querySelector('.status-indicator');
-            const isRunning = status === 'running' || status === 'active';
-            indicator.className = 'status-indicator ' + (isRunning ? 'status-online' : 'status-offline');
-            element.lastChild.textContent = isRunning ? 'Running' : 'Stopped';
-        }
-
-        function setupDarkMode() {
-            const toggle = document.getElementById('darkModeToggle');
-            const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-            if (localStorage.getItem('darkMode') === 'enabled' || (localStorage.getItem('darkMode') === null && prefersDark)) {
-                document.body.classList.add('dark-mode');
-                toggle.textContent = '☀️';
-            }
-            toggle.addEventListener('click', () => {
-                document.body.classList.toggle('dark-mode');
-                localStorage.setItem('darkMode', document.body.classList.contains('dark-mode') ? 'enabled' : 'disabled');
-                toggle.textContent = document.body.classList.contains('dark-mode') ? '☀️' : '🌙';
+    // ========== CHART INITIALIZATION ==========
+    function initializeChart() {
+        try {
+            const ctx = document.getElementById('network-graph').getContext('2d');
+            trafficChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: Array(maxDataPoints).fill(''),
+                    datasets: [
+                        { label: 'Download (Mbps)', data: Array(maxDataPoints).fill(0), borderColor: '#3498db', backgroundColor: 'rgba(52,152,219,0.1)', borderWidth: 2, tension: 0.4, fill: true },
+                        { label: 'Upload (Mbps)', data: Array(maxDataPoints).fill(0), borderColor: '#2ecc71', backgroundColor: 'rgba(46,204,113,0.1)', borderWidth: 2, tension: 0.4, fill: true }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    animation: { duration: 0 },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { callback: v => v + ' Mbps', color: document.body.classList.contains('dark-mode') ? '#aaa' : '#666' }, grid: { color: document.body.classList.contains('dark-mode') ? '#333' : '#ddd' } },
+                        x: { display: false }
+                    },
+                    plugins: { legend: { display: false }, tooltip: { mode: 'index', intersect: false, callbacks: { label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(2) + ' Mbps' } } }
+                }
             });
+            document.getElementById('interface-select').addEventListener('change', e => {
+                selectedInterface = e.target.value;
+                updateChart();
+            });
+        } catch (error) {
+            showError('Error initializing chart: ' + error.message);
         }
+    }
 
-        setupDarkMode();
-        updateStatus();
-        setInterval(updateStatus, 30000);
+    // ========== DATA UPDATE FUNCTIONS ==========
+    function updateStatus() {
+        fetch(statusDataPath + '?' + new Date().getTime())
+            .then(res => {
+                if (!res.ok) {
+                    throw new Error(`HTTP error! Status: ${res.status}`);
+                }
+                return res.json();
+            })
+            .then(data => {
+                document.getElementById('uptime').textContent = data.uptime || '-';
+                const cpuUsage = parseInt(data.cpu_usage) || 0;
+                document.getElementById('cpu-usage').textContent = cpuUsage + '%';
+                const cpuBar = document.getElementById('cpu-bar');
+                cpuBar.style.width = cpuUsage + '%';
+                setBarColor(cpuBar, cpuUsage);
+
+                const tempValue = parseFloat(data.cpu_temp) || 0;
+                document.getElementById('cpu-temp').textContent = tempValue + '°C';
+                const tempBar = document.getElementById('temp-bar');
+                tempBar.style.width = (tempValue / 80 * 100) + '%';
+                setBarColor(tempBar, tempValue / 80 * 100);
+
+                const memUsage = parseInt(data.memory_usage) || 0;
+                document.getElementById('memory-usage').textContent = `${data.memory_used} / ${data.memory_total} MB (${memUsage}%)`;
+                const memBar = document.getElementById('memory-bar');
+                memBar.style.width = memUsage + '%';
+                setBarColor(memBar, memUsage);
+
+                const diskUsage = parseInt(data.disk_usage) || 0;
+                document.getElementById('disk-usage').textContent = `${data.disk_used} / ${data.disk_total} GB (${diskUsage}%)`;
+                const diskBar = document.getElementById('disk-bar');
+                diskBar.style.width = diskUsage + '%';
+                setBarColor(diskBar, diskUsage);
+
+                updateServiceStatus('wireguard-status', data.services.wireguard);
+                updateServiceStatus('nginx-status', data.services.nginx);
+                updateServiceStatus('jellyfin-proxy-status', data.services.jellyfin_proxy);
+
+                updateNetworkData(data.network);
+
+                document.getElementById('status-update-timer').textContent = data.timers.status_update.next_run || '-';
+                document.getElementById('ssl-renewal-timer').textContent = data.timers.ssl_renewal.next_run || '-';
+                document.getElementById('finguard-update-timer').textContent = data.timers.finguard_update.next_run || '-';
+                document.getElementById('last-updated').textContent = data.last_updated || new Date().toLocaleString();
+                
+                // Clear any previous error
+                document.getElementById('error-message').textContent = '';
+            })
+            .catch(err => {
+                showError('Error fetching status data: ' + err.message);
+            });
+    }
+
+    // ========== NETWORK DATA PROCESSING ==========
+    function updateNetworkData(interfaces) {
+        try {
+            const table = document.getElementById('network-table');
+            while (table.rows.length > 1) table.deleteRow(1);
+            let totalRx = 0, totalTx = 0;
+            const timestamp = new Date().toLocaleTimeString();
+            trafficHistory.timestamps.push(timestamp);
+            if (trafficHistory.timestamps.length > maxDataPoints) trafficHistory.timestamps.shift();
+
+            interfaces.forEach(iface => {
+                const name = iface.name || 'Unknown';
+                if (!networkInterfaces.includes(name)) {
+                    networkInterfaces.push(name);
+                    const op = document.createElement('option');
+                    op.value = name;
+                    op.textContent = name;
+                    document.getElementById('interface-select').appendChild(op);
+                }
+                if (!trafficHistory.interfaces[name]) trafficHistory.interfaces[name] = { rx: Array(maxDataPoints).fill(0), tx: Array(maxDataPoints).fill(0) };
+
+                const rx = parseFloat(iface.bitrate?.rx) || 0;
+                const tx = parseFloat(iface.bitrate?.tx) || 0;
+                trafficHistory.interfaces[name].rx.push(rx);
+                trafficHistory.interfaces[name].tx.push(tx);
+                if (trafficHistory.interfaces[name].rx.length > maxDataPoints) trafficHistory.interfaces[name].rx.shift();
+                if (trafficHistory.interfaces[name].tx.length > maxDataPoints) trafficHistory.interfaces[name].tx.shift();
+
+                totalRx += rx;
+                totalTx += tx;
+
+                const row = table.insertRow();
+                row.insertCell(0).textContent = name;
+                row.insertCell(1).textContent = iface.ip || 'N/A';
+                const sc = row.insertCell(2);
+                const ind = document.createElement('span');
+                ind.className = 'status-indicator ' + (iface.status === 'up' ? 'status-online' : 'status-offline');
+                sc.appendChild(ind);
+                sc.appendChild(document.createTextNode(iface.status === 'up' ? 'Up' : 'Down'));
+                row.insertCell(3).textContent = `${rx.toFixed(2)} Mbps`;
+                row.insertCell(4).textContent = `${tx.toFixed(2)} Mbps`;
+            });
+
+            if (!trafficHistory.interfaces.all) trafficHistory.interfaces.all = { rx: Array(maxDataPoints).fill(0), tx: Array(maxDataPoints).fill(0) };
+            trafficHistory.interfaces.all.rx.push(totalRx);
+            trafficHistory.interfaces.all.tx.push(totalTx);
+            if (trafficHistory.interfaces.all.rx.length > maxDataPoints) trafficHistory.interfaces.all.rx.shift();
+            if (trafficHistory.interfaces.all.tx.length > maxDataPoints) trafficHistory.interfaces.all.tx.shift();
+
+            updateChart();
+        } catch (error) {
+            showError('Error updating network data: ' + error.message);
+        }
+    }
+
+    // ========== CHART UPDATE FUNCTION ==========
+    function updateChart() {
+        try {
+            if (!trafficChart) return;
+            
+            const interfaceData = trafficHistory.interfaces[selectedInterface];
+            if (!interfaceData) return;
+            
+            // Update current and max values
+            const currentRx = interfaceData.rx[interfaceData.rx.length - 1] || 0;
+            const currentTx = interfaceData.tx[interfaceData.tx.length - 1] || 0;
+            const maxRx = Math.max(...interfaceData.rx);
+            const maxTx = Math.max(...interfaceData.tx);
+            
+            document.getElementById('current-rx').textContent = currentRx.toFixed(2);
+            document.getElementById('current-tx').textContent = currentTx.toFixed(2);
+            document.getElementById('max-rx').textContent = maxRx.toFixed(2);
+            document.getElementById('max-tx').textContent = maxTx.toFixed(2);
+            
+            // Update chart data
+            trafficChart.data.labels = trafficHistory.timestamps;
+            trafficChart.data.datasets[0].data = interfaceData.rx;
+            trafficChart.data.datasets[1].data = interfaceData.tx;
+            trafficChart.update();
+        } catch (error) {
+            showError('Error updating chart: ' + error.message);
+        }
+    }
+
+    // ========== DARK MODE SETUP ==========
+    function setupDarkMode() {
+        try {
+            const darkModeToggle = document.getElementById('darkModeToggle');
+            // Check if user has previously selected dark mode
+            const darkModeEnabled = localStorage.getItem('darkMode') === 'true';
+            
+            // Apply dark mode if enabled
+            if (darkModeEnabled) {
+                document.body.classList.add('dark-mode');
+                darkModeToggle.textContent = '☀️';
+            }
+            
+            // Toggle dark mode on button click
+            darkModeToggle.addEventListener('click', () => {
+                document.body.classList.toggle('dark-mode');
+                const isDarkMode = document.body.classList.contains('dark-mode');
+                darkModeToggle.textContent = isDarkMode ? '☀️' : '🌙';
+                localStorage.setItem('darkMode', isDarkMode);
+                
+                // Update chart colors if it exists
+                if (trafficChart) {
+                    trafficChart.options.scales.y.grid.color = isDarkMode ? '#333' : '#ddd';
+                    trafficChart.options.scales.y.ticks.color = isDarkMode ? '#aaa' : '#666';
+                    trafficChart.update();
+                }
+            });
+        } catch (error) {
+            showError('Error setting up dark mode: ' + error.message);
+        }
+    }
+
+    // ========== UTILITY FUNCTIONS ==========
+    function setBarColor(el, pct) {
+        const g = Math.max(0, 255 - (pct * 2.55));
+        const r = Math.min(255, pct * 2.55);
+        el.style.backgroundColor = `rgb(${r}, ${g}, 0)`;
+    }
+
+    // ========== SERVICE STATUS UPDATE ==========
+    function updateServiceStatus(id, status) {
+        try {
+            const el = document.getElementById(id);
+            const ind = el.querySelector('.status-indicator');
+            const running = status === 'running' || status === 'active';
+            ind.className = 'status-indicator ' + (running ? 'status-online' : 'status-offline');
+            el.lastChild.textContent = running ? 'Running' : 'Stopped';
+        } catch (error) {
+            showError('Error updating service status: ' + error.message);
+        }
+    }
+
+    // ========== INITIALIZATION ==========
+    document.addEventListener('DOMContentLoaded', () => {
+        try {
+            setupDarkMode();
+            initializeChart();
+            updateStatus();
+            setInterval(updateStatus, 10000);
+        } catch (error) {
+            showError('Error during initialization: ' + error.message);
+        }
+    });
     </script>
 </body>
 </html>
