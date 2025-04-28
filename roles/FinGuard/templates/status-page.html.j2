@@ -6,7 +6,6 @@
     <title>FinGuard Status</title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
-
         /* ========== BASE STYLES ========== */
         body {
             font-family: Arial, sans-serif;
@@ -18,8 +17,10 @@
         }
 
         .container {
+            width: 100%;
             max-width: 800px;
             margin: 0 auto;
+            box-sizing: border-box;
             background-color: white;
             padding: 20px;
             border-radius: 5px;
@@ -33,48 +34,51 @@
             padding-bottom: 10px;
         }
 
-        .card {
-            margin-bottom: 20px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            padding: 15px;
-            transition: border-color 0.3s, background-color 0.3s;
-        }
-
-        .card h2 {
-            margin-top: 0;
-            font-size: 18px;
-            color: #3498db;
-        }
-
+        /* ========== STATUS DOTS ========== */
         .status-indicator {
             display: inline-block;
             width: 12px;
             height: 12px;
             border-radius: 50%;
             margin-right: 5px;
+            vertical-align: middle;
+        }
+        .status-online  { background-color: #2ecc71; }  /* green */
+        .status-offline { background-color: #e74c3c; }  /* red */
+        .status-warning { background-color: #f1c40f; }  /* yellow, if needed */
+
+        /* ========== CARDS ========== */
+        .card {
+            margin-bottom: 20px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            background-color: white;
+            transition: border-color 0.3s, background-color 0.3s;
+            overflow-x: visible;
+        }
+        .card h2 {
+            margin-top: 0;
+            font-size: 18px;
+            color: #3498db;
         }
 
-        .status-online {
-            background-color: #2ecc71;
-        }
-
-        .status-offline {
-            background-color: #e74c3c;
-        }
-
-        table {
+        /* ========== TABLES: desktop ========== */
+        .card table {
+            display: table;
             width: 100%;
             border-collapse: collapse;
+            overflow-x: visible;
         }
-
-        table td,
-        table th {
+        .card table th,
+        .card table td {
             padding: 8px;
             text-align: left;
             border-bottom: 1px solid #ddd;
+            white-space: normal;
         }
 
+        /* ========== PROGRESS BARS ========== */
         .progress-bar {
             height: 10px;
             background-color: #ecf0f1;
@@ -82,87 +86,90 @@
             overflow: hidden;
             margin-bottom: 8px;
         }
-
         .progress-fill {
             height: 100%;
             transition: background-color 0.3s, width 0.3s;
         }
 
+        /* ========== NETWORK GRAPHS: desktop ========== */
         .network-graphs {
             display: flex;
             flex-wrap: wrap;
             gap: 10px;
+            overflow-x: visible;
         }
-
         .graph-container {
-            flex: 1;
+            flex: 1 1 300px;
             min-width: 300px;
             height: auto;
             max-height: 300px;
             margin-bottom: 10px;
         }
 
+        /* ========== TRAFFIC LEGEND ========== */
         .traffic-legend {
             display: flex;
             justify-content: center;
             margin-top: 10px;
         }
-
         .legend-item {
             display: flex;
             align-items: center;
             margin: 0 10px;
         }
-
         .legend-color {
             width: 15px;
             height: 15px;
             border-radius: 3px;
             margin-right: 5px;
         }
+        .rx-color { background-color: #3498db; }
+        .tx-color { background-color: #2ecc71; }
 
-        .rx-color {
-            background-color: #3498db;
-        }
-
-        .tx-color {
-            background-color: #2ecc71;
-        }
-
+        /* ========== INTERFACE SELECTOR ========== */
         .interface-selector {
             margin-bottom: 15px;
         }
-
         .interface-selector select {
             padding: 5px;
             border-radius: 4px;
         }
 
+        /* ========== NETWORK STATS ========== */
         .network-stats {
             display: flex;
             justify-content: space-between;
             margin-top: 5px;
         }
-
         .network-stat {
             text-align: center;
             flex: 1;
         }
-
         .stat-value {
             font-weight: bold;
             font-size: 16px;
         }
-
         .stat-label {
             font-size: 12px;
             color: #7f8c8d;
         }
 
+        /* ========== REFRESH TIME & ERROR ========== */
         .refresh-time {
             font-size: 12px;
             color: #7f8c8d;
             text-align: right;
+        }
+        #error-message {
+            color: red;
+            margin-top: 10px;
+        }
+
+        /* ========== CANVAS SHRINK ========== */
+        canvas {
+            max-width: 100%;
+            height: auto;
+            display: block;
         }
 
         /* ========== DARK MODE STYLES ========== */
@@ -170,33 +177,25 @@
             background-color: #121212;
             color: #e0e0e0;
         }
-
         body.dark-mode .container {
             background-color: #1e1e1e;
-            box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
+            box-shadow: 0 2px 4px rgba(255,255,255,0.1);
         }
-
+        body.dark-mode .card {
+            background-color: #1e1e1e;
+            border-color: #333;
+        }
         body.dark-mode h1,
         body.dark-mode .card h2 {
             color: #90caf9;
         }
-
-        body.dark-mode .card {
-            border-color: #333;
-        }
-
         body.dark-mode .progress-bar {
             background-color: #333;
         }
-
-        body.dark-mode .status-online {
-            background-color: #66bb6a;
-        }
-
-        body.dark-mode .status-offline {
-            background-color: #ef5350;
-        }
-
+        /* reuse status-indicator with new dark-mode colors */
+        body.dark-mode .status-indicator.status-online  { background-color: #66bb6a; }
+        body.dark-mode .status-indicator.status-offline { background-color: #ef5350; }
+        body.dark-mode .status-indicator.status-warning { background-color: #fbc02d; }
         body.dark-mode .refresh-time {
             color: #aaa;
         }
@@ -213,9 +212,45 @@
             cursor: pointer;
             transition: background-color 0.3s;
         }
-
         body.dark-mode #darkModeToggle {
             background-color: #555;
+        }
+
+        /* ========== MOBILE OVERRIDES (≤600px) ========== */
+        @media (max-width: 600px) {
+            .card {
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            }
+            .card table {
+            display: block;
+            width: auto;
+            min-width: 100%;
+            overflow-x: auto;
+            }
+            .card table th,
+            .card table td {
+            white-space: nowrap;
+            }
+            .network-graphs {
+            overflow-x: auto;
+            }
+            .graph-container {
+            flex: 1 1 300px;
+            min-width: 300px;
+            }
+            canvas {
+            max-width: 100%;
+            height: auto;
+            }
+            .container {
+            padding: 10px;
+            }
+            #darkModeToggle {
+            float: none;
+            margin-bottom: 10px;
+            width: auto;
+            }
         }
     </style>
 </head>
