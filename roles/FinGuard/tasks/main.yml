@@ -94,10 +94,9 @@
     block: |
       tmpfs /var/log tmpfs defaults,noatime,mode=0755,size=100M 0 0
       tmpfs /var/log/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0
-      tmpfs /var/cache/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /var/cache/apt tmpfs defaults,noatime,mode=0755,size=500M 0 0
       tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=100M 0 0
       tmpfs /run/status tmpfs defaults,noatime,mode=0755,size=100M 0 0
-  notify: Mount all filesystems
 
 - name: Ensure nginx log directory exists
   file:
