@@ -395,6 +395,6 @@
     update_cache: yes
     upgrade: yes
 
-- name: Reboot the system
-  reboot:
-    reboot_timeout: 300
+- name: Reboot required
+  debug:
+    msg: "Reboot is required for changes to take effect"
