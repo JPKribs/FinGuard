@@ -60,33 +60,70 @@ get_temperature() {
 }
 
 # Network bitrate
-get_network_bitrate() {
-  local interface=$1
-  local stats_file="/sys/class/net/$interface/statistics"
-  local sample_time=1  # Default sampling time in seconds
+get_network_stats() {
+  local interfaces=()
+  local interface_data=""
   
-  if [[ "$interface" == wg* ]]; then
-    sample_time=5
-  fi
-
-  if [[ ! -d "$stats_file" ]]; then
-    echo "{\"rx\":\"0\",\"tx\":\"0\"}"
-    return
-  fi
-
-  local rx_bytes_start=$(cat "$stats_file/rx_bytes" 2>/dev/null || echo 0)
-  local tx_bytes_start=$(cat "$stats_file/tx_bytes" 2>/dev/null || echo 0)
-
-  sleep $sample_time
-
-  local rx_bytes_end=$(cat "$stats_file/rx_bytes" 2>/dev/null || echo 0)
-  local tx_bytes_end=$(cat "$stats_file/tx_bytes" 2>/dev/null || echo 0)
-  local rx_bps=$(( (rx_bytes_end - rx_bytes_start) * 8 / sample_time ))
-  local tx_bps=$(( (tx_bytes_end - tx_bytes_start) * 8 / sample_time ))
-  local rx_mbps=$(echo "scale=2; $rx_bps / 1000000" | bc 2>/dev/null || echo 0)
-  local tx_mbps=$(echo "scale=2; $tx_bps / 1000000" | bc 2>/dev/null || echo 0)
-
-  echo "{\"rx\":\"$rx_mbps\",\"tx\":\"$tx_mbps\"}"
+  while read -r line; do
+    interface=$(echo "$line" | awk '{print $1}')
+    state=$(echo "$line" | awk '{print $2}')
+    ip=$(echo "$line" | awk '{print $3}' | cut -d/ -f1)
+    
+    status="down"
+    if [ "$state" == "UP" ] || [ "$state" == "UNKNOWN" ]; then
+      status="up"
+    fi
+    
+    interfaces+=("$interface|$ip|$status")
+  done < <(ip -br addr)
+  
+  declare -A rx_start
+  declare -A tx_start
+  
+  for interface_info in "${interfaces[@]}"; do
+    interface=$(echo "$interface_info" | cut -d'|' -f1)
+    stats_file="/sys/class/net/$interface/statistics"
+    
+    if [ -d "$stats_file" ]; then
+      rx_start["$interface"]=$(cat "$stats_file/rx_bytes" 2>/dev/null || echo 0)
+      tx_start["$interface"]=$(cat "$stats_file/tx_bytes" 2>/dev/null || echo 0)
+    else
+      rx_start["$interface"]=0
+      tx_start["$interface"]=0
+    fi
+  done
+  
+  sleep 10
+  
+  for interface_info in "${interfaces[@]}"; do
+    interface=$(echo "$interface_info" | cut -d'|' -f1)
+    ip=$(echo "$interface_info" | cut -d'|' -f2)
+    status=$(echo "$interface_info" | cut -d'|' -f3)
+    
+    stats_file="/sys/class/net/$interface/statistics"
+    
+    if [ "$status" == "up" ] && [ -d "$stats_file" ]; then
+      rx_end=$(cat "$stats_file/rx_bytes" 2>/dev/null || echo 0)
+      tx_end=$(cat "$stats_file/tx_bytes" 2>/dev/null || echo 0)
+      
+      rx_bps=$(( (rx_end - ${rx_start["$interface"]}) * 8 ))
+      tx_bps=$(( (tx_end - ${tx_start["$interface"]}) * 8 ))
+      
+      rx_mbps=$(echo "scale=2; $rx_bps / 1000000" | bc 2>/dev/null || echo 0)
+      tx_mbps=$(echo "scale=2; $tx_bps / 1000000" | bc 2>/dev/null || echo 0)
+    else
+      rx_mbps="0"
+      tx_mbps="0"
+    fi
+    
+    if [ -n "$interface_data" ]; then
+      interface_data="$interface_data,"
+    fi
+    
+    interface_data="$interface_data{\"name\":\"$interface\",\"ip\":\"$ip\",\"status\":\"$status\",\"bitrate\":{\"rx\":\"$rx_mbps\",\"tx\":\"$tx_mbps\"}}"
+  done
+  
+  echo "[$interface_data]"
 }
 
 # Get timer statuses
@@ -116,22 +153,7 @@ NGINX_STATUS=$(systemctl is-active nginx)
 JELLYFIN_PROXY_STATUS=$(systemctl is-active jellyfin-discovery-proxy)
 
 # Get network statuses
-NETWORK_DATA=$(ip -br addr | awk '
-{
-    split($3, ip, "/");
-    status = ($2 == "UP" || $2 == "UNKNOWN") ? "up" : "down";
-    printf("{\"name\":\"%s\",\"ip\":\"%s\",\"status\":\"%s\"", $1, ip[1], status);
-    if (status == "up") {
-        printf(",\"bitrate\":");
-        system(get_network_bitrate $1);
-        printf("}");
-    } else {
-        printf(",\"bitrate\":{\"rx\":\"0\",\"tx\":\"0\"}}");
-    }
-    printf(",");
-}
-' | sed 's/,$//')
-NETWORK_DATA="[$NETWORK_DATA]"
+NETWORK_DATA=$(get_network_stats)
 
 # Write to JSON
 cat > /run/status/status.json << EOF

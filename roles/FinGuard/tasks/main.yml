@@ -94,6 +94,10 @@
     state: present
   register: tmpfs_config
 
+- name: Pause for 3 second to let fstab fully close
+  pause:
+    seconds: 3
+
 - name: Create additional tmpfs mount points for all potential log directories
   lineinfile:
     path: /etc/fstab
@@ -105,6 +109,10 @@
     - "tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=100M 0 0"
     - "tmpfs /run/status tmpfs defaults,noatime,mode=0755,size=100M 0 0"
   register: additional_tmpfs_config
+
+- name: Pause for 3 second to let fstab fully close
+  pause:
+    seconds: 3
 
 - name: Mount tmpfs filesystems if fstab was changed
   command: mount -a
@@ -170,12 +178,20 @@
     state: present
     reload: yes
 
+- name: Pause for 3 second to let fstab fully close
+  pause:
+    seconds: 3
+
 - name: Disable swap in fstab
   replace:
     path: /etc/fstab
     regexp: '^([^#].*\sswap\s+sw\s.*)$'
     replace: '# \1'
   register: swap_disabled
+
+- name: Pause for 3 second to let fstab fully close
+  pause:
+    seconds: 3
 
 - name: Turn off swap
   command: swapoff -a
