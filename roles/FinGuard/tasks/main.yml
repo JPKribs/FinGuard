@@ -99,13 +99,6 @@
       tmpfs /run/status tmpfs defaults,noatime,mode=0755,size=100M 0 0
   notify: Mount all filesystems
 
-- name: Pause for 3 second to let fstab fully close
-  pause:
-    seconds: 3
-
-- name: Mount tmpfs filesystems
-  command: mount -a
-
 - name: Ensure nginx log directory exists
   file:
     path: /var/log/nginx
@@ -172,10 +165,6 @@
     regexp: '^([^#].*\sswap\s+sw\s.*)$'
     replace: '# \1'
   register: swap_disabled
-
-- name: Pause for 3 second to let fstab fully close
-  pause:
-    seconds: 3
 
 - name: Turn off swap
   command: swapoff -a
@@ -401,3 +390,12 @@
     - jellyfin-discovery-proxy
     - nginx
     - "wg-quick@{{ wg_interface }}"
+
+- name: Update apt cache and upgrade all packages
+  apt:
+    update_cache: yes
+    upgrade: yes
+
+- name: Reboot the system
+  reboot:
+    reboot_timeout: 300
