@@ -77,7 +77,7 @@ wg_conf: |
   PublicKey           = <SERVER_PUBLIC_KEY>
   Endpoint            = vpn.example.com:51820
   AllowedIPs          = 10.192.1.254/32
-  PersistentKeepalive = 60
+  PersistentKeepalive = 25
 
 services:
   - { ip: "10.192.1.254:8096", name: "jellyfin", path: "/" }
