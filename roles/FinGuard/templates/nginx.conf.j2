@@ -4,16 +4,94 @@ server {
     listen [::]:80 default_server;
     server_name {{ hostname }} {{ hostname }}.local;
     
-    # Redirect all HTTP traffic to HTTPS
-    return 301 https://$host$request_uri;
+    # Status page
+    location /status {
+        alias /var/www/html/status;
+        index index.html;
+    }
+
+    location /status/status.json {
+        alias /run/status/status.json;
+        default_type application/json;
+    }
+
+    # Dynamic services
+    {% for service in services %}
+    # {{ service.name | title }} service
+    location {{ service.path }} {
+        {% if service.path != "/" %}
+        rewrite ^{{ service.path }}(.*)$ $1 break;
+        {% endif %}
+
+        proxy_pass http://{{ service.ip }};
+        proxy_http_version 1.1;
+        
+        # WebSocket support
+        {% if service.websocket | default(false) %}
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        {% else %}
+        proxy_set_header Connection "";
+        {% endif %}
+        
+        # Standard proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Protocol $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+        
+        {% if service.path != "/" %}
+        proxy_set_header X-Forwarded-Prefix {{ service.path }};
+        {% endif %}
+        proxy_redirect off;
+
+        # Optimize proxy settings
+        client_body_buffer_size 128k;
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+        proxy_buffering off;
+    }
+    
+    # Special WebSocket location for Jellyfin if needed
+    {% if service.name == 'jellyfin' %}
+    location {{ service.path }}socket {
+        {% if service.path != "/" %}
+        rewrite ^{{ service.path }}socket(.*)$ /socket$1 break;
+        {% endif %}
+        
+        proxy_pass http://{{ service.ip }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Protocol $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+        
+        {% if service.path != "/" %}
+        proxy_set_header X-Forwarded-Prefix {{ service.path }};
+        {% endif %}
+        proxy_redirect off;
+    }
+    {% endif %}
+    {% endfor %}
 }
 
 # HTTPS server configuration
 server {
-    # Nginx 1.25+ configuration
-    listen 443 ssl;
-    listen [::]:443 ssl;
-    http2 on;
+    # Nginx versions prior to 1.25
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+
+    # Nginx versions 1.25+
+    #listen 443 ssl;
+    #listen [::]:443 ssl;
+    #http2 on;
     
     server_name {{ hostname }} {{ hostname }}.local;
     
