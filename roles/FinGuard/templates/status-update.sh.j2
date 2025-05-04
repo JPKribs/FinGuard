@@ -129,7 +129,7 @@ get_network_stats() {
 # Get timer statuses
 STATUS_UPDATE_LAST_RUN=$(get_last_run "status-update.service")
 if [[ "$STATUS_UPDATE_LAST_RUN" != "-" ]]; then
-  STATUS_UPDATE_NEXT_RUN=$(date -d "$STATUS_UPDATE_LAST_RUN + 10 seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-")
+  STATUS_UPDATE_NEXT_RUN=$(date -d "$STATUS_UPDATE_LAST_RUN + 30 seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-")
 else
   STATUS_UPDATE_NEXT_RUN="-"
 fi
