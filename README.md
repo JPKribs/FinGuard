@@ -103,8 +103,15 @@ Defaults for other values (e.g., `wg_interface`, `discovery_repo`, paths, etc.) 
 2. Prepare and fix the OS environment:
    ```bash
    sudo apt update
-   sudo sed -i 's|https://mirrors.aliyun.com/debian|https://deb.debian.org/debian|g' /etc/apt/sources.list
-   sudo sed -i 's|bookworm main contrib non-free|bookworm main contrib non-free non-free-firmware|g' /etc/apt/sources.list
+   sudo cp /etc/apt/sources.list /etc/apt/sources.list.backup
+   sudo tee /etc/apt/sources.list > /dev/null << 'EOF'
+   deb https://deb.debian.org/debian bookworm main non-free-firmware non-free contrib
+   deb-src https://deb.debian.org/debian bookworm main non-free-firmware non-free contrib
+   deb https://deb.debian.org/debian-security bookworm-security main
+   deb-src https://deb.debian.org/debian-security bookworm-security main
+   deb https://deb.debian.org/debian bookworm-backports main non-free-firmware non-free contrib
+   deb-src https://deb.debian.org/debian bookworm-backports main non-free-firmware non-free contrib
+   EOF
    sudo apt update
    sudo apt --fix-broken install -y
    sudo apt install -y python3 python3-pip git locales ansible
