@@ -1,9 +1,12 @@
 [Unit]
-Description=Run FinGuard update every {{ finguard_update_day }} at {{ finguard_update_time }}
+Description=Run FinGuard update weekly
 
 [Timer]
+Unit=finguard-update.service
 OnCalendar={{ finguard_update_day }} *-*-* {{ finguard_update_time }}
 Persistent=true
+WakeSystem=true
+RandomizedDelaySec=15m
 
 [Install]
 WantedBy=timers.target

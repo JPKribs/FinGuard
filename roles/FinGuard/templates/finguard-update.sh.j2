@@ -15,11 +15,24 @@ chmod +x /tmp/jellyfin-discovery-proxy
 # Move to destination
 mv /tmp/jellyfin-discovery-proxy {{ binary_dest }}
 
-# Update system packages
-apt clean && apt update && apt upgrade -y
-
 # Restart the discovery proxy
 systemctl restart jellyfin-discovery-proxy
 
-# Reboot the system
-reboot
+# Check for system package updates
+apt clean
+apt update
+
+# Update system packages
+if apt list --upgradable 2>/dev/null | grep -q upgradable; then
+  apt upgrade -y
+  systemctl restart nginx
+else
+  echo "No package upgrades."
+fi
+
+# Only reboot if the distro has marked it as required
+if [ -f /var/run/reboot-required ]; then
+  reboot
+else
+  echo "No reboot required; exiting."
+fi

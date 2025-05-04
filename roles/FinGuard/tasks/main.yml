@@ -87,36 +87,24 @@
       RestartSec=5
   notify: Reload systemd
 
-- name: Create tmpfs mount points in fstab
-  lineinfile:
+- name: Add all tmpfs entries to fstab
+  blockinfile:
     path: /etc/fstab
-    line: "tmpfs /var/log tmpfs defaults,noatime,mode=0755,size=100M 0 0"
-    state: present
-  register: tmpfs_config
+    marker: "# BEGIN tmpfs mounts"
+    block: |
+      tmpfs /var/log tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /var/log/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /var/cache/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /run/status tmpfs defaults,noatime,mode=0755,size=100M 0 0
+  notify: Mount all filesystems
 
 - name: Pause for 3 second to let fstab fully close
   pause:
     seconds: 3
 
-- name: Create additional tmpfs mount points for all potential log directories
-  lineinfile:
-    path: /etc/fstab
-    line: "{{ item }}"
-    state: present
-  loop:
-    - "tmpfs /var/log/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0"
-    - "tmpfs /var/cache/apt tmpfs defaults,noatime,mode=0755,size=100M 0 0"
-    - "tmpfs /var/log/nginx tmpfs defaults,noatime,mode=0755,size=100M 0 0"
-    - "tmpfs /run/status tmpfs defaults,noatime,mode=0755,size=100M 0 0"
-  register: additional_tmpfs_config
-
-- name: Pause for 3 second to let fstab fully close
-  pause:
-    seconds: 3
-
-- name: Mount tmpfs filesystems if fstab was changed
+- name: Mount tmpfs filesystems
   command: mount -a
-  when: tmpfs_config.changed or additional_tmpfs_config.changed
 
 - name: Ensure nginx log directory exists
   file:
@@ -177,10 +165,6 @@
     value: '1'
     state: present
     reload: yes
-
-- name: Pause for 3 second to let fstab fully close
-  pause:
-    seconds: 3
 
 - name: Disable swap in fstab
   replace:

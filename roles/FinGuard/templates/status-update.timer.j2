@@ -1,11 +1,10 @@
 [Unit]
-Description=Update system status information every minute
-RefuseManualStart=no
-RefuseManualStop=no
+Description=Update system status information every 30 seconds
 
 [Timer]
-OnBootSec=30sec
-OnUnitActiveSec=30sec
+OnBootSec=30s
+OnUnitActiveSec=30s
+AccuracySec=100ms
 Unit=status-update.service
 
 [Install]

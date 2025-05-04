@@ -6,7 +6,7 @@ After=network.target
 Type=oneshot
 ExecStart=/usr/local/bin/FinGuard-update.sh
 StandardOutput=append:/var/log/FinGuard-update.log
-StandardError=inherit
+StandardError=append:/var/log/FinGuard-update.log
 Restart=on-failure
 
 [Install]

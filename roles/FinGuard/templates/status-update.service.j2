@@ -8,6 +8,7 @@ Type=oneshot
 Environment="WG_INTERFACE={{ wg_interface }}"
 ExecStartPre=/bin/mkdir -p /run/status
 ExecStart=/usr/local/bin/status-update.sh
+TimeoutSec=60
 
 [Install]
 WantedBy=multi-user.target

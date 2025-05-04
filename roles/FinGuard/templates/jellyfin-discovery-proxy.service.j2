@@ -3,6 +3,7 @@ Description=Jellyfin Discovery Proxy Service
 After=network.target
 
 [Service]
+Type=simple
 ExecStart={{ binary_dest }}
 Environment=JELLYFIN_SERVER_URL={{ jellyfin_server_url }}
 Environment=PROXY_URL=http://{{ hostname }}.local
