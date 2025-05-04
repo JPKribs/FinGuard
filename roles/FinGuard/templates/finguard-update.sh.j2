@@ -16,7 +16,7 @@ chmod +x /tmp/jellyfin-discovery-proxy
 mv /tmp/jellyfin-discovery-proxy {{ binary_dest }}
 
 # Update system packages
-apt update && apt upgrade -y
+apt clean && apt update && apt upgrade -y
 
 # Restart the discovery proxy
 systemctl restart jellyfin-discovery-proxy
