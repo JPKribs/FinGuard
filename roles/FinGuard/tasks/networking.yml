@@ -41,50 +41,32 @@
 # Dynamic Virtual Interface Setup
 # --------------------------------------------------
 
-# Calculates dynamic IP addresses for service aliases based on main interface IP.
-- name: Calculate service IPs for virtual interfaces
-  set_fact:
-    service_ips: >-
-      {%- set result = {} -%}
-      {%- set base_ip_parts = ansible_default_ipv4.address.split('.') -%}
-      {%- set base_last_octet = base_ip_parts[3] | int -%}
-      {%- set services_with_aliases = services | selectattr('alias', 'defined') | rejectattr('alias', 'equalto', '') | list -%}
-      {%- for service in services_with_aliases -%}
-        {%- set new_ip = base_ip_parts[0] + '.' + base_ip_parts[1] + '.' + base_ip_parts[2] + '.' + ((base_last_octet + loop.index) | string) -%}
-        {%- set _ = result.update({service.alias: new_ip}) -%}
-      {%- endfor -%}
-      {{ result }}
+# Ensure network facts are gathered for the default interface.
+- name: Gather network facts
+  ansible.builtin.setup:
+    gather_subset:
+      - network
+  when: ansible_default_ipv4 is not defined or ansible_default_ipv4.interface is not defined
 
-# Creates virtual network interfaces for each service alias with unique IP addresses.
-- name: Create virtual interfaces for service aliases
-  command: >
-    ip addr add {{ service_ips[item.alias] }}/{{ ansible_default_ipv4.netmask | ipaddr('prefix') }} 
-    dev {{ ansible_default_ipv4.interface }} 
-    label {{ ansible_default_ipv4.interface }}:{{ loop.index }}
-  loop: "{{ services | selectattr('alias', 'defined') | rejectattr('alias', 'equalto', '') | list }}"
-  register: virtual_interface_result
-  failed_when: virtual_interface_result.rc != 0 and 'File exists' not in virtual_interface_result.stderr
-  changed_when: virtual_interface_result.rc == 0
-
-# Makes virtual interfaces persistent across reboots by adding to network configuration.
-- name: Make virtual interfaces persistent
-  blockinfile:
+# Configure virtual network interfaces for each service alias to use DHCP for IPv4 and IPv6.
+- name: Configure virtual interfaces for service aliases with DHCP
+  ansible.builtin.blockinfile:
     path: /etc/network/interfaces
     marker: "# {mark} ANSIBLE MANAGED VIRTUAL INTERFACES"
     block: |
       {% for service in services | selectattr('alias', 'defined') | rejectattr('alias', 'equalto', '') | list %}
-      # {{ service.alias }} service virtual interface
+      # {{ service.alias }} service virtual interface (DHCP IPv4/IPv6)
       auto {{ ansible_default_ipv4.interface }}:{{ loop.index }}
-      iface {{ ansible_default_ipv4.interface }}:{{ loop.index }} inet static
-          address {{ service_ips[service.alias] }}
-          netmask {{ ansible_default_ipv4.netmask }}
-      
+      iface {{ ansible_default_ipv4.interface }}:{{ loop.index }} inet dhcp
+      iface {{ ansible_default_ipv4.interface }}:{{ loop.index }} inet6 dhcp
       {% endfor %}
     create: yes
     backup: yes
+  notify: Restart networking service
+  when: ansible_default_ipv4 is defined and ansible_default_ipv4.interface is defined
 
 # --------------------------------------------------
-# Avahi/mDNS Setup  
+# Avahi/mDNS Setup
 # --------------------------------------------------
 
 # Ensures Avahi daemon is enabled and running for mDNS.
@@ -95,19 +77,18 @@
     state: started
   tags: [mdns]
 
-# Deploys Avahi service files for each service alias with dedicated IP addresses.
-- name: Deploy Avahi service files for service aliases with dedicated IPs
+# Deploys Avahi service files for each service alias.
+- name: Deploy Avahi service files for service aliases
   copy:
     dest: "/etc/avahi/services/{{ item.alias }}.{{ hostname }}.service"
     content: |
       <?xml version="1.0" standalone='no'?>
       <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
       <service-group>
-        <name replace-wildcards="yes">{{ item.alias }}.{{ hostname }}</n>
+        <name replace-wildcards="yes">{{ item.alias }}.{{ hostname }}</name>
         <service>
           <type>_http._tcp</type>
           <port>80</port>
-          <host-name>{{ item.alias }}.{{ hostname }}.local</host-name>
         </service>
       </service-group>
     mode: '0644'

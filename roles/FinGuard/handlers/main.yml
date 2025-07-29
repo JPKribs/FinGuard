@@ -39,3 +39,9 @@
   systemd:
     name: avahi-daemon
     state: restarted
+
+- name: Restart networking service
+  ansible.builtin.service:
+    name: networking
+    state: restarted
+  listen: "Restart networking service"
