@@ -34,3 +34,8 @@
     - { path: /var/cache/apt, opts: "defaults,noatime,mode=0755,size=500M" }
     - { path: /var/log/nginx, opts: "defaults,noatime,mode=0755,size=100M" }
     - { path: /run/status,    opts: "defaults,noatime,mode=0755,size=100M" }
+
+- name: Restart Avahi
+  systemd:
+    name: avahi-daemon
+    state: restarted

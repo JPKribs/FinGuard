@@ -1,0 +1,97 @@
+# --------------------------------------------------
+# tmpfs Mount Points
+# --------------------------------------------------
+
+# Ensures that all necessary directories for tmpfs mount points exist with proper permissions.
+- name: Ensure tmpfs mount-point directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /var/log
+    - /var/log/apt
+    - /var/cache/apt
+    - /var/log/nginx
+    - /run/status
+
+# Adds entries for various tmpfs filesystems to /etc/fstab to mount them at boot.
+- name: Add all tmpfs entries to fstab
+  blockinfile:
+    path: /etc/fstab
+    marker: "# BEGIN tmpfs mounts"
+    block: |
+      tmpfs /var/log        tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /var/log/apt    tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /var/cache/apt  tmpfs defaults,noatime,mode=0755,size=500M 0 0
+      tmpfs /var/log/nginx  tmpfs defaults,noatime,mode=0755,size=100M 0 0
+      tmpfs /run/status     tmpfs defaults,noatime,mode=0755,size=100M 0 0
+  notify: Mount tmpfs filesystems
+
+# --------------------------------------------------
+# Disk Write Optimization
+# --------------------------------------------------
+
+# Configures APT to prioritize gzipped indexes and minimize disk writes during package operations.
+- name: Configure APT to minimize writes
+  copy:
+    dest: /etc/apt/apt.conf.d/02compress-indexes
+    content: |
+      Acquire::GzipIndexes "true";
+      Acquire::CompressionTypes::Order:: "gz";
+
+# Disables APT's periodic background activities to further reduce disk writes.
+- name: Disable APT periodic activities
+  copy:
+    dest: /etc/apt/apt.conf.d/02periodic
+    content: |
+      APT::Periodic::Enable "0";
+
+# Sets the kernel's swappiness parameter to '1', greatly reducing swap usage and disk writes.
+- name: Set swappiness to reduce disk writes
+  sysctl:
+    name: vm.swappiness
+    value: '1'
+    state: present
+    reload: yes
+
+# Comments out any existing swap entries in /etc/fstab to prevent swap from being activated at boot.
+- name: Disable swap in fstab
+  replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\sswap\s+sw\s.*)$'
+    replace: '# \1'
+  register: swap_disabled
+
+# Turns off any active swap space immediately if swap was disabled in fstab.
+- name: Turn off swap
+  command: swapoff -a
+  when: swap_disabled.changed
+
+# Configures journald to store logs only in volatile memory (RAM), preventing log writes to disk.
+- name: Configure journald to store logs in volatile memory
+  copy:
+    dest: /etc/systemd/journald.conf
+    content: |
+      [Journal]
+      Storage=volatile
+      RuntimeMaxUse=100M
+      ForwardToSyslog=yes
+  notify: Restart journald
+
+# --------------------------------------------------
+# Directory Structure
+# --------------------------------------------------
+
+# Ensures that all specified directories exist with correct permissions.
+- name: Ensure all required directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /var/log/apt
+    - /var/cache/apt
+    - /var/cache/apt/archives
+    - /var/cache/apt/archives/partial
+    - /run/status

@@ -1,0 +1,100 @@
+# --------------------------------------------------
+# NGINX Service Configuration
+# --------------------------------------------------
+
+# Creates a directory for NGINX systemd service overrides to customize its behavior.
+- name: Create override dir for NGINX
+  file:
+    path: /etc/systemd/system/nginx.service.d
+    state: directory
+    mode: '0755'
+
+# Ensures NGINX automatically restarts on failure, improving service reliability.
+- name: Ensure NGINX auto-restart on failure
+  copy:
+    dest: /etc/systemd/system/nginx.service.d/override.conf
+    content: |
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+  notify: Reload systemd
+
+# --------------------------------------------------
+# NGINX Logging Setup
+# --------------------------------------------------
+
+# Ensures the primary NGINX log directory exists with appropriate permissions.
+- name: Ensure nginx log directory exists
+  file:
+    path: /var/log/nginx
+    state: directory
+    mode: '0755'
+
+# Creates the necessary NGINX log files and sets their ownership and permissions.
+- name: Create required NGINX log files
+  file:
+    path: "{{ item }}"
+    state: touch
+    owner: www-data
+    group: adm
+    mode: '0640'
+  loop:
+    - /var/log/nginx/access.log
+    - /var/log/nginx/error.log
+
+# Deploys a configuration file to minimize NGINX logging, disabling access logs by default.
+- name: Configure NGINX to log minimally
+  copy:
+    dest: /etc/nginx/conf.d/minimal-logging.conf
+    content: |
+      # Minimize NGINX logging
+      access_log off;
+      error_log /var/log/nginx/error.log crit;
+  notify:
+    - Test NGINX configuration
+    - Reload NGINX if valid
+
+# Updates the main NGINX configuration to include minimal logging settings.
+- name: Update NGINX log configuration
+  blockinfile:
+    path: /etc/nginx/nginx.conf
+    insertafter: "http {"
+    block: |
+      # Minimal logging configuration
+      access_log /var/log/nginx/access.log combined buffer=4k flush=1m;
+      error_log /var/log/nginx/error.log warn;
+  notify:
+    - Test NGINX configuration
+    - Reload NGINX if valid
+
+# --------------------------------------------------
+# NGINX Site Configuration
+# --------------------------------------------------
+
+# Deploys the NGINX virtual host configuration file from a Jinja2 template.
+- name: Deploy NGINX vhost
+  template:
+    src: nginx.conf.j2
+    dest: "/etc/nginx/sites-available/{{ nginx_site_name }}.conf"
+  notify:
+    - Test NGINX configuration
+    - Reload NGINX if valid
+
+# Enables the deployed NGINX site by creating a symbolic link in sites-enabled.
+- name: Enable NGINX site
+  file:
+    src: "/etc/nginx/sites-available/{{ nginx_site_name }}.conf"
+    dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}.conf"
+    state: link
+  notify:
+    - Test NGINX configuration
+    - Reload NGINX if valid
+
+# Disables the default NGINX site to prevent conflicts with custom configurations.
+- name: Disable NGINX default site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify:
+    - Test NGINX configuration
+    - Reload NGINX if valid

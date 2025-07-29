@@ -15,8 +15,8 @@ wg_conf: |
 
 # 3) Services configuration
 services:
-  - { ip: "10.192.1.254:8096", name: "jellyfin", path: "/" }
-  - { ip: "10.192.1.254:5055", name: "requests", path: "/requests/" }
+  - { ip: "10.192.1.254:8096", name: "jellyfin", alias: "", path: "/" }
+  - { ip: "10.192.1.254:5055", name: "requests", alias: "requests", path: "/" }
 
 # 4) Optional: set new password for 'pi'; leave blank to skip
 pi_password: ""

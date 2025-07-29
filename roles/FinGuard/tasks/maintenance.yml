@@ -1,0 +1,35 @@
+# --------------------------------------------------
+# FinGuard Update System
+# --------------------------------------------------
+
+# Deploy the FinGuard update script to the target system
+- name: Deploy FinGuard update script
+  template:
+    src: finguard-update.sh.j2
+    dest: /usr/local/bin/FinGuard-update.sh
+    mode: '0755'
+  tags: [updates]
+
+# Deploy systemd service unit for FinGuard update management
+- name: Deploy FinGuard update systemd service
+  template:
+    src: finguard-update.service.j2
+    dest: /etc/systemd/system/finguard-update.service
+  notify: Reload systemd
+  tags: [updates]
+
+# Deploy systemd timer unit to schedule periodic FinGuard updates
+- name: Deploy FinGuard update systemd timer
+  template:
+    src: finguard-update.timer.j2
+    dest: /etc/systemd/system/finguard-update.timer
+  notify: Reload systemd
+  tags: [updates]
+
+# Enable and start the FinGuard update timer for scheduled update execution
+- name: Enable and start FinGuard update timer
+  systemd:
+    name: finguard-update.timer
+    enabled: true
+    state: started
+  tags: [updates]

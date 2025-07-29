@@ -1,0 +1,59 @@
+# --------------------------------------------------
+# Status Dashboard Setup
+# --------------------------------------------------
+
+# Create directory to serve status page
+- name: Create status page directory
+  file:
+    path: /var/www/html/status
+    state: directory
+    mode: '0755'
+  tags: [dashboard]
+
+# Deploy the main status page HTML template
+- name: Deploy status page HTML
+  template:
+    src: status-page.html.j2
+    dest: /var/www/html/status/index.html
+    mode: '0644'
+  tags: [dashboard]
+
+# Deploy favicon for status page
+- name: Deploy favicon for status page
+  copy:
+    src: inventory/group_vars/favicon.ico
+    dest: /var/www/html/status/favicon.ico
+    mode: '0644'
+  tags: [dashboard]
+
+# --------------------------------------------------
+# Status Update System
+# --------------------------------------------------
+
+# Deploy script responsible for updating status
+- name: Deploy status update script
+  template:
+    src: status-update.sh.j2
+    dest: /usr/local/bin/status-update.sh
+    mode: '0755'
+
+# Deploy systemd service to run status update script
+- name: Deploy status update service
+  template:
+    src: status-update.service.j2
+    dest: /etc/systemd/system/status-update.service
+  notify: Reload systemd
+
+# Deploy systemd timer to schedule status update runs
+- name: Deploy status update timer
+  template:
+    src: status-update.timer.j2
+    dest: /etc/systemd/system/status-update.timer
+  notify: Reload systemd
+
+# Enable and start the status update timer
+- name: Enable status update timer
+  systemd:
+    name: status-update.timer
+    enabled: true
+    state: started

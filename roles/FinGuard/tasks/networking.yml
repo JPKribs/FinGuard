@@ -1,0 +1,123 @@
+# --------------------------------------------------
+# WireGuard Setup
+# --------------------------------------------------
+
+# Deploy WireGuard configuration file
+- name: Deploy WireGuard config
+  copy:
+    dest: "/etc/wireguard/{{ wg_interface }}.conf"
+    content: "{{ wg_conf }}"
+    mode: '0600'
+  tags: [wireguard]
+
+# Enable and start WireGuard interface service
+- name: Enable & start WireGuard
+  systemd:
+    name: "wg-quick@{{ wg_interface }}"
+    enabled: true
+    state: started
+  tags: [wireguard]
+
+# Create directory for WireGuard systemd service overrides
+- name: Create override dir for WireGuard service
+  file:
+    path: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d"
+    state: directory
+    mode: '0755'
+  tags: [wireguard]
+
+# Ensure WireGuard service auto-restarts on failure
+- name: Ensure WireGuard auto-restart on failure
+  copy:
+    dest: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d/override.conf"
+    content: |
+      [Service]
+      Restart=on-failure
+      RestartSec=5
+  notify: Reload systemd
+  tags: [wireguard]
+
+# --------------------------------------------------
+# Avahi/mDNS Setup
+# --------------------------------------------------
+
+# Ensure Avahi daemon is enabled and running for mDNS
+- name: Ensure Avahi is running
+  systemd:
+    name: avahi-daemon
+    enabled: true
+    state: started
+  tags: [mdns]
+
+# Deploy Avahi service files for defined service aliases.
+# This task iterates through the 'services' list from 'all.yml'.
+# It creates an Avahi service file for each service that has an 'alias'
+# defined and that 'alias' is not an empty string.
+# The mDNS name will be formatted as 'alias.hostname.local'.
+# The port for the service is extracted from the 'ip' field.
+- name: Deploy Avahi service files for defined service aliases
+  copy:
+    dest: "/etc/avahi/services/{{ item.alias }}.{{ hostname }}.service"
+    content: |
+      <?xml version="1.0" standalone='no'?>
+      <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
+      <service-group>
+        <name replace-wildcards="yes">{{ item.alias }}.{{ hostname }}</name>
+        <service>
+          <type>_http._tcp</type>
+          <port>{{ item.ip.split(':')[1] }}</port>
+        </service>
+      </service-group>
+    mode: '0644'
+  loop: "{{ services | selectattr('alias', 'defined') | rejectattr('alias', 'equalto', '') | list }}"
+  notify: Restart Avahi
+  tags: [mdns]
+
+# --------------------------------------------------
+# Jellyfin Discovery Proxy Setup
+# --------------------------------------------------
+
+# Fetch latest release information from GitHub API
+- name: Get latest release info from GitHub
+  uri:
+    url: "https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest"
+    method: GET
+    return_content: yes
+    status_code: 200
+    body_format: json
+    validate_certs: yes
+  register: github_latest_release
+  tags: [discovery]
+
+# Set release version fact from fetched GitHub release info
+- name: Set Discovery Proxy version from latest release
+  set_fact:
+    release_version: "{{ github_latest_release.json.tag_name }}"
+  tags: [discovery]
+
+# Download the Jellyfin Discovery Proxy binary for ARM64
+- name: Download Discovery Proxy binary
+  get_url:
+    url: "https://github.com/JPKribs/jellyfin-discovery-proxy/releases/download/{{ release_version }}/jellyfin-discovery-proxy_{{ release_version }}_linux-arm64"
+    dest: "{{ binary_dest }}"
+    mode: '0755'
+  register: binary_download
+  tags: [discovery]
+
+# Deploy systemd service file for Discovery Proxy
+- name: Deploy Discovery Proxy systemd service
+  template:
+    src: jellyfin-discovery-proxy.service.j2
+    dest: /etc/systemd/system/jellyfin-discovery-proxy.service
+  notify:
+    - Reload systemd
+    - Restart Discovery Proxy
+  tags: [discovery]
+
+# Enable and start the Discovery Proxy service
+- name: Ensure Discovery Proxy service is enabled & started
+  systemd:
+    name: jellyfin-discovery-proxy
+    enabled: true
+    state: started
+  tags: [discovery]

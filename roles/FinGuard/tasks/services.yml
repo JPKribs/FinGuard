@@ -1,0 +1,19 @@
+# --------------------------------------------------
+# Final Service Management
+# --------------------------------------------------
+
+# Ensures that core services (jellyfin-discovery-proxy, nginx, wireguard) are enabled and running.
+- name: Ensure core services are enabled & running
+  systemd:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - jellyfin-discovery-proxy
+    - nginx
+    - "wg-quick@{{ wg_interface }}"
+
+# Informs the user that a system reboot is required for all changes to take effect.
+- name: Reboot required
+  debug:
+    msg: "Reboot is required for changes to take effect"

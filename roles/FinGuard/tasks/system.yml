@@ -1,0 +1,273 @@
+# --------------------------------------------------
+# Package Installation
+# --------------------------------------------------
+
+# Ensures the APT package cache is updated before installing new packages.
+- name: Ensure apt cache is up to date
+  apt:
+    update_cache: yes
+  tags: [packages]
+
+# Installs a list of essential packages required for the system's functionality.
+- name: Install required packages
+  apt:
+    name:
+      - wireguard-tools
+      - nginx
+      - avahi-daemon
+      - resolvconf
+      - cron
+      - openssl
+      - jq
+      - bc
+    state: present
+  tags: [packages]
+
+# --------------------------------------------------
+# System Configuration
+# --------------------------------------------------
+
+# Sets the system's timezone based on the 'timezone' variable.
+- name: Set system timezone
+  timezone:
+    name: "{{ timezone }}"
+
+# --------------------------------------------------
+# Hostname Setup
+# --------------------------------------------------
+
+# Validates that the 'hostname' variable conforms to a valid format.
+- name: Validate hostname format
+  fail:
+    msg: "Hostname '{{ hostname }}' is invalid. Must be alphanumeric with hyphens only, max 63 chars."
+  when: 
+    - hostname is not match('^[a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?$')
+    - hostname | length > 63
+  tags: [hostname]
+
+# Sets the system's hostname using the 'hostnamectl' command (primary method).
+- name: Set hostname via hostnamectl (primary method)
+  command: hostnamectl set-hostname {{ hostname }}
+  register: hostnamectl_result
+  changed_when: true
+  tags: [hostname]
+
+# Verifies that 'hostnamectl' successfully set the hostname.
+- name: Verify hostnamectl succeeded
+  command: hostnamectl status --static
+  register: hostnamectl_check
+  failed_when: hostnamectl_check.stdout.strip() != hostname
+  tags: [hostname]
+
+# Writes the hostname to /etc/hostname as a backup method for persistence across reboots.
+- name: Write hostname to /etc/hostname (backup method)
+  copy:
+    content: "{{ hostname }}\n"
+    dest: /etc/hostname
+    mode: '0644'
+    backup: yes
+  tags: [hostname]
+
+# Verifies that the content of /etc/hostname matches the desired hostname.
+- name: Verify /etc/hostname content
+  slurp:
+    src: /etc/hostname
+  register: etc_hostname_content
+  failed_when: (etc_hostname_content.content | b64decode).strip() != hostname
+  tags: [hostname]
+
+# Updates /etc/hosts with the correct localhost, hostname, and IPv6 entries.
+- name: Update /etc/hosts with proper entries
+  blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} ANSIBLE MANAGED HOSTNAME BLOCK"
+    block: |
+      127.0.0.1       localhost
+      127.0.1.1       {{ hostname }}.local {{ hostname }}
+      
+      # IPv6 entries
+      ::1             localhost ip6-localhost ip6-loopback
+      ff02::1         ip6-allnodes
+      ff02::2         ip6-allrouters
+    backup: yes
+  tags: [hostname]
+
+# Verifies that the /etc/hosts file contains the correct hostname entry.
+- name: Verify /etc/hosts contains correct entry
+  lineinfile:
+    path: /etc/hosts
+    line: "127.0.1.1       {{ hostname }}.local {{ hostname }}"
+    state: present
+  check_mode: yes
+  register: hosts_check
+  failed_when: hosts_check.changed
+  tags: [hostname]
+
+# Creates a shell script to verify and fix hostname settings if they drift.
+- name: Create hostname verification script
+  copy:
+    dest: /usr/local/bin/verify-hostname.sh
+    mode: '0755'
+    content: |
+      #!/bin/bash
+      set -euo pipefail
+      
+      EXPECTED_HOSTNAME="{{ hostname }}"
+      
+      # Check hostnamectl
+      CURRENT_HOSTNAME=$(hostnamectl status --static 2>/dev/null || echo "FAILED")
+      if [[ "$CURRENT_HOSTNAME" != "$EXPECTED_HOSTNAME" ]]; then
+        echo "ERROR: hostnamectl shows '$CURRENT_HOSTNAME', expected '$EXPECTED_HOSTNAME'"
+        hostnamectl set-hostname "$EXPECTED_HOSTNAME"
+        echo "FIXED: Set hostname via hostnamectl"
+      fi
+      
+      # Check /etc/hostname
+      if [[ ! -f /etc/hostname ]] || [[ "$(cat /etc/hostname | tr -d '\n')" != "$EXPECTED_HOSTNAME" ]]; then
+        echo "$EXPECTED_HOSTNAME" > /etc/hostname
+        echo "FIXED: Updated /etc/hostname"
+      fi
+      
+      # Check /etc/hosts
+      if ! grep -q "127.0.1.1.*$EXPECTED_HOSTNAME" /etc/hosts; then
+        sed -i '/^127\.0\.1\.1/d' /etc/hosts
+        echo "127.0.1.1       $EXPECTED_HOSTNAME.local $EXPECTED_HOSTNAME" >> /etc/hosts
+        echo "FIXED: Updated /etc/hosts"
+      fi
+      
+      # Final verification
+      FINAL_CHECK=$(hostname 2>/dev/null || echo "FAILED")
+      if [[ "$FINAL_CHECK" != "$EXPECTED_HOSTNAME" ]]; then
+        echo "CRITICAL: hostname command still shows '$FINAL_CHECK' after fixes"
+        exit 1
+      fi
+      
+      echo "SUCCESS: Hostname is correctly set to '$EXPECTED_HOSTNAME'"
+  tags: [hostname]
+
+# Executes the hostname verification script immediately to ensure initial correctness.
+- name: Run initial hostname verification
+  command: /usr/local/bin/verify-hostname.sh
+  register: hostname_verification
+  changed_when: "'FIXED:' in hostname_verification.stdout"
+  tags: [hostname]
+
+# Displays the output of the hostname verification script for review.
+- name: Display verification results
+  debug:
+    var: hostname_verification.stdout_lines
+  tags: [hostname]
+
+# Creates a systemd service unit file for the hostname guardian script.
+- name: Create hostname guardian systemd service
+  copy:
+    dest: /etc/systemd/system/hostname-guardian.service
+    content: |
+      [Unit]
+      Description=Hostname Guardian - Ensure hostname stays correct
+      After=systemd-hostnamed.service
+      Before=network.target avahi-daemon.service
+      
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/verify-hostname.sh
+      RemainAfterExit=yes
+      StandardOutput=journal
+      StandardError=journal
+      
+      [Install]
+      WantedBy=multi-user.target
+  notify: Reload systemd
+  tags: [hostname]
+
+# Enables and starts the hostname guardian service to run at boot.
+- name: Enable hostname guardian service
+  systemd:
+    name: hostname-guardian.service
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [hostname]
+
+# Creates a systemd timer unit file to periodically run the hostname guardian service.
+- name: Create hostname guardian timer for periodic checks
+  copy:
+    dest: /etc/systemd/system/hostname-guardian.timer
+    content: |
+      [Unit]
+      Description=Check hostname every 5 minutes
+      
+      [Timer]
+      OnBootSec=1min
+      OnUnitActiveSec=5min
+      Unit=hostname-guardian.service
+      
+      [Install]
+      WantedBy=timers.target
+  notify: Reload systemd
+  tags: [hostname]
+
+# Enables and starts the hostname guardian timer for continuous monitoring.
+- name: Enable hostname guardian timer
+  systemd:
+    name: hostname-guardian.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+  tags: [hostname]
+
+# Forces immediate refresh of hostname settings using systemd and hostname commands.
+- name: Force immediate hostname refresh
+  command: "{{ item }}"
+  loop:
+    - systemctl restart systemd-hostnamed
+    - hostname {{ hostname }}
+  changed_when: false
+  tags: [hostname]
+
+# Performs a final set of checks to comprehensively verify the hostname status.
+- name: Final comprehensive hostname verification
+  block:
+    # Checks the output of the 'hostname' command.
+    - name: Check hostname command output
+      command: hostname
+      register: hostname_cmd_check
+      failed_when: hostname_cmd_check.stdout.strip() != hostname
+      
+    # Checks the static hostname reported by 'hostnamectl'.
+    - name: Check hostnamectl output  
+      command: hostnamectl status --static
+      register: hostnamectl_final_check
+      failed_when: hostnamectl_final_check.stdout.strip() != hostname
+      
+    # Verifies that the system can resolve the hostname via mDNS.
+    - name: Check system can resolve hostname.local
+      command: getent hosts {{ hostname }}.local
+      register: mdns_check
+      failed_when: mdns_check.rc != 0
+      
+    # Displays the final verification status for all checks.
+    - name: Display final status
+      debug:
+        msg: 
+          - "✓ hostname command: {{ hostname_cmd_check.stdout }}"
+          - "✓ hostnamectl: {{ hostnamectl_final_check.stdout }}"  
+          - "✓ mDNS resolution: {{ mdns_check.stdout.split()[1] }}"
+  tags: [hostname]
+
+# --------------------------------------------------
+# User Management
+# --------------------------------------------------
+
+# Optionally resets the 'pi' user's password if 'pi_password' is defined and not empty.
+- name: Optionally reset pi password
+  shell: echo "pi:{{ pi_password }}" | chpasswd
+  when: pi_password is defined and pi_password != ""
+  no_log: true
+
+# Updates the APT package cache and upgrades all installed packages.
+- name: Update apt cache and upgrade all packages
+  apt:
+    update_cache: yes
+    upgrade: yes
+  tags: [packages, updates]

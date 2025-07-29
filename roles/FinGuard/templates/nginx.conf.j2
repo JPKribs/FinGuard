@@ -2,7 +2,7 @@
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name {{ hostname }} {{ hostname }}.local _;
+    server_name {{ hostname }} {{ hostname }}.local {% for service in services %}{% if service.alias != "" %}{{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }} {% endif %}{% endfor %}_;
     
     # Status page
     location /status {
@@ -37,7 +37,7 @@ server {
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Protocol $scheme;
         proxy_set_header X-Forwarded-Host $http_host;
         proxy_set_header X-Forwarded-Ssl on;
@@ -100,7 +100,7 @@ server {
     #listen [::]:443 ssl;
     #http2 on;
     
-    server_name {{ hostname }} {{ hostname }}.local _;
+    server_name {{ hostname }} {{ hostname }}.local {% for service in services %}{% if service.alias != "" %}{{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }} {% endif %}{% endfor %}_;
     
     # SSL Configuration
     ssl_certificate /etc/ssl/certs/{{ hostname }}.crt;
