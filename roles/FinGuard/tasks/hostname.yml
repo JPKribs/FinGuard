@@ -242,13 +242,13 @@
       register: mdns_check
       failed_when: mdns_check.rc != 0
 
-    # Display final status
+    # Displays the final verification status for all checks.
     - name: Display final status
       debug:
         msg: 
-          - "✓ hostname command: {{ hostname_cmd_check.stdout }}"
-          - "✓ hostnamectl: {{ hostnamectl_final_check.stdout }}"  
-          - "✓ mDNS resolution: {{ mdns_check.stdout.split()[1] }}"
+          - "✓ hostname command: {{ hostname_cmd_check.stdout | trim }}"
+          - "✓ hostnamectl: {{ hostnamectl_final_check.stdout | trim }}"  
+          - "✓ mDNS resolution: {{ mdns_check.stdout | default('N/A', true) | trim }}"
 
 # --------------------------------------------------
 # Set /etc/machine-info PRETTY_HOSTNAME (optional)
