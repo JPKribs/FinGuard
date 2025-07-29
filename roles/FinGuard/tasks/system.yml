@@ -107,17 +107,6 @@
     backup: yes
   tags: [hostname]
 
-# Verifies that the /etc/hosts file contains the correct hostname entry.
-- name: Verify /etc/hosts contains correct entry
-  lineinfile:
-    path: /etc/hosts
-    line: "127.0.1.1       {{ hostname }}.local {{ hostname }}"
-    state: present
-  check_mode: yes
-  register: hosts_check
-  failed_when: hosts_check.changed
-  tags: [hostname]
-
 # Creates a shell script to verify and fix hostname settings if they drift.
 - name: Create hostname verification script
   copy:
