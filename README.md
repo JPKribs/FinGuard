@@ -80,8 +80,10 @@ wg_conf: |
   PersistentKeepalive = 25
 
 services:
-  - { ip: "10.192.1.254:8096", name: "jellyfin", path: "/" }
-  - { ip: "10.192.1.254:5055", name: "other", path: "/other/" } # Ensure the path does not conflict with Jellyfin path. Use Jellyfin's Base URL to prevent conflicts.
+  - { ip: "10.192.1.254:8096", name: "jellyfin", alias: "", path: "/" } # No alias means it uses hostname.local
+  - { ip: "10.192.1.254:5055", name: "other", alias: "other", path: "/" } # This will be accessible at other.hostname.local
+  - { ip: "10.192.1.254:8080", name: "other", alias: "other", path: "/app/" } # This will be accessible at other.hostname.local/app/
+
 
 pi_password: ""
 
