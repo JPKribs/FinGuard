@@ -2,7 +2,7 @@
 # BASE DOMAIN HTTP SERVER (jellyfin.local)
 # ==============================================
 server {
-    listen 80 default_server;
+    listen {{ ansible_default_ipv4.address }}:80 default_server;
     listen [::]:80 default_server;
     server_name {{ hostname }} {{ hostname }}.local _;
     
@@ -69,13 +69,13 @@ server {
 }
 
 # ==============================================
-# ALIAS SUBDOMAIN HTTP SERVERS
+# ALIAS SUBDOMAIN HTTP SERVERS (Virtual IPs)
 # ==============================================
 {% for service in services %}
 {% if service.alias != "" %}
 # {{ service.alias | upper }} SUBDOMAIN: {{ service.alias }}.{{ hostname }}.local
 server {
-    listen 80;
+    listen {{ ansible_default_ipv4.address | regex_replace('(\d+)$', (ansible_default_ipv4.address.split('.')[3] | int + loop.index) | string) }}:80;
     listen [::]:80;
     server_name {{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }};
     
@@ -126,7 +126,7 @@ server {
 # BASE DOMAIN HTTPS SERVER (jellyfin.local)
 # ==============================================
 server {
-    listen 443 ssl http2;
+    listen {{ ansible_default_ipv4.address }}:443 ssl http2;
     listen [::]:443 ssl http2;
     server_name {{ hostname }} {{ hostname }}.local _;
     
@@ -211,13 +211,13 @@ server {
 }
 
 # ==============================================
-# ALIAS SUBDOMAIN HTTPS SERVERS
+# ALIAS SUBDOMAIN HTTPS SERVERS (Virtual IPs)
 # ==============================================
 {% for service in services %}
 {% if service.alias != "" %}
 # {{ service.alias | upper }} SUBDOMAIN HTTPS: {{ service.alias }}.{{ hostname }}.local
 server {
-    listen 443 ssl http2;
+    listen {{ ansible_default_ipv4.address | regex_replace('(\d+)$', (ansible_default_ipv4.address.split('.')[3] | int + loop.index) | string) }}:443 ssl http2;
     listen [::]:443 ssl http2;
     server_name {{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }};
     
