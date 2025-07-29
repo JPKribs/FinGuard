@@ -1,8 +1,10 @@
-# HTTP server configuration
+# ==============================================
+# BASE DOMAIN HTTP SERVER (jellyfin.local)
+# ==============================================
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
-    server_name {{ hostname }} {{ hostname }}.local {% for service in services %}{% if service.alias != "" %}{{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }} {% endif %}{% endfor %}_;
+    server_name {{ hostname }} {{ hostname }}.local _;
     
     # Status page
     location /status {
@@ -15,39 +17,96 @@ server {
         default_type application/json;
     }
 
-    # Dynamic services
-{% for service in services %}
-    # {{ service.name | title }} service
-    location {{ service.path }} {
-{% if service.path != "/" %}
-        rewrite ^{{ service.path }}(.*)$ /$1 break;
-{% endif %}
-        proxy_pass http://{{ service.ip }};
+{% set main_service = services | selectattr('alias', 'equalto', '') | first %}
+{% if main_service %}
+    # Main service: {{ main_service.name }}
+    location / {
+        proxy_pass http://{{ main_service.ip }};
         proxy_http_version 1.1;
-        
-        # WebSocket support
-{% if service.websocket | default(false) %}
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-{% else %}
         proxy_set_header Connection "";
-{% endif %}
         
         # Standard proxy headers
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Proto $scheme;
         proxy_set_header X-Forwarded-Protocol $scheme;
         proxy_set_header X-Forwarded-Host $http_host;
         proxy_set_header X-Forwarded-Ssl on;
-        
-{% if service.path != "/" %}
-        proxy_set_header X-Forwarded-Prefix {{ service.path }};
-{% endif %}
         proxy_redirect off;
 
-        # Optimize proxy settings
+        # Optimize proxy settings for {{ main_service.name }}
+{% if main_service.name == 'jellyfin' %}
+        client_body_buffer_size 512m;
+        client_max_body_size 2G;
+{% else %}
+        client_body_buffer_size 50m;
+{% endif %}
+        proxy_connect_timeout 60s;
+        proxy_send_timeout 60s;
+        proxy_read_timeout 60s;
+        proxy_buffering off;
+    }
+
+{% if main_service.name == 'jellyfin' %}
+    # Jellyfin WebSocket support
+    location /socket {
+        proxy_pass http://{{ main_service.ip }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Protocol $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Ssl on;
+        proxy_redirect off;
+    }
+{% endif %}
+{% endif %}
+}
+
+# ==============================================
+# ALIAS SUBDOMAIN HTTP SERVERS
+# ==============================================
+{% for service in services %}
+{% if service.alias != "" %}
+# {{ service.alias | upper }} SUBDOMAIN: {{ service.alias }}.{{ hostname }}.local
+server {
+    listen 80;
+    listen [::]:80;
+    server_name {{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }};
+    
+    # Status page
+    location /status {
+        alias /var/www/html/status;
+        index index.html;
+    }
+
+    location /status/status.json {
+        alias /run/status/status.json;
+        default_type application/json;
+    }
+    
+    # {{ service.name | title }} service
+    location / {
+        proxy_pass http://{{ service.ip }};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        
+        # Standard proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Protocol $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Ssl on;
+        proxy_redirect off;
+
+        # Optimize proxy settings for {{ service.name }}
 {% if service.name == 'jellyfin' %}
         client_body_buffer_size 512m;
         client_max_body_size 2G;
@@ -59,48 +118,17 @@ server {
         proxy_read_timeout 60s;
         proxy_buffering off;
     }
-{% endfor %}
-
-    # Jellyfin WebSocket location
-{% for service in services %}
-{% if service.name == 'jellyfin' %}
-    location {{ service.path }}socket {
-{% if service.path != "/" %}
-        rewrite ^{{ service.path }}socket(.*)$ /socket$1 break;
-{% endif %}
-        proxy_pass http://{{ service.ip }};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Protocol $scheme;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Ssl on;
-        
-{% if service.path != "/" %}
-        proxy_set_header X-Forwarded-Prefix {{ service.path }};
-{% endif %}
-        proxy_redirect off;
-    }
-{% endif %}
-{% endfor %}
 }
+{% endif %}
+{% endfor %}
 
-# HTTPS server configuration
+# ==============================================
+# BASE DOMAIN HTTPS SERVER (jellyfin.local)
+# ==============================================
 server {
-    # Nginx versions prior to 1.25
     listen 443 ssl http2;
     listen [::]:443 ssl http2;
-
-    # Nginx versions 1.25+
-    #listen 443 ssl;
-    #listen [::]:443 ssl;
-    #http2 on;
-    
-    server_name {{ hostname }} {{ hostname }}.local {% for service in services %}{% if service.alias != "" %}{{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }} {% endif %}{% endfor %}_;
+    server_name {{ hostname }} {{ hostname }}.local _;
     
     # SSL Configuration
     ssl_certificate /etc/ssl/certs/{{ hostname }}.crt;
@@ -118,7 +146,6 @@ server {
     add_header Permissions-Policy "accelerometer=(), ambient-light-sensor=(), battery=(), bluetooth=(), camera=(), clipboard-read=(), display-capture=(), document-domain=(), encrypted-media=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), keyboard-map=(), local-fonts=(), magnetometer=(), microphone=(), payment=(), publickey-credentials-get=(), serial=(), sync-xhr=(), usb=(), xr-spatial-tracking=()" always;
     add_header Content-Security-Policy "default-src 'self' data: blob: ws: wss: http: https:; img-src 'self' data: http: https:; style-src 'self' 'unsafe-inline' http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https: blob:; worker-src 'self' blob:; connect-src 'self' http: https: ws: wss:; object-src 'none'; frame-ancestors 'self'; font-src 'self' http: https:;";
     
-    # Increase maximum upload size for media files (internal network optimized)
     client_max_body_size 2G;
     
     # Status page
@@ -132,23 +159,13 @@ server {
         default_type application/json;
     }
 
-    # Dynamic services
-{% for service in services %}
-    # {{ service.name | title }} service
-    location {{ service.path }} {
-{% if service.path != "/" %}
-        rewrite ^{{ service.path }}(.*)$ /$1 break;
-{% endif %}
-        proxy_pass http://{{ service.ip }};
+{% set main_service = services | selectattr('alias', 'equalto', '') | first %}
+{% if main_service %}
+    # Main service: {{ main_service.name }}
+    location / {
+        proxy_pass http://{{ main_service.ip }};
         proxy_http_version 1.1;
-        
-        # WebSocket support
-{% if service.websocket | default(false) %}
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-{% else %}
         proxy_set_header Connection "";
-{% endif %}
         
         # Standard proxy headers
         proxy_set_header Host $host;
@@ -158,13 +175,98 @@ server {
         proxy_set_header X-Forwarded-Protocol $scheme;
         proxy_set_header X-Forwarded-Host $http_host;
         proxy_set_header X-Forwarded-Ssl on;
-        
-{% if service.path != "/" %}
-        proxy_set_header X-Forwarded-Prefix {{ service.path }};
-{% endif %}
         proxy_redirect off;
 
-        # Optimize proxy settings
+        # Optimize proxy settings for {{ main_service.name }}
+{% if main_service.name == 'jellyfin' %}
+        client_body_buffer_size 512m;
+        client_max_body_size 2G;
+{% else %}
+        client_body_buffer_size 50m;
+{% endif %}
+        proxy_connect_timeout 300s;
+        proxy_send_timeout 300s;
+        proxy_read_timeout 300s;
+        proxy_buffering off;
+    }
+
+{% if main_service.name == 'jellyfin' %}
+    # Jellyfin WebSocket support
+    location /socket {
+        proxy_pass http://{{ main_service.ip }};
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Protocol $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Ssl on;
+        proxy_redirect off;
+    }
+{% endif %}
+{% endif %}
+}
+
+# ==============================================
+# ALIAS SUBDOMAIN HTTPS SERVERS
+# ==============================================
+{% for service in services %}
+{% if service.alias != "" %}
+# {{ service.alias | upper }} SUBDOMAIN HTTPS: {{ service.alias }}.{{ hostname }}.local
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name {{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }};
+    
+    # SSL Configuration
+    ssl_certificate /etc/ssl/certs/{{ hostname }}.crt;
+    ssl_certificate_key /etc/ssl/private/{{ hostname }}.key;
+    
+    ssl_protocols TLSv1.2 TLSv1.3;
+    ssl_prefer_server_ciphers on;
+    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
+    ssl_session_timeout 10m;
+    ssl_session_cache shared:SSL:10m;
+    ssl_session_tickets off;
+    
+    # Security Headers
+    add_header X-Content-Type-Options "nosniff";
+    add_header Permissions-Policy "accelerometer=(), ambient-light-sensor=(), battery=(), bluetooth=(), camera=(), clipboard-read=(), display-capture=(), document-domain=(), encrypted-media=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), keyboard-map=(), local-fonts=(), magnetometer=(), microphone=(), payment=(), publickey-credentials-get=(), serial=(), sync-xhr=(), usb=(), xr-spatial-tracking=()" always;
+    add_header Content-Security-Policy "default-src 'self' data: blob: ws: wss: http: https:; img-src 'self' data: http: https:; style-src 'self' 'unsafe-inline' http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https: blob:; worker-src 'self' blob:; connect-src 'self' http: https: ws: wss:; object-src 'none'; frame-ancestors 'self'; font-src 'self' http: https:;";
+    
+    client_max_body_size 2G;
+    
+    # Status page
+    location /status {
+        alias /var/www/html/status;
+        index index.html;
+    }
+
+    location /status/status.json {
+        alias /run/status/status.json;
+        default_type application/json;
+    }
+    
+    # {{ service.name | title }} service
+    location / {
+        proxy_pass http://{{ service.ip }};
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        
+        # Standard proxy headers
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-Protocol $scheme;
+        proxy_set_header X-Forwarded-Host $http_host;
+        proxy_set_header X-Forwarded-Ssl on;
+        proxy_redirect off;
+
+        # Optimize proxy settings for {{ service.name }}
 {% if service.name == 'jellyfin' %}
         client_body_buffer_size 512m;
         client_max_body_size 2G;
@@ -176,32 +278,6 @@ server {
         proxy_read_timeout 300s;
         proxy_buffering off;
     }
-{% endfor %}
-
-    # Jellyfin WebSocket location
-{% for service in services %}
-{% if service.name == 'jellyfin' %}
-    location {{ service.path }}socket {
-{% if service.path != "/" %}
-        rewrite ^{{ service.path }}socket(.*)$ /socket$1 break;
-{% endif %}
-        proxy_pass http://{{ service.ip }};
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Protocol $scheme;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Ssl on;
-        
-{% if service.path != "/" %}
-        proxy_set_header X-Forwarded-Prefix {{ service.path }};
-{% endif %}
-        proxy_redirect off;
-    }
-{% endif %}
-{% endfor %}
 }
+{% endif %}
+{% endfor %}
