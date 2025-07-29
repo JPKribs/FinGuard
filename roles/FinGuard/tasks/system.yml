@@ -79,18 +79,9 @@
 # Builds a list of hostname aliases from defined service aliases to include in /etc/hosts.
 - name: Build hostname aliases from services
   set_fact:
-    hostname_aliases: >-
-      {{
-        services
-        | selectattr('alias', 'defined')
-        | rejectattr('alias', 'equalto', '')
-        | map(attribute='alias')
-        | map('regex_replace', '^(.*)$', '\\1.' + hostname + '.local')
-        | list
-        | join(' ')
-      }}
+    hostname_aliases: "{% for service in services %}{% if service.alias is defined and service.alias != '' %}{{ service.alias }}.{{ hostname }}.local {% endif %}{% endfor %}"
   tags: [hostname]
-
+  
 # Updates /etc/hosts with the correct localhost, hostname, service aliases, and IPv6 entries.
 - name: Update /etc/hosts with proper entries including service aliases
   blockinfile:
