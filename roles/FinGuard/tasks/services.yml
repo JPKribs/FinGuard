@@ -12,7 +12,6 @@
     - jellyfin-discovery-proxy
     - nginx
     - "wg-quick@{{ wg_interface }}"
-    - mdns-publisher
     - avahi-daemon
 
 # Verify service accessibility
