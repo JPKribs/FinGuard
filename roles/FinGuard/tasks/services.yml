@@ -15,17 +15,6 @@
     - mdns-publisher
     - avahi-daemon
 
-# Verify service accessibility
-- name: Verify service endpoints
-  uri:
-    url: "https://{{ item.hostname }}.local/status"
-    validate_certs: no
-    status_code: 200
-    timeout: 5
-  loop: "{{ services }}"
-  ignore_errors: true
-  register: endpoint_checks
-
 # Display endpoint check results
 - name: Display endpoint verification results
   debug:
