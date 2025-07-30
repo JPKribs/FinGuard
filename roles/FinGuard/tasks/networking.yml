@@ -69,12 +69,10 @@
         <service>
           <type>_http._tcp</type>
           <port>80</port>
-          <txt-record>path={{ item.path }}</txt-record>
         </service>
         <service>
           <type>_https._tcp</type>
           <port>443</port>
-          <txt-record>path={{ item.path }}</txt-record>
         </service>
       </service-group>
     mode: '0644'
