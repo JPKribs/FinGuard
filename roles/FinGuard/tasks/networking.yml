@@ -2,7 +2,7 @@
 # WireGuard Setup
 # --------------------------------------------------
 
-# Deploys WireGuard configuration file to establish VPN tunnel.
+# Deploy WireGuard configuration
 - name: Deploy WireGuard config
   copy:
     dest: "/etc/wireguard/{{ wg_interface }}.conf"
@@ -10,7 +10,7 @@
     mode: '0600'
   tags: [wireguard]
 
-# Enables and starts WireGuard interface service.
+# Enable and start WireGuard
 - name: Enable & start WireGuard
   systemd:
     name: "wg-quick@{{ wg_interface }}"
@@ -18,7 +18,7 @@
     state: started
   tags: [wireguard]
 
-# Creates directory for WireGuard systemd service overrides.
+# Create WireGuard service override directory
 - name: Create override dir for WireGuard service
   file:
     path: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d"
@@ -26,7 +26,7 @@
     mode: '0755'
   tags: [wireguard]
 
-# Ensures WireGuard service auto-restarts on failure.
+# Ensure WireGuard auto-restarts on failure
 - name: Ensure WireGuard auto-restart on failure
   copy:
     dest: "/etc/systemd/system/wg-quick@{{ wg_interface }}.service.d/override.conf"
@@ -37,39 +37,11 @@
   notify: Reload systemd
   tags: [wireguard]
 
-# --------------------------------------------------
-# Dynamic Virtual Interface Setup
-# --------------------------------------------------
-
-# Ensure network facts are gathered for the default interface.
-- name: Gather network facts
-  ansible.builtin.setup:
-    gather_subset:
-      - network
-  when: ansible_default_ipv4 is not defined or ansible_default_ipv4.interface is not defined
-
-# Configure virtual network interfaces for each service alias to use DHCP for IPv4 and IPv6.
-- name: Configure virtual interfaces for service aliases with DHCP
-  ansible.builtin.blockinfile:
-    path: /etc/network/interfaces
-    marker: "# {mark} ANSIBLE MANAGED VIRTUAL INTERFACES"
-    block: |
-      {% for service in services | selectattr('alias', 'defined') | rejectattr('alias', 'equalto', '') | list %}
-      # {{ service.alias }} service virtual interface (DHCP IPv4/IPv6)
-      auto {{ ansible_default_ipv4.interface }}:{{ loop.index }}
-      iface {{ ansible_default_ipv4.interface }}:{{ loop.index }} inet dhcp
-      iface {{ ansible_default_ipv4.interface }}:{{ loop.index }} inet6 dhcp
-      {% endfor %}
-    create: yes
-    backup: yes
-  notify: Restart networking service
-  when: ansible_default_ipv4 is defined and ansible_default_ipv4.interface is defined
-
-# --------------------------------------------------
+# -----------
 # Avahi/mDNS Setup
-# --------------------------------------------------
+# -----------
 
-# Ensures Avahi daemon is enabled and running for mDNS.
+# Ensure Avahi is running
 - name: Ensure Avahi is running
   systemd:
     name: avahi-daemon
@@ -77,30 +49,87 @@
     state: started
   tags: [mdns]
 
-# Deploys Avahi service files for each service alias.
-- name: Deploy Avahi service files for service aliases
+# Create Avahi services directory
+- name: Ensure Avahi services directory exists
+  file:
+    path: /etc/avahi/services
+    state: directory
+    mode: '0755'
+  tags: [mdns]
+
+# Deploy Avahi service files for each service
+- name: Deploy Avahi service files for each service
   copy:
-    dest: "/etc/avahi/services/{{ item.alias }}.{{ hostname }}.service"
+    dest: "/etc/avahi/services/{{ item.hostname }}.service"
     content: |
       <?xml version="1.0" standalone='no'?>
       <!DOCTYPE service-group SYSTEM "avahi-service.dtd">
       <service-group>
-        <name replace-wildcards="yes">{{ item.alias }}.{{ hostname }}</name>
+        <name replace-wildcards="yes">{{ item.hostname }}</name>
         <service>
           <type>_http._tcp</type>
           <port>80</port>
+          <txt-record>path={{ item.path }}</txt-record>
+        </service>
+        <service>
+          <type>_https._tcp</type>
+          <port>443</port>
+          <txt-record>path={{ item.path }}</txt-record>
         </service>
       </service-group>
     mode: '0644'
-  loop: "{{ services | selectattr('alias', 'defined') | rejectattr('alias', 'equalto', '') | list }}"
+  loop: "{{ services }}"
   notify: Restart Avahi
   tags: [mdns]
 
-# --------------------------------------------------
-# Jellyfin Discovery Proxy Setup
-# --------------------------------------------------
+# Configure Avahi to publish multiple hostnames
+- name: Configure Avahi daemon
+  lineinfile:
+    path: /etc/avahi/avahi-daemon.conf
+    regexp: "^#?{{ item.key }}="
+    line: "{{ item.key }}={{ item.value }}"
+    state: present
+  loop:
+    - { key: "host-name", value: "{{ hostname }}" }
+    - { key: "domain-name", value: "local" }
+    - { key: "publish-hinfo", value: "yes" }
+    - { key: "publish-workstation", value: "yes" }
+    - { key: "publish-domain", value: "yes" }
+    - { key: "publish-addresses", value: "yes" }
+    - { key: "publish-aaaa-on-ipv4", value: "no" }
+    - { key: "publish-a-on-ipv6", value: "no" }
+  notify: Restart Avahi
+  tags: [mdns]
 
-# Fetches latest release information from GitHub API.
+# Deploy script to publish additional hostnames
+- name: Deploy mDNS hostname publisher script
+  template:
+    src: mdns-publisher.sh.j2
+    dest: /usr/local/bin/mdns-publisher.sh
+    mode: '0755'
+  tags: [mdns]
+
+# Deploy systemd service for mDNS publisher
+- name: Deploy mDNS publisher service
+  template:
+    src: mdns-publisher.service.j2
+    dest: /etc/systemd/system/mdns-publisher.service
+  notify: Reload systemd
+  tags: [mdns]
+
+# Enable and start mDNS publisher
+- name: Enable and start mDNS publisher
+  systemd:
+    name: mdns-publisher
+    enabled: true
+    state: started
+  tags: [mdns]
+
+# -----------
+# Jellyfin Discovery Proxy Setup
+# -----------
+
+# Get latest release info
 - name: Get latest release info from GitHub
   uri:
     url: "https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest"
@@ -112,13 +141,13 @@
   register: github_latest_release
   tags: [discovery]
 
-# Sets release version fact from fetched GitHub release info.
+# Set Discovery Proxy version
 - name: Set Discovery Proxy version from latest release
   set_fact:
     release_version: "{{ github_latest_release.json.tag_name }}"
   tags: [discovery]
 
-# Downloads the Jellyfin Discovery Proxy binary for ARM64.
+# Download Discovery Proxy binary
 - name: Download Discovery Proxy binary
   get_url:
     url: "https://github.com/JPKribs/jellyfin-discovery-proxy/releases/download/{{ release_version }}/jellyfin-discovery-proxy_{{ release_version }}_linux-arm64"
@@ -127,7 +156,7 @@
   register: binary_download
   tags: [discovery]
 
-# Deploys systemd service file for Discovery Proxy.
+# Deploy Discovery Proxy systemd service
 - name: Deploy Discovery Proxy systemd service
   template:
     src: jellyfin-discovery-proxy.service.j2
@@ -137,7 +166,7 @@
     - Restart Discovery Proxy
   tags: [discovery]
 
-# Enables and starts the Discovery Proxy service.
+# Enable and start Discovery Proxy
 - name: Ensure Discovery Proxy service is enabled & started
   systemd:
     name: jellyfin-discovery-proxy

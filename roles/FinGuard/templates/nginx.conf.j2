@@ -1,12 +1,15 @@
-# ==============================================
-# BASE DOMAIN HTTP SERVER (jellyfin.local)
-# ==============================================
+# --------------------------------------------------
+# HTTP Servers
+# --------------------------------------------------
+{% for service in services %}
 server {
-    listen {{ ansible_default_ipv4.address }}:80 default_server;
-    listen [::]:80 default_server;
-    server_name {{ hostname }} {{ hostname }}.local _;
+    listen 80;
+    listen [::]:80;
+    server_name {{ service.hostname }}.local {{ service.hostname }};
     
-    # Status page
+    # --------------------------------------------------
+    # Status Page
+    # --------------------------------------------------
     location /status {
         alias /var/www/html/status;
         index index.html;
@@ -17,11 +20,11 @@ server {
         default_type application/json;
     }
 
-{% set main_service = services | selectattr('alias', 'equalto', '') | first %}
-{% if main_service %}
-    # Main service: {{ main_service.name }}
-    location / {
-        proxy_pass http://{{ main_service.ip }};
+    # --------------------------------------------------
+    # Service: {{ service.name }}
+    # --------------------------------------------------
+    location {{ service.path }} {
+        proxy_pass http://{{ service.upstream }};
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         
@@ -35,23 +38,19 @@ server {
         proxy_set_header X-Forwarded-Ssl on;
         proxy_redirect off;
 
-        # Optimize proxy settings for {{ main_service.name }}
-{% if main_service.name == 'jellyfin' %}
-        client_body_buffer_size 512m;
-        client_max_body_size 2G;
-{% else %}
-        client_body_buffer_size 50m;
-{% endif %}
+        # Buffer settings
+        client_body_buffer_size {{ service.client_max_body_size | default('50m') }};
+        client_max_body_size {{ service.client_max_body_size | default('50m') }};
         proxy_connect_timeout 60s;
         proxy_send_timeout 60s;
         proxy_read_timeout 60s;
         proxy_buffering off;
     }
 
-{% if main_service.name == 'jellyfin' %}
-    # Jellyfin WebSocket support
+{% if service.websocket %}
+    # WebSocket support for {{ service.name }}
     location /socket {
-        proxy_pass http://{{ main_service.ip }};
+        proxy_pass http://{{ service.upstream }};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -65,74 +64,22 @@ server {
         proxy_redirect off;
     }
 {% endif %}
-{% endif %}
 }
 
-# ==============================================
-# ALIAS SUBDOMAIN HTTP SERVERS (Virtual IPs)
-# ==============================================
-{% for service in services %}
-{% if service.alias != "" %}
-# {{ service.alias | upper }} SUBDOMAIN: {{ service.alias }}.{{ hostname }}.local
-server {
-    listen {{ ansible_default_ipv4.address | regex_replace('(\d+)$', (ansible_default_ipv4.address.split('.')[3] | int + loop.index) | string) }}:80;
-    listen [::]:80;
-    server_name {{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }};
-    
-    # Status page
-    location /status {
-        alias /var/www/html/status;
-        index index.html;
-    }
-
-    location /status/status.json {
-        alias /run/status/status.json;
-        default_type application/json;
-    }
-    
-    # {{ service.name | title }} service
-    location / {
-        proxy_pass http://{{ service.ip }};
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        
-        # Standard proxy headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Protocol $scheme;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Ssl on;
-        proxy_redirect off;
-
-        # Optimize proxy settings for {{ service.name }}
-{% if service.name == 'jellyfin' %}
-        client_body_buffer_size 512m;
-        client_max_body_size 2G;
-{% else %}
-        client_body_buffer_size 50m;
-{% endif %}
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-        proxy_buffering off;
-    }
-}
-{% endif %}
 {% endfor %}
 
-# ==============================================
-# BASE DOMAIN HTTPS SERVER (jellyfin.local)
-# ==============================================
+# --------------------------------------------------
+# HTTPS Servers
+# --------------------------------------------------
+{% for service in services %}
 server {
-    listen {{ ansible_default_ipv4.address }}:443 ssl http2;
+    listen 443 ssl http2;
     listen [::]:443 ssl http2;
-    server_name {{ hostname }} {{ hostname }}.local _;
+    server_name {{ service.hostname }}.local {{ service.hostname }};
     
     # SSL Configuration
-    ssl_certificate /etc/ssl/certs/{{ hostname }}.crt;
-    ssl_certificate_key /etc/ssl/private/{{ hostname }}.key;
+    ssl_certificate /etc/ssl/certs/{{ service.hostname }}.crt;
+    ssl_certificate_key /etc/ssl/private/{{ service.hostname }}.key;
     
     ssl_protocols TLSv1.2 TLSv1.3;
     ssl_prefer_server_ciphers on;
@@ -146,9 +93,11 @@ server {
     add_header Permissions-Policy "accelerometer=(), ambient-light-sensor=(), battery=(), bluetooth=(), camera=(), clipboard-read=(), display-capture=(), document-domain=(), encrypted-media=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), keyboard-map=(), local-fonts=(), magnetometer=(), microphone=(), payment=(), publickey-credentials-get=(), serial=(), sync-xhr=(), usb=(), xr-spatial-tracking=()" always;
     add_header Content-Security-Policy "default-src 'self' data: blob: ws: wss: http: https:; img-src 'self' data: http: https:; style-src 'self' 'unsafe-inline' http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https: blob:; worker-src 'self' blob:; connect-src 'self' http: https: ws: wss:; object-src 'none'; frame-ancestors 'self'; font-src 'self' http: https:;";
     
-    client_max_body_size 2G;
+    client_max_body_size {{ service.client_max_body_size | default('50m') }};
     
-    # Status page
+    # --------------------------------------------------
+    # Status Page
+    # --------------------------------------------------
     location /status {
         alias /var/www/html/status;
         index index.html;
@@ -159,11 +108,11 @@ server {
         default_type application/json;
     }
 
-{% set main_service = services | selectattr('alias', 'equalto', '') | first %}
-{% if main_service %}
-    # Main service: {{ main_service.name }}
-    location / {
-        proxy_pass http://{{ main_service.ip }};
+    # --------------------------------------------------
+    # Service: {{ service.name }}
+    # --------------------------------------------------
+    location {{ service.path }} {
+        proxy_pass http://{{ service.upstream }};
         proxy_http_version 1.1;
         proxy_set_header Connection "";
         
@@ -177,23 +126,19 @@ server {
         proxy_set_header X-Forwarded-Ssl on;
         proxy_redirect off;
 
-        # Optimize proxy settings for {{ main_service.name }}
-{% if main_service.name == 'jellyfin' %}
-        client_body_buffer_size 512m;
-        client_max_body_size 2G;
-{% else %}
-        client_body_buffer_size 50m;
-{% endif %}
+        # Buffer settings
+        client_body_buffer_size {{ service.client_max_body_size | default('50m') }};
+        client_max_body_size {{ service.client_max_body_size | default('50m') }};
         proxy_connect_timeout 300s;
         proxy_send_timeout 300s;
         proxy_read_timeout 300s;
         proxy_buffering off;
     }
 
-{% if main_service.name == 'jellyfin' %}
-    # Jellyfin WebSocket support
+{% if service.websocket %}
+    # WebSocket support for {{ service.name }}
     location /socket {
-        proxy_pass http://{{ main_service.ip }};
+        proxy_pass http://{{ service.upstream }};
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";
@@ -207,77 +152,6 @@ server {
         proxy_redirect off;
     }
 {% endif %}
-{% endif %}
 }
 
-# ==============================================
-# ALIAS SUBDOMAIN HTTPS SERVERS (Virtual IPs)
-# ==============================================
-{% for service in services %}
-{% if service.alias != "" %}
-# {{ service.alias | upper }} SUBDOMAIN HTTPS: {{ service.alias }}.{{ hostname }}.local
-server {
-    listen {{ ansible_default_ipv4.address | regex_replace('(\d+)$', (ansible_default_ipv4.address.split('.')[3] | int + loop.index) | string) }}:443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name {{ service.alias }}.{{ hostname }}.local {{ service.alias }}.{{ hostname }};
-    
-    # SSL Configuration
-    ssl_certificate /etc/ssl/certs/{{ hostname }}.crt;
-    ssl_certificate_key /etc/ssl/private/{{ hostname }}.key;
-    
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_prefer_server_ciphers on;
-    ssl_ciphers ECDHE-RSA-AES256-GCM-SHA512:DHE-RSA-AES256-GCM-SHA512:ECDHE-RSA-AES256-GCM-SHA384:DHE-RSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-SHA384;
-    ssl_session_timeout 10m;
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_tickets off;
-    
-    # Security Headers
-    add_header X-Content-Type-Options "nosniff";
-    add_header Permissions-Policy "accelerometer=(), ambient-light-sensor=(), battery=(), bluetooth=(), camera=(), clipboard-read=(), display-capture=(), document-domain=(), encrypted-media=(), gamepad=(), geolocation=(), gyroscope=(), hid=(), idle-detection=(), interest-cohort=(), keyboard-map=(), local-fonts=(), magnetometer=(), microphone=(), payment=(), publickey-credentials-get=(), serial=(), sync-xhr=(), usb=(), xr-spatial-tracking=()" always;
-    add_header Content-Security-Policy "default-src 'self' data: blob: ws: wss: http: https:; img-src 'self' data: http: https:; style-src 'self' 'unsafe-inline' http: https:; script-src 'self' 'unsafe-inline' 'unsafe-eval' http: https: blob:; worker-src 'self' blob:; connect-src 'self' http: https: ws: wss:; object-src 'none'; frame-ancestors 'self'; font-src 'self' http: https:;";
-    
-    client_max_body_size 2G;
-    
-    # Status page
-    location /status {
-        alias /var/www/html/status;
-        index index.html;
-    }
-
-    location /status/status.json {
-        alias /run/status/status.json;
-        default_type application/json;
-    }
-    
-    # {{ service.name | title }} service
-    location / {
-        proxy_pass http://{{ service.ip }};
-        proxy_http_version 1.1;
-        proxy_set_header Connection "";
-        
-        # Standard proxy headers
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_set_header X-Forwarded-Protocol $scheme;
-        proxy_set_header X-Forwarded-Host $http_host;
-        proxy_set_header X-Forwarded-Ssl on;
-        proxy_redirect off;
-
-        # Optimize proxy settings for {{ service.name }}
-{% if service.name == 'jellyfin' %}
-        client_body_buffer_size 512m;
-        client_max_body_size 2G;
-{% else %}
-        client_body_buffer_size 50m;
-{% endif %}
-        proxy_connect_timeout 300s;
-        proxy_send_timeout 300s;
-        proxy_read_timeout 300s;
-        proxy_buffering off;
-    }
-}
-{% endif %}
 {% endfor %}

@@ -2,7 +2,7 @@
 # SSL Certificate Setup
 # --------------------------------------------------
 
-# Ensures the directory for storing SSL private keys exists with appropriate permissions.
+# Ensure SSL directories exist
 - name: Ensure SSL private key directory exists
   file:
     path: /etc/ssl/private
@@ -10,38 +10,54 @@
     mode: '0700'
   tags: [ssl]
 
-# Generates a new 2048-bit RSA private key for the self-signed SSL certificate.
-- name: Generate private key for self-signed SSL certificate
+- name: Ensure SSL certificate directory exists
+  file:
+    path: /etc/ssl/certs
+    state: directory
+    mode: '0755'
+  tags: [ssl]
+
+# --------------------------------------------------
+# Generate SSL certificates for each service
+# --------------------------------------------------
+
+# Generate private keys for each service
+- name: Generate private key for each service
   openssl_privatekey:
-    path: /etc/ssl/private/{{ hostname }}.key
+    path: "/etc/ssl/private/{{ item.hostname }}.key"
     size: 2048
     mode: '0600'
+  loop: "{{ services }}"
   tags: [ssl]
 
-# Generates a Certificate Signing Request (CSR) using the newly created private key.
-- name: Generate CSR for self-signed SSL certificate
+# Generate CSRs for each service
+- name: Generate CSR for each service
   openssl_csr:
-    path: /etc/ssl/certs/{{ hostname }}.csr
-    privatekey_path: /etc/ssl/private/{{ hostname }}.key
-    common_name: "{{ hostname }}"
-    subject_alt_name: "DNS:{{ hostname }},DNS:{{ hostname }}.local"
+    path: "/etc/ssl/certs/{{ item.hostname }}.csr"
+    privatekey_path: "/etc/ssl/private/{{ item.hostname }}.key"
+    common_name: "{{ item.hostname }}.local"
+    subject_alt_name:
+      - "DNS:{{ item.hostname }}.local"
+      - "DNS:{{ item.hostname }}"
+  loop: "{{ services }}"
   tags: [ssl]
 
-# Generates the self-signed SSL certificate using the private key and CSR.
-- name: Generate self-signed SSL certificate
+# Generate self-signed certificates for each service
+- name: Generate self-signed SSL certificate for each service
   openssl_certificate:
-    path: /etc/ssl/certs/{{ hostname }}.crt
-    privatekey_path: /etc/ssl/private/{{ hostname }}.key
-    csr_path: /etc/ssl/certs/{{ hostname }}.csr
+    path: "/etc/ssl/certs/{{ item.hostname }}.crt"
+    privatekey_path: "/etc/ssl/private/{{ item.hostname }}.key"
+    csr_path: "/etc/ssl/certs/{{ item.hostname }}.csr"
     provider: selfsigned
-    selfsigned_not_after: "+370d" 
+    selfsigned_not_after: "+370d"
+  loop: "{{ services }}"
   tags: [ssl]
 
 # --------------------------------------------------
 # SSL Certificate Renewal Automation
 # --------------------------------------------------
 
-# Deploys a shell script responsible for renewing the self-signed SSL certificate.
+# Deploy SSL renewal script
 - name: Deploy SSL certificate renewal script
   template:
     src: renew-ssl-cert.sh.j2
@@ -49,7 +65,7 @@
     mode: '0755'
   tags: [ssl]
 
-# Deploys a systemd service unit file for the SSL certificate renewal script.
+# Deploy SSL renewal systemd service
 - name: Deploy SSL certificate renewal systemd service
   template:
     src: renew-ssl-cert.service.j2
@@ -57,7 +73,7 @@
   notify: Reload systemd
   tags: [ssl]
 
-# Deploys a systemd timer unit file to periodically trigger the SSL certificate renewal service.
+# Deploy SSL renewal systemd timer
 - name: Deploy SSL certificate renewal systemd timer
   template:
     src: renew-ssl-cert.timer.j2
@@ -65,7 +81,7 @@
   notify: Reload systemd
   tags: [ssl]
 
-# Enables and starts the systemd timer for SSL certificate renewal.
+# Enable SSL renewal timer
 - name: Enable SSL certificate renewal timer
   systemd:
     name: renew-ssl-cert.timer

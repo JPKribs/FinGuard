@@ -1,38 +1,78 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Get latest release info from GitHub
-LATEST_RELEASE=$(curl -sL https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest)
+# --------------------------------------------------
+# FinGuard Update Script
+# --------------------------------------------------
 
-# Extract the tag_name value
+echo "[$(date)] Starting FinGuard update..."
+
+# Get latest Discovery Proxy release
+LATEST_RELEASE=$(curl -sL https://api.github.com/repos/JPKribs/jellyfin-discovery-proxy/releases/latest)
 LATEST_VERSION=$(echo "$LATEST_RELEASE" | grep -Po '"tag_name": "\K[^"]*')
 
-# Download the latest binary
+# Download latest Discovery Proxy binary
+echo "Downloading Discovery Proxy version $LATEST_VERSION..."
 curl -sL "https://github.com/JPKribs/jellyfin-discovery-proxy/releases/download/${LATEST_VERSION}/jellyfin-discovery-proxy_${LATEST_VERSION}_linux-arm64" \
      -o /tmp/jellyfin-discovery-proxy
-chmod +x /tmp/jellyfin-discovery-proxy
 
-# Move to destination
-mv /tmp/jellyfin-discovery-proxy {{ binary_dest }}
+# Verify download
+if [ -f /tmp/jellyfin-discovery-proxy ]; then
+    chmod +x /tmp/jellyfin-discovery-proxy
+    mv /tmp/jellyfin-discovery-proxy {{ binary_dest }}
+    echo "Discovery Proxy updated successfully"
+else
+    echo "Failed to download Discovery Proxy"
+fi
 
-# Restart the discovery proxy
+# Restart Discovery Proxy
 systemctl restart jellyfin-discovery-proxy
 
 # Check for system package updates
+echo "Checking for system updates..."
 apt clean
 apt update
 
 # Update system packages
 if apt list --upgradable 2>/dev/null | grep -q upgradable; then
-  apt upgrade -y
-  systemctl restart nginx
+    echo "Installing system updates..."
+    apt upgrade -y
+    
+    # Restart critical services after updates
+    systemctl restart nginx
+    systemctl restart mdns-publisher
+    systemctl restart avahi-daemon
+    
+    echo "System updates installed"
 else
-  echo "No package upgrades."
+    echo "No package upgrades available"
 fi
 
-# Only reboot if the distro has marked it as required
+# Verify all services are running
+echo "Verifying services..."
+SERVICES=(
+    "wg-quick@{{ wg_interface }}"
+    "nginx"
+    "jellyfin-discovery-proxy"
+    "mdns-publisher"
+    "avahi-daemon"
+)
+
+for service in "${SERVICES[@]}"; do
+    if systemctl is-active --quiet "$service"; then
+        echo "✓ $service is running"
+    else
+        echo "✗ $service is not running, attempting restart..."
+        systemctl restart "$service" || echo "Failed to restart $service"
+    fi
+done
+
+# Check if reboot is required
 if [ -f /var/run/reboot-required ]; then
-  reboot
+    echo "System reboot required"
+    reboot
 else
-  echo "No reboot required; exiting."
+    echo "No reboot required"
 fi
+
+echo "[$(date)] FinGuard update completed"

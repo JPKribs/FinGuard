@@ -1,0 +1,42 @@
+#!/bin/bash
+
+# --------------------------------------------------
+# mDNS Hostname Publisher
+# --------------------------------------------------
+
+# Get the primary IP address
+PRIMARY_IP=$(ip -4 addr show scope global | grep inet | head -n1 | awk '{print $2}' | cut -d/ -f1)
+
+if [ -z "$PRIMARY_IP" ]; then
+    echo "Error: Could not determine primary IP address"
+    exit 1
+fi
+
+# --------------------------------------------------
+# Publish hostnames via avahi-publish
+# --------------------------------------------------
+
+{% for service in services %}
+# Publish {{ service.hostname }}.local
+avahi-publish -a -R "{{ service.hostname }}.local" "$PRIMARY_IP" &
+PIDS+=($!)
+{% endfor %}
+
+# --------------------------------------------------
+# Keep the script running
+# --------------------------------------------------
+
+# Function to cleanup on exit
+cleanup() {
+    echo "Stopping mDNS publishers..."
+    for pid in "${PIDS[@]}"; do
+        kill "$pid" 2>/dev/null
+    done
+    exit 0
+}
+
+# Set up signal handlers
+trap cleanup SIGTERM SIGINT
+
+# Wait for all background processes
+wait

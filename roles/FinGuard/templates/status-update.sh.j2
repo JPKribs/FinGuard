@@ -1,5 +1,9 @@
 #!/bin/bash
 
+# --------------------------------------------------
+# Status Update Script
+# --------------------------------------------------
+
 # Get last run
 get_last_run() {
   local service_name=$1
@@ -11,7 +15,7 @@ get_last_run() {
   fi
 }
 
-# Get next run based on timing
+# Get next run
 get_next_run() {
   local timer_name=$1
   next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}')
@@ -27,17 +31,6 @@ get_next_run() {
   fi
 }
 
-# Get next run based on schedule
-get_next_static_run() {
-  local timer_name=$1
-  next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}')
-  if [[ -z "$next_run" ]]; then
-    echo "-"
-  else
-    echo "$next_run"
-  fi
-}
-
 # Get CPU temperature
 get_temperature() {
   if [ -d "/sys/class/thermal" ]; then
@@ -50,16 +43,10 @@ get_temperature() {
       fi
     done
   fi
-  if [ -f "/sys/devices/virtual/thermal/thermal_zone0/temp" ]; then
-    temp=$(cat "/sys/devices/virtual/thermal/thermal_zone0/temp" 2>/dev/null || echo 0)
-    temp_c=$(echo "scale=1; $temp / 1000" | bc 2>/dev/null || echo 0)
-    echo "$temp_c"
-    return
-  fi
   echo "0"
 }
 
-# Network bitrate
+# Network bitrate calculation
 get_network_stats() {
   local interfaces=()
   local interface_data=""
@@ -126,17 +113,43 @@ get_network_stats() {
   echo "[$interface_data]"
 }
 
-# Get timer statuses
+# Get service endpoints status
+get_service_endpoints() {
+  local endpoints_data=""
+  
+{% for service in services %}
+  # Check {{ service.name }} endpoint
+  if curl -k -s -o /dev/null -w "%{http_code}" "https://{{ service.hostname }}.local" | grep -q "^[23]"; then
+    endpoint_status="reachable"
+  else
+    endpoint_status="unreachable"
+  fi
+  
+  if [ -n "$endpoints_data" ]; then
+    endpoints_data="$endpoints_data,"
+  fi
+  
+  endpoints_data="$endpoints_data{\"name\":\"{{ service.name }}\",\"hostname\":\"{{ service.hostname }}.local\",\"status\":\"$endpoint_status\"}"
+{% endfor %}
+  
+  echo "[$endpoints_data]"
+}
+
+# --------------------------------------------------
+# Timer statuses
+# --------------------------------------------------
 STATUS_UPDATE_LAST_RUN=$(get_last_run "status-update.service")
 if [[ "$STATUS_UPDATE_LAST_RUN" != "-" ]]; then
   STATUS_UPDATE_NEXT_RUN=$(date -d "$STATUS_UPDATE_LAST_RUN + 30 seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-")
 else
   STATUS_UPDATE_NEXT_RUN="-"
 fi
-SSL_RENEWAL_NEXT_RUN=$(get_next_static_run "renew-ssl-cert.timer")
-FINGUARD_UPDATE_NEXT_RUN=$(get_next_static_run "finguard-update.timer")
+SSL_RENEWAL_NEXT_RUN=$(get_next_run "renew-ssl-cert.timer")
+FINGUARD_UPDATE_NEXT_RUN=$(get_next_run "finguard-update.timer")
 
-# Get system metrics
+# --------------------------------------------------
+# System metrics
+# --------------------------------------------------
 UPTIME=$(uptime -p 2>/dev/null | sed "s/up //" || echo "Unknown")
 CPU_USAGE=$(top -bn1 2>/dev/null | grep "Cpu(s)" | sed "s/.*, *\([0-9.]*\)%* id.*/\1/" | awk '{print 100 - $1}' | cut -d. -f1 || echo 0)
 MEMORY_TOTAL=$(free -m 2>/dev/null | awk '/Mem:/ {print $2}' || echo 0)
@@ -147,15 +160,23 @@ DISK_USED=$(df -h / 2>/dev/null | awk '/\// {print $3}' | sed 's/G//' || echo 0)
 DISK_USAGE=$(df -h / 2>/dev/null | awk '/\// {print $5}' | sed 's/%//' || echo 0)
 CPU_TEMP=$(get_temperature)
 
-# Get service statuses
-WIREGUARD_STATUS=$(systemctl is-active wg-quick@wg0)
+# -----------
+# Service statuses
+# -----------
+WIREGUARD_STATUS=$(systemctl is-active wg-quick@{{ wg_interface }})
 NGINX_STATUS=$(systemctl is-active nginx)
 JELLYFIN_PROXY_STATUS=$(systemctl is-active jellyfin-discovery-proxy)
+MDNS_PUBLISHER_STATUS=$(systemctl is-active mdns-publisher)
 
-# Get network statuses
+# -----------
+# Get dynamic data
+# -----------
 NETWORK_DATA=$(get_network_stats)
+SERVICE_ENDPOINTS=$(get_service_endpoints)
 
-# Write to JSON
+# -----------
+# Write JSON output
+# -----------
 cat > /run/status/status.json << EOF
 {
   "uptime": "$UPTIME",
@@ -170,8 +191,10 @@ cat > /run/status/status.json << EOF
   "services": {
     "wireguard": "$WIREGUARD_STATUS",
     "nginx": "$NGINX_STATUS",
-    "jellyfin_proxy": "$JELLYFIN_PROXY_STATUS"
+    "jellyfin_proxy": "$JELLYFIN_PROXY_STATUS",
+    "mdns_publisher": "$MDNS_PUBLISHER_STATUS"
   },
+  "endpoints": $SERVICE_ENDPOINTS,
   "timers": {
     "status_update": {
       "next_run": "$STATUS_UPDATE_NEXT_RUN"

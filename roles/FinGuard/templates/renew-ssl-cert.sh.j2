@@ -1,10 +1,29 @@
 #!/bin/bash
 
+# --------------------------------------------------
+# SSL Certificate Renewal Script
+# --------------------------------------------------
+
+{% for service in services %}
+# Renew certificate for {{ service.hostname }}
+echo "Renewing certificate for {{ service.hostname }}.local..."
+
 # Generate CSR
-openssl req -new -key /etc/ssl/private/{{ hostname }}.key -out /etc/ssl/certs/{{ hostname }}.csr -subj "/CN={{ hostname }}" -addext "subjectAltName = DNS:{{ hostname }},DNS:{{ hostname }}.local"
+openssl req -new \
+    -key /etc/ssl/private/{{ service.hostname }}.key \
+    -out /etc/ssl/certs/{{ service.hostname }}.csr \
+    -subj "/CN={{ service.hostname }}.local" \
+    -addext "subjectAltName = DNS:{{ service.hostname }}.local,DNS:{{ service.hostname }}"
 
 # Generate self-signed certificate
-openssl x509 -req -days 370 -in /etc/ssl/certs/{{ hostname }}.csr -signkey /etc/ssl/private/{{ hostname }}.key -out /etc/ssl/certs/{{ hostname }}.crt
+openssl x509 -req -days 370 \
+    -in /etc/ssl/certs/{{ service.hostname }}.csr \
+    -signkey /etc/ssl/private/{{ service.hostname }}.key \
+    -out /etc/ssl/certs/{{ service.hostname }}.crt
 
-# Reload nginx to apply the new certificate
+{% endfor %}
+
+# Reload nginx to apply new certificates
 systemctl reload nginx
+
+echo "SSL certificate renewal completed"

@@ -2,14 +2,14 @@
 # NGINX Service Configuration
 # --------------------------------------------------
 
-# Creates a directory for NGINX systemd service overrides to customize its behavior.
+# Create NGINX service override directory
 - name: Create override dir for NGINX
   file:
     path: /etc/systemd/system/nginx.service.d
     state: directory
     mode: '0755'
 
-# Ensures NGINX automatically restarts on failure, improving service reliability.
+# Ensure NGINX auto-restarts on failure
 - name: Ensure NGINX auto-restart on failure
   copy:
     dest: /etc/systemd/system/nginx.service.d/override.conf
@@ -23,14 +23,14 @@
 # NGINX Logging Setup
 # --------------------------------------------------
 
-# Ensures the primary NGINX log directory exists with appropriate permissions.
+# Ensure NGINX log directory exists
 - name: Ensure nginx log directory exists
   file:
     path: /var/log/nginx
     state: directory
     mode: '0755'
 
-# Creates the necessary NGINX log files and sets their ownership and permissions.
+# Create NGINX log files
 - name: Create required NGINX log files
   file:
     path: "{{ item }}"
@@ -42,7 +42,7 @@
     - /var/log/nginx/access.log
     - /var/log/nginx/error.log
 
-# Deploys a configuration file to minimize NGINX logging, disabling access logs by default.
+# Configure minimal NGINX logging
 - name: Configure NGINX to log minimally
   copy:
     dest: /etc/nginx/conf.d/minimal-logging.conf
@@ -54,7 +54,7 @@
     - Test NGINX configuration
     - Reload NGINX if valid
 
-# Updates the main NGINX configuration to include minimal logging settings.
+# Update main NGINX configuration
 - name: Update NGINX log configuration
   blockinfile:
     path: /etc/nginx/nginx.conf
@@ -71,26 +71,36 @@
 # NGINX Site Configuration
 # --------------------------------------------------
 
-# Deploys the NGINX virtual host configuration file from a Jinja2 template.
-- name: Deploy NGINX vhost
+# Create sites directories
+- name: Ensure NGINX sites directories exist
+  file:
+    path: "{{ item }}"
+    state: directory
+    mode: '0755'
+  loop:
+    - /etc/nginx/sites-available
+    - /etc/nginx/sites-enabled
+
+# Deploy NGINX virtual host configuration
+- name: Deploy NGINX vhost configuration
   template:
     src: nginx.conf.j2
-    dest: "/etc/nginx/sites-available/{{ nginx_site_name }}.conf"
+    dest: /etc/nginx/sites-available/finguard.conf
   notify:
     - Test NGINX configuration
     - Reload NGINX if valid
 
-# Enables the deployed NGINX site by creating a symbolic link in sites-enabled.
+# Enable NGINX site
 - name: Enable NGINX site
   file:
-    src: "/etc/nginx/sites-available/{{ nginx_site_name }}.conf"
-    dest: "/etc/nginx/sites-enabled/{{ nginx_site_name }}.conf"
+    src: /etc/nginx/sites-available/finguard.conf
+    dest: /etc/nginx/sites-enabled/finguard.conf
     state: link
   notify:
     - Test NGINX configuration
     - Reload NGINX if valid
 
-# Disables the default NGINX site to prevent conflicts with custom configurations.
+# Disable default NGINX site
 - name: Disable NGINX default site
   file:
     path: /etc/nginx/sites-enabled/default
@@ -98,3 +108,10 @@
   notify:
     - Test NGINX configuration
     - Reload NGINX if valid
+
+# Ensure NGINX is started
+- name: Ensure NGINX is started and enabled
+  systemd:
+    name: nginx
+    enabled: true
+    state: started

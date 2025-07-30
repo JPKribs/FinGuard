@@ -2,7 +2,7 @@
 # Final Service Management
 # --------------------------------------------------
 
-# Ensures that core services (jellyfin-discovery-proxy, nginx, wireguard) are enabled and running.
+# Ensure core services are enabled and running
 - name: Ensure core services are enabled & running
   systemd:
     name: "{{ item }}"
@@ -12,8 +12,38 @@
     - jellyfin-discovery-proxy
     - nginx
     - "wg-quick@{{ wg_interface }}"
+    - mdns-publisher
+    - avahi-daemon
 
-# Informs the user that a system reboot is required for all changes to take effect.
-- name: Reboot required
+# Verify service accessibility
+- name: Verify service endpoints
+  uri:
+    url: "https://{{ item.hostname }}.local/status"
+    validate_certs: no
+    status_code: 200
+    timeout: 5
+  loop: "{{ services }}"
+  ignore_errors: true
+  register: endpoint_checks
+
+# Display endpoint check results
+- name: Display endpoint verification results
   debug:
-    msg: "Reboot is required for changes to take effect"
+    msg: "{{ item.item.hostname }}.local: {{ 'OK' if item.status == 200 else 'FAILED' }}"
+  loop: "{{ endpoint_checks.results }}"
+  when: endpoint_checks is defined
+
+# Final status message
+- name: Display final status
+  debug:
+    msg: |
+      FinGuard setup complete!
+      
+      Services are accessible at:
+      {% for service in services %}
+      - https://{{ service.hostname }}.local - {{ service.name | title }}
+      {% endfor %}
+      
+      Status dashboard: https://{{ services[0].hostname }}.local/status
+      
+      A reboot is recommended for all changes to take effect.
