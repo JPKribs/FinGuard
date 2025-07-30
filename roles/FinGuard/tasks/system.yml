@@ -53,6 +53,15 @@
     mode: '0644'
   tags: [hostname]
 
+# Adds a crontab entry to set the hostname at boot
+- name: Set hostname on boot using @reboot crontab
+  cron:
+    name: "Set hostname at boot"
+    special_time: reboot
+    job: "/bin/hostname {{ hostname }}"
+    user: root
+  tags: [hostname]
+
 # --------------------------------------------------
 # User Management & Updates
 # --------------------------------------------------

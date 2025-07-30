@@ -80,10 +80,30 @@ wg_conf: |
   PersistentKeepalive = 25
 
 services:
-  - { ip: "10.192.1.254:8096", name: "jellyfin", alias: "", path: "/" } # No alias means it uses hostname.local
-  - { ip: "10.192.1.254:5055", name: "other", alias: "other", path: "/" } # This will be accessible at other.hostname.local
-  - { ip: "10.192.1.254:8080", name: "other", alias: "other", path: "/app/" } # This will be accessible at other.hostname.local/app/
-
+  - { 
+      name: "jellyfin",
+      hostname: "jellyfin",  # No alias means it uses hostname.local
+      upstream: "10.192.1.254:8096",
+      path: "/",
+      websocket: true,
+      client_max_body_size: "1024m"
+    }
+  - { 
+      name: "other",
+      hostname: "other",  # This will be accessible at other.local
+      upstream: "10.192.1.254:5055",
+      path: "/",
+      websocket: false,
+      client_max_body_size: "50m"
+    }
+      - { 
+      name: "other",
+      hostname: "other",  # This will be accessible at other.local/app/
+      upstream: "10.192.1.254:8080",
+      path: "/",
+      websocket: true,
+      client_max_body_size: "50m"
+    }
 
 pi_password: ""
 

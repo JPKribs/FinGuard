@@ -18,16 +18,13 @@ get_last_run() {
 # Get next run
 get_next_run() {
   local timer_name=$1
-  next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}')
+  local next_run=$(systemctl show "$timer_name" -p NextElapseUSecRealtime | awk -F= '{print $2}' | xargs)
+
   if [[ -z "$next_run" || "$next_run" == "n/a" ]]; then
     echo "-"
   else
-    local seconds=$(echo "$next_run" | awk '{print substr($1, 1, length($1)-6)}')
-    if [[ -n "$seconds" && "$seconds" != "0" ]]; then
-      date -d "@$seconds" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "-"
-    else
-      echo "-"
-    fi
+    # Convert to standard format (fallbacks gracefully)
+    date -d "$next_run" '+%a %Y-%m-%d %H:%M:%S %Z' 2>/dev/null || echo "$next_run"
   fi
 }
 
@@ -166,7 +163,6 @@ CPU_TEMP=$(get_temperature)
 WIREGUARD_STATUS=$(systemctl is-active wg-quick@{{ wg_interface }})
 NGINX_STATUS=$(systemctl is-active nginx)
 JELLYFIN_PROXY_STATUS=$(systemctl is-active jellyfin-discovery-proxy)
-MDNS_PUBLISHER_STATUS=$(systemctl is-active mdns-publisher)
 
 # -----------
 # Get dynamic data
@@ -191,8 +187,7 @@ cat > /run/status/status.json << EOF
   "services": {
     "wireguard": "$WIREGUARD_STATUS",
     "nginx": "$NGINX_STATUS",
-    "jellyfin_proxy": "$JELLYFIN_PROXY_STATUS",
-    "mdns_publisher": "$MDNS_PUBLISHER_STATUS"
+    "jellyfin_proxy": "$JELLYFIN_PROXY_STATUS"
   },
   "endpoints": $SERVICE_ENDPOINTS,
   "timers": {

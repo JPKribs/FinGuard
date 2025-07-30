@@ -331,7 +331,6 @@
                 <tr><td>WireGuard</td><td id="wireguard-status"><span class="status-indicator"></span>Loading...</td></tr>
                 <tr><td>NGINX</td><td id="nginx-status"><span class="status-indicator"></span>Loading...</td></tr>
                 <tr><td>Jellyfin Discovery</td><td id="jellyfin-proxy-status"><span class="status-indicator"></span>Loading...</td></tr>
-                <tr><td>mDNS Publisher</td><td id="mdns-publisher-status"><span class="status-indicator"></span>Loading...</td></tr>
             </table>
         </div>
 
@@ -429,6 +428,28 @@
         }
     }
 
+    // ========== SERVICE ENDPOINTS UPDATE ==========
+    function updateServiceEndpoints(endpoints) {
+        try {
+            const table = document.getElementById('endpoints-table');
+            while (table.rows.length > 1) table.deleteRow(1);
+            
+            endpoints.forEach(endpoint => {
+                const row = table.insertRow();
+                row.insertCell(0).textContent = endpoint.name || 'Unknown';
+                row.insertCell(1).textContent = endpoint.hostname || 'N/A';
+                
+                const statusCell = row.insertCell(2);
+                const indicator = document.createElement('span');
+                indicator.className = 'status-indicator ' + (endpoint.status === 'reachable' ? 'status-online' : 'status-offline');
+                statusCell.appendChild(indicator);
+                statusCell.appendChild(document.createTextNode(endpoint.status === 'reachable' ? 'Reachable' : 'Unreachable'));
+            });
+        } catch (error) {
+            showError('Error updating service endpoints: ' + error.message);
+        }
+    }
+
     // ========== DATA UPDATE FUNCTIONS ==========
     function updateStatus() {
         fetch(statusDataPath + '?' + new Date().getTime())
@@ -467,6 +488,8 @@
                 updateServiceStatus('wireguard-status', data.services.wireguard);
                 updateServiceStatus('nginx-status', data.services.nginx);
                 updateServiceStatus('jellyfin-proxy-status', data.services.jellyfin_proxy);
+
+                updateServiceEndpoints(data.endpoints || []);
 
                 updateNetworkData(data.network);
 
