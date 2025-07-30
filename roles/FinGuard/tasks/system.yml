@@ -37,13 +37,22 @@
 # Hostname Setup
 # --------------------------------------------------
 
-# Sets the system's static and transient hostname in a reliable and persistent way.
-- name: Set system hostname
-  hostname:
-    name: "{{ hostname }}"
+# Write hostname to /etc/hostname file (primary source)
+- name: Set hostname in /etc/hostname
+  copy:
+    content: "{{ hostname }}\n"
+    dest: /etc/hostname
+    owner: root
+    group: root
+    mode: '0644'
   tags: [hostname]
 
-# Updates the /etc/hosts file to ensure the new hostname resolves correctly to the loopback address.
+# Set hostname using hostnamectl (systemd method)
+- name: Set system hostname with hostnamectl
+  command: hostnamectl set-hostname "{{ hostname }}"
+  tags: [hostname]
+
+# Update /etc/hosts file
 - name: Update /etc/hosts file
   lineinfile:
     path: /etc/hosts
@@ -54,13 +63,42 @@
     mode: '0644'
   tags: [hostname]
 
-# Adds a crontab entry to set the hostname at boot
-- name: Set hostname on boot using @reboot crontab
-  cron:
-    name: "Set hostname at boot"
-    special_time: reboot
-    job: "/bin/hostname {{ hostname }}"
-    user: root
+# Remove any conflicting hostname entries
+- name: Remove old hostname from /etc/hosts
+  lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1.*NanoPi-Zero2.*'
+    state: absent
+  tags: [hostname]
+
+# Create systemd service to ensure hostname persists
+- name: Create hostname persistence service
+  copy:
+    content: |
+      [Unit]
+      Description=Set hostname
+      After=systemd-hostnamed.service
+      Before=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/hostnamectl set-hostname {{ hostname }}
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+    dest: /etc/systemd/system/set-hostname.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd
+  tags: [hostname]
+
+# Enable the hostname service
+- name: Enable hostname persistence service
+  systemd:
+    name: set-hostname.service
+    enabled: true
   tags: [hostname]
 
 # --------------------------------------------------
