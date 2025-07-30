@@ -21,7 +21,7 @@ services:
       upstream: "10.192.1.254:8096",
       path: "/",
       websocket: true,
-      client_max_body_size: "2G"
+      client_max_body_size: "1024m"
     }
   - { 
       name: "other",
@@ -29,14 +29,14 @@ services:
       upstream: "10.192.1.254:5055",
       path: "/",
       websocket: false,
-      client_max_body_size: "50M"
+      client_max_body_size: "50m"
     }
 
 # 4) Optional: set new password for 'pi'; leave blank to skip
 pi_password: ""
 
 # 5) For Discovery Proxy
-jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='ip') | first }}"
+jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='upstream') | first }}"
 
 # 6) FinGuard weekly‐update schedule
 finguard_update_day: Wed # e.g. Mon, Tue, Wed, Thu, Fri, Sat, Sun
