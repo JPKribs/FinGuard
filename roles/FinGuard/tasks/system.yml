@@ -15,6 +15,7 @@
       - wireguard-tools
       - nginx
       - avahi-daemon
+      - avahi-utils
       - resolvconf
       - cron
       - openssl
