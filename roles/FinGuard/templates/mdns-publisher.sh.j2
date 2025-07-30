@@ -1,0 +1,53 @@
+#!/bin/bash
+
+# mDNS Publisher Script
+# Publishes additional hostnames via Avahi
+
+set -euo pipefail
+
+AVAHI_PUBLISH_CMD="/usr/bin/avahi-publish-address"
+SLEEP_INTERVAL=30
+
+# Get the primary IP address
+get_primary_ip() {
+    ip route get 1.1.1.1 | grep -oP 'src \K\S+' 2>/dev/null || echo "127.0.0.1"
+}
+
+# Publish hostnames
+publish_hostnames() {
+    local ip_address=$(get_primary_ip)
+    
+    echo "Publishing hostnames with IP: $ip_address"
+    
+{% for service in services %}
+{% if service.hostname != hostname %}
+    echo "Publishing {{ service.hostname }}.local -> $ip_address"
+    $AVAHI_PUBLISH_CMD -R "{{ service.hostname }}.local" "$ip_address" &
+{% endif %}
+{% endfor %}
+}
+
+# Kill existing publishers
+cleanup_publishers() {
+    pkill -f "avahi-publish-address" || true
+    sleep 2
+}
+
+# Main execution
+main() {
+    echo "Starting mDNS hostname publisher..."
+    
+    while true; do
+        cleanup_publishers
+        publish_hostnames
+        
+        echo "Sleeping for $SLEEP_INTERVAL seconds..."
+        sleep $SLEEP_INTERVAL
+    done
+}
+
+# Handle signals
+trap cleanup_publishers EXIT INT TERM
+
+# Start main loop
+main

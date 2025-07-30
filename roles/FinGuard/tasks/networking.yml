@@ -102,6 +102,34 @@
   tags: [mdns]
 
 # -----------
+# mDNS Hostname Publisher Setup
+# -----------
+
+# Deploy script to publish additional hostnames
+- name: Deploy mDNS hostname publisher script
+  template:
+    src: mdns-publisher.sh.j2
+    dest: /usr/local/bin/mdns-publisher.sh
+    mode: '0755'
+  tags: [mdns]
+
+# Deploy systemd service for mDNS publisher
+- name: Deploy mDNS publisher service
+  template:
+    src: mdns-publisher.service.j2
+    dest: /etc/systemd/system/mdns-publisher.service
+  notify: Reload systemd
+  tags: [mdns]
+
+# Enable and start mDNS publisher
+- name: Enable and start mDNS publisher
+  systemd:
+    name: mdns-publisher
+    enabled: true
+    state: started
+  tags: [mdns]
+
+# -----------
 # Jellyfin Discovery Proxy Setup
 # -----------
 
