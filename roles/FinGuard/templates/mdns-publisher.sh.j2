@@ -5,7 +5,7 @@
 
 set -euo pipefail
 
-AVAHI_PUBLISH_CMD="/usr/bin/avahi-publish-address"
+AVAHI_PUBLISH_CMD="$(which avahi-publish-address)"
 SLEEP_INTERVAL=30
 
 # Get the primary IP address
