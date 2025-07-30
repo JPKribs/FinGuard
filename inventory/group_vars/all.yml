@@ -3,7 +3,7 @@
 # --------------------------------------------------
 
 # 1) Host identity
-hostname: jellyfin
+hostname: finguard
 
 # 2) WireGuard (full wg0.conf text)
 wg_conf: |
