@@ -1,3 +1,7 @@
+# --------------------------------------------------
+# FinGuard Configuration
+# --------------------------------------------------
+
 # 1) Host identity
 hostname: jellyfin
 
@@ -17,17 +21,15 @@ wg_conf: |
 services:
   - { 
       name: "jellyfin",
-      hostname: "jellyfin",  # Will be accessible at jellyfin.local
-      upstream: "10.192.1.254:8096",
-      path: "/",
+      hostname: "jellyfin",
+      upstream: "10.192.1.254:1080",
       websocket: true,
       client_max_body_size: "1024m"
     }
   - { 
-      name: "other",
-      hostname: "other",  # Will be accessible at other.local
-      upstream: "10.192.1.254:5055",
-      path: "/",
+      name: "requests",
+      hostname: "requests",
+      upstream: "10.192.1.254:11030",
       websocket: false,
       client_max_body_size: "50m"
     }
@@ -39,5 +41,5 @@ pi_password: ""
 jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='upstream') | first }}"
 
 # 6) FinGuard weekly‐update schedule
-finguard_update_day: Wed # e.g. Mon, Tue, Wed, Thu, Fri, Sat, Sun
-finguard_update_time: "03:00:00" # HH:MM:SS
+finguard_update_day: Wed          # e.g. Mon, Tue, Wed, Thu, Fri, Sat, Sun
+finguard_update_time: "03:00:00"  # HH:MM:SS

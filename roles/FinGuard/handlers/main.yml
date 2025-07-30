@@ -1,26 +1,36 @@
+# --------------------------------------------------
+# FinGuard Main Task Handlers
+# --------------------------------------------------
+
+# Reload systemd manager configuration to pick up new unit files
 - name: Reload systemd
   command: systemctl daemon-reload
 
+# Test NGINX configuration before applying changes
 - name: Test NGINX configuration
   command: nginx -t
   register: nginx_test
   failed_when: nginx_test.rc != 0
 
+# Reload NGINX service if configuration test passed
 - name: Reload NGINX if valid
   systemd:
     name: nginx
     state: reloaded
 
+# Restart the Jellyfin Discovery Proxy service
 - name: Restart Discovery Proxy
   systemd:
     name: jellyfin-discovery-proxy
     state: restarted
 
+# Restart systemd journal service to apply changes
 - name: Restart journald
   systemd:
     name: systemd-journald
     state: restarted
 
+# Mount critical directories as tmpfs to reduce disk writes and improve speed
 - name: Mount tmpfs filesystems
   mount:
     path: "{{ item.path }}"
@@ -29,17 +39,19 @@
     opts: "{{ item.opts }}"
     state: mounted
   loop:
-    - { path: /var/log,       opts: "defaults,noatime,mode=0755,size=100M" }
-    - { path: /var/log/apt,   opts: "defaults,noatime,mode=0755,size=100M" }
-    - { path: /var/cache/apt, opts: "defaults,noatime,mode=0755,size=500M" }
-    - { path: /var/log/nginx, opts: "defaults,noatime,mode=0755,size=100M" }
-    - { path: /run/status,    opts: "defaults,noatime,mode=0755,size=100M" }
+    - { path: /var/log,       opts: "defaults,noatime,mode=0755,size=100M" }       # General log storage in memory
+    - { path: /var/log/apt,   opts: "defaults,noatime,mode=0755,size=100M" }       # APT log directory in memory
+    - { path: /var/cache/apt, opts: "defaults,noatime,mode=0755,size=500M" }       # APT cache directory in memory
+    - { path: /var/log/nginx, opts: "defaults,noatime,mode=0755,size=100M" }       # NGINX logs stored in memory
+    - { path: /run/status,    opts: "defaults,noatime,mode=0755,size=100M" }       # Temporary runtime status directory
 
+# Restart Avahi daemon for mDNS/zeroconf networking
 - name: Restart Avahi
   systemd:
     name: avahi-daemon
     state: restarted
 
+# Restart networking service to apply network-related changes
 - name: Restart networking service
   ansible.builtin.service:
     name: networking

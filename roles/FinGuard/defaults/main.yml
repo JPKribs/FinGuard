@@ -1,25 +1,32 @@
-# Host identity (no .local)
-hostname: ""
+# --------------------------------------------------
+# FinGuard Default Configurations
+# --------------------------------------------------
 
-# Full WireGuard client config (wg0.conf)
+# 1) Host identity
+hostname: jellyfin
+
+# 2) WireGuard (full wg#.conf text)
 wg_conf: ""
 
-# Upstream service endpoints (IP:port). Leave blank to skip
-jellyfin_ip: ""
-requests_ip: ""
+# 3) Services configuration
+services: []
 
-# Optional: set new password for 'pi'; leave blank to skip
+# 4) Optional: set new password for 'pi'; leave blank to skip
 pi_password: ""
 
-# URL for Discovery Proxy to point at (you can leave blank if jellyfin_ip="" )
-jellyfin_server_url: ""
+# 5) For Discovery Proxy
+jellyfin_server_url: "http://10.192.1.254:80"
 
-# WireGuard interface name & discovery build paths (sensible defaults)
+# 6) FinGuard weekly‐update schedule
+finguard_update_day: Wed # e.g. Mon, Tue, Wed, Thu, Fri, Sat, Sun
+finguard_update_time: "03:00:00" # HH:MM:SS
+
+# 7) WireGuard interface name & discovery build paths (sensible defaults)
 wg_interface: wg0
 discovery_repo: "https://github.com/jpkribs/jellyfin-discovery-proxy.git"
 discovery_dest: "/opt/jellyfin-discovery-proxy"
 binary_dest: "/usr/local/bin/jellyfin-discovery-proxy"
 
-# NGINX site name & timezone
+# 8) NGINX site name & timezone
 nginx_site_name: "{{ hostname }}.local"
 timezone: America/Denver
