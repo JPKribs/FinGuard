@@ -64,7 +64,7 @@ Site-specific values live in `inventory/group_vars/all.yml`. Edit that file to c
 ```yaml
 # inventory/group_vars/all.yml
 
-hostname: jellyfin
+hostname: finguard
 timezone: America/Denver
 
 wg_conf: |
@@ -82,9 +82,8 @@ wg_conf: |
 services:
   - { 
       name: "jellyfin",
-      hostname: "jellyfin",  # No alias means it uses hostname.local
+      hostname: "jellyfin",  # This will be accessible at jellyfin.local
       upstream: "10.192.1.254:8096",
-      path: "/",
       websocket: true,
       client_max_body_size: "1024m"
     }
@@ -92,16 +91,7 @@ services:
       name: "other",
       hostname: "other",  # This will be accessible at other.local
       upstream: "10.192.1.254:5055",
-      path: "/",
       websocket: false,
-      client_max_body_size: "50m"
-    }
-      - { 
-      name: "other",
-      hostname: "other",  # This will be accessible at other.local/app/
-      upstream: "10.192.1.254:8080",
-      path: "/",
-      websocket: true,
       client_max_body_size: "50m"
     }
 
