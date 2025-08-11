@@ -77,7 +77,7 @@ Site-specific values live in `inventory/group_vars/all.yml`. Edit that file to c
 # inventory/group_vars/all.yml
 
 # 1) Host identity
-hostname: jellyfin
+hostname: finguard
 
 # 2) WireGuard (full wg0.conf text)
 wg_conf: |
@@ -103,18 +103,10 @@ services:
     }
   - { 
       name: "overseerr",
-      hostname: "overseerr",  # Will be accessible at overseerr.local
+      hostname: "requests",  # Will be accessible at requests.local
       upstream: "10.192.1.254:5055",
       path: "/",
       websocket: false,
-      client_max_body_size: "50m"
-    }
-  - { 
-      name: "sonarr",
-      hostname: "sonarr",  # Will be accessible at sonarr.local
-      upstream: "10.192.1.254:8989",
-      path: "/",
-      websocket: true,
       client_max_body_size: "50m"
     }
 
