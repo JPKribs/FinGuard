@@ -10,15 +10,15 @@ Minimal Debian SBC "boot & run" project to:
 
 ## Goal and Architecture
 
-FinGuard turns any small single-board computer (SBC) running Debian into a **dedicated WireGuard bridge** for your media ecosystem. Instead of installing a WireGuard client on every device or reconfiguring your router, you point all media clients at `http://<hostname>.local` and let FinGuard handle:
+FinGuard turns any small single-board computer (SBC) running Debian into a **dedicated WireGuard bridge** for your media ecosystem. Instead of installing a WireGuard client on every device or reconfiguring your router, you point all media clients at `http://<service>.local` and let FinGuard handle:
 
 - **WireGuard**: Securely tunnel traffic from local devices into your remote network.
-- **NGINX**: Proxy paths dynamically based on your defined services (default includes Jellyfin at `/` and optionally other services).
-- **mDNS Discovery**: Advertise your Jellyfin server automatically to clients via the Discovery Proxy.
+- **NGINX**: Create separate virtual hosts for each service with SSL termination.
+- **mDNS Discovery**: Advertise your services automatically via Avahi and Jellyfin Discovery Proxy.
 
 ### Why a dedicated bridge?
 
-- **Simplicity**: No per-device VPN configuration. Point all devices at a single `.local` address.
+- **Simplicity**: No per-device VPN configuration. Point all devices at individual `.local` addresses.
 - **Compatibility**: Older devices or smart TVs often lack WireGuard support. The bridge handles encryption.
 - **Isolation**: You can firewall or monitor the bridge separately, without affecting your entire LAN.
 
@@ -40,18 +40,30 @@ On the SBC (NanoPi Zero2, Raspberry Pi, etc.)
 FinGuard/
 ├── ansible.cfg
 ├── inventory/
-│   └── hosts
-│   └── group_vars
-│       └── all.yml
+│   ├── hosts
+│   └── group_vars/
+│       ├── all.yml
 │       └── favicon.ico
 ├── playbook.yml
 ├── roles/
 │   └── FinGuard/
 │       ├── defaults/main.yml
-│       ├── tasks/main.yml
+│       ├── handlers/main.yml
+│       ├── tasks/
+│       │   ├── main.yml
+│       │   ├── system.yml
+│       │   ├── storage.yml
+│       │   ├── security.yml
+│       │   ├── networking.yml
+│       │   ├── web.yml
+│       │   ├── monitoring.yml
+│       │   ├── maintenance.yml
+│       │   └── services.yml
 │       └── templates/
 │           ├── nginx.conf.j2
-│           └── jellyfin-discovery-proxy.service.j2
+│           ├── jellyfin-discovery-proxy.service.j2
+│           ├── status-page.html.j2
+│           └── [various systemd service templates]
 └── README.md
 ```
 
@@ -64,14 +76,14 @@ Site-specific values live in `inventory/group_vars/all.yml`. Edit that file to c
 ```yaml
 # inventory/group_vars/all.yml
 
-hostname: finguard
-timezone: America/Denver
+# 1) Host identity
+hostname: jellyfin
 
+# 2) WireGuard (full wg0.conf text)
 wg_conf: |
   [Interface]
   PrivateKey = <YOUR_PRIVATE_KEY>
   Address    = 10.192.1.X/32
-  DNS        = 1.1.1.1
 
   [Peer]
   PublicKey           = <SERVER_PUBLIC_KEY>
@@ -79,28 +91,45 @@ wg_conf: |
   AllowedIPs          = 10.192.1.254/32
   PersistentKeepalive = 25
 
+# 3) Services configuration - each gets its own subdomain
 services:
   - { 
       name: "jellyfin",
-      hostname: "jellyfin",  # This will be accessible at jellyfin.local
+      hostname: "jellyfin",  # Will be accessible at jellyfin.local
       upstream: "10.192.1.254:8096",
+      path: "/",
       websocket: true,
       client_max_body_size: "1024m"
     }
   - { 
-      name: "other",
-      hostname: "other",  # This will be accessible at other.local
+      name: "overseerr",
+      hostname: "overseerr",  # Will be accessible at overseerr.local
       upstream: "10.192.1.254:5055",
+      path: "/",
       websocket: false,
       client_max_body_size: "50m"
     }
+  - { 
+      name: "sonarr",
+      hostname: "sonarr",  # Will be accessible at sonarr.local
+      upstream: "10.192.1.254:8989",
+      path: "/",
+      websocket: true,
+      client_max_body_size: "50m"
+    }
 
+# 4) Optional: set new password for 'pi'; leave blank to skip
 pi_password: ""
 
-jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='ip') | first }}"
+# 5) For Discovery Proxy
+jellyfin_server_url: "http://{{ services | selectattr('name', 'equalto', 'jellyfin') | map(attribute='upstream') | first }}"
+
+# 6) FinGuard weekly‐update schedule
+finguard_update_day: Wed # e.g. Mon, Tue, Wed, Thu, Fri, Sat, Sun
+finguard_update_time: "03:00:00" # HH:MM:SS
 ```
 
-Defaults for other values (e.g., `wg_interface`, `discovery_repo`, paths, etc.) are defined in `roles/FinGuard/defaults/main.yml`.
+Default values (timezone, WireGuard interface, binary paths, etc.) are defined in `roles/FinGuard/defaults/main.yml`.
 
 ---
 
@@ -147,43 +176,68 @@ Defaults for other values (e.g., `wg_interface`, `discovery_repo`, paths, etc.) 
 
 ---
 
+## Service Features
+
+### Storage Optimization
+- tmpfs mounts for logs and cache to reduce SD card wear
+- Disabled swap and optimized journald settings
+- Minimal logging configuration
+
+### Security
+- Self-signed SSL certificates for each service
+- Automatic certificate renewal
+- Secure NGINX configuration with modern TLS
+
+### Monitoring
+- Real-time status dashboard at `https://<hostname>.local/status`
+- Network traffic monitoring with historical graphs
+- System metrics (CPU, memory, disk, temperature)
+- Service health monitoring
+
+### Maintenance
+- Weekly automated updates via systemd timers
+- Automatic service restart on failure
+- Update logs at `/var/log/FinGuard-update.log`
+
+---
+
 ## Service Auto-Restart
 
 All core services (WireGuard, NGINX, Jellyfin Discovery Proxy) are managed by systemd to:
 
 - Enable at boot
 - Restart on failure
-
-This ensures the bridge recovers from crashes or reboots.
+- Auto-recovery from crashes or reboots
 
 ---
 
-## Weekly Maintenance Cron
+## Weekly Maintenance
 
-A cron job runs every Wednesday at 03:00 (timezone as specified) to:
+A systemd timer runs weekly (configurable day/time) to:
 
-1. Pull the latest Jellyfin Discovery Proxy code and rebuild.
-2. Update the OS and installed packages:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   ```
-3. Reboot the device to apply updates.
+1. Download the latest Jellyfin Discovery Proxy binary
+2. Update the OS and installed packages
+3. Restart critical services
+4. Reboot if kernel updates require it
 
-Cron logs are appended to `/var/log/FinGuard-update.log`.
+Timer logs are saved to `/var/log/FinGuard-update.log`.
 
 ---
 
 ## Verification
 
-After deployment, access the following URLs:
+After deployment, each service will be accessible at its own subdomain:
 
-- `http://<hostname>.local/` → Root Services
-- `http://<hostname>.local/status` → Bridge Dashboard
-- `http://<hostname>.local/service-path` → Other Services
+- `https://jellyfin.local/` → Jellyfin Media Server
+- `https://overseerr.local/` → Overseerr Request Management  
+- `https://sonarr.local/` → Sonarr TV Management
+- `https://<hostname>.local/status` → FinGuard Status Dashboard
 
-Metrics and bridge status can be seen from the Bridge Dashboard
-
-![Dashboard Screenshot](dashboard.png)
+The status dashboard provides:
+- System metrics and health
+- Network traffic monitoring
+- Service status indicators
+- Automatic updates on network interface changes
 
 Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 
@@ -192,7 +246,8 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
 ## Troubleshooting
 
 - **Ansible errors**: Rerun with `-vvv` and verify SSH/`sudo` access.
-- **NGINX 404**: Check your `_ip` variables; only non-empty ones generate locations.
+- **Service not accessible**: Check service configuration in `all.yml` and verify upstream is reachable.
+- **SSL certificate errors**: Certificates are self-signed; add security exceptions in browsers.
 - **Discovery Proxy**: Check service status:
   ```bash
   systemctl status jellyfin-discovery-proxy
@@ -203,7 +258,26 @@ Jellyfin clients should also auto-discover your server via mDNS (UDP port 7359).
   systemctl status avahi-daemon
   ```
   Confirm both devices are on the same subnet.
+- **Status dashboard**: Check timer status:
+  ```bash
+  systemctl status status-update.timer
+  ```
 
+### Service Status Commands
+
+Check individual service status:
+```bash
+systemctl status nginx
+systemctl status wg-quick@wg0
+systemctl status jellyfin-discovery-proxy
+systemctl status mdns-publisher
+```
+
+View service logs:
+```bash
+journalctl -u nginx -f
+journalctl -u jellyfin-discovery-proxy -f
+```
 
 ---
 
