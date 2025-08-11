@@ -3,7 +3,7 @@
 # --------------------------------------------------
 
 # 1) Host identity
-hostname: finguard
+hostname: jellyfin
 
 # 2) WireGuard (full wg0.conf text)
 wg_conf: |
@@ -22,14 +22,14 @@ services:
   - { 
       name: "jellyfin",
       hostname: "jellyfin",
-      upstream: "10.192.1.254:1080",
+      upstream: "10.20.1.1:80",
       websocket: true,
       client_max_body_size: "1024m"
     }
   - { 
       name: "requests",
       hostname: "requests",
-      upstream: "10.192.1.254:11030",
+      upstream: "10.20.1.3:80",
       websocket: false,
       client_max_body_size: "50m"
     }
