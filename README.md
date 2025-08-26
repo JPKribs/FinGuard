@@ -8,7 +8,7 @@
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Build Status](https://img.shields.io/badge/Build-Passing-success?style=flat-square)](https://github.com/JPKribs/FinGuard)
 
-[Features](#features) • [Quick Start](#quick-start) • [Web UI](#web-management-interface) • [Configuration](#️configuration) • [Architecture](#architecture)
+[Features](#features) • [Quick Start](#quick-start) • [Web UI](#web-management-interface) • [Configuration](#configuration) • [Architecture](#architecture)
 
 </div>
 
