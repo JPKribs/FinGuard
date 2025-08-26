@@ -1,0 +1,11 @@
+/* Logo styling */
+.logo-container {
+    display: flex;
+    justify-content: center;
+}
+
+.logo-container img {
+    height: 300px;
+    width: auto;
+    filter: drop-shadow(0 0 20px var(--color-logo-shadow));
+}

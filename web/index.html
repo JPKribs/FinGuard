@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FinGuard</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" type="image/png" href="/static/resources/images/logo.png">
+</head>
+<body>
+    <div class="container">
+        <div class="logo-container">
+            <img src="/static/resources/images/finguard.png" alt="FinGuard Logo">
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="window.Utils.showTab('status')">System</button>
+            <button class="tab" onclick="window.Utils.showTab('services')">Services</button>
+            <button class="tab" onclick="window.Utils.showTab('tunnels')">Tunnels</button>
+            <button class="tab" onclick="window.Utils.showTab('logs')">Logs</button>
+        </div>
+        
+        <div id="alert" class="alert hidden"></div>
+
+        <!-- System Tab -->
+        <div id="status" class="content active">
+            <div class="card">
+                <h3>System Status</h3>
+                <div id="systemStatus"></div>
+            </div>
+        </div>
+
+        <!-- Services Tab -->
+        <div id="services" class="content">
+            <div class="two-column">
+                <div>
+                    <div class="card">
+                        <h3>Add Service</h3>
+                        <form id="serviceForm">
+                            <div class="form-group">
+                                <label>Service Name</label>
+                                <input type="text" id="serviceName" required>
+                            </div>
+                            <div class="form-group">
+                                <label>Upstream URL</label>
+                                <input type="url" id="serviceUpstream" placeholder="http://192.168.0.1:8096" required>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="serviceWebsocket" style="width: auto; margin-right: 0.5rem;">
+                                    WebSocket Support
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="serviceDefault" style="width: auto; margin-right: 0.5rem;">
+                                    Default Service
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>
+                                    <input type="checkbox" id="serviceMDNS" style="width: auto; margin-right: 0.5rem;">
+                                    Publish via mDNS
+                                </label>
+                            </div>
+                            <div class="form-group">
+                                <label>Tunnel</label>
+                                <select id="serviceTunnel">
+                                    <option value="">None</option>
+                                </select>
+                            </div>
+                            <button type="submit">Add Service</button>
+                        </form>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="card">
+                        <h3>Active Services</h3>
+                        <div id="servicesList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tunnels Tab -->
+        <div id="tunnels" class="content">
+            <div class="two-column">
+                <div>
+                    <div class="card">
+                        <h3>Create WireGuard Client</h3>
+                        <form id="tunnelForm">
+                            <div class="form-group">
+                                <label>Tunnel Name</label>
+                                <input type="text" id="tunnelName" required>
+                            </div>
+                            
+                            <h4>Interface Configuration</h4>
+                            <div class="form-group">
+                                <label>Private Key</label>
+                                <textarea id="tunnelPrivateKey" rows="2" required></textarea>
+                            </div>
+                            <div class="form-group">
+                                <label>Address (CIDR)</label>
+                                <input type="text" id="tunnelAddress" required>
+                            </div>
+                            <div class="form-group">
+                                <label>MTU</label>
+                                <input type="number" id="tunnelMTU" placeholder="1420" value="1420">
+                            </div>
+                            
+                            <h4>Peer Configuration</h4>
+                            <div id="peerSection">
+                                <div class="peer-config" data-peer-index="0">
+                                    <div class="form-group">
+                                        <label>Peer Name</label>
+                                        <input type="text" class="peer-name">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Public Key</label>
+                                        <textarea class="peer-public-key" rows="2" required></textarea>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Endpoint</label>
+                                        <input type="text" class="peer-endpoint" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Allowed IPs</label>
+                                        <input type="text" class="peer-allowed-ips" placeholder="10.20.0.0/24,10.20.1.0/24" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Persistent Keepalive</label>
+                                        <input type="number" class="peer-keepalive" placeholder="25" value="25">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Preshared Key</label>
+                                        <textarea class="peer-preshared" placeholder="Optional preshared key" rows="2"></textarea>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="form-actions">
+                                <button type="button" onclick="addPeer()">Add Another Peer</button>
+                                <button type="submit">Create Tunnel</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+                
+                <div>
+                    <div class="card">
+                        <h3>Active Tunnels</h3>
+                        <div id="tunnelsList"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="logs" class="content">
+            <div class="card">
+                <h3>Logs</h3>
+
+                <div class="form-group">
+                    <label>Filter by level:</label>
+                    <select id="logLevelFilter">
+                        <option value="">All</option>
+                        <option value="info">INFO</option>
+                        <option value="debug">DEBUG</option>
+                        <option value="warn">WARN</option>
+                        <option value="error">ERROR</option>
+                    </select>
+                </div>
+
+                <div id="logsList"></div>
+                <div id="logsPagination" class="logs-pagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load JavaScript modules -->
+    <script src="/static/js/components/config.js"></script>
+    <script src="/static/js/components/utils.js"></script>
+    <script src="/static/js/components/auth.js"></script>
+    <script src="/static/js/components/api.js"></script>
+    <script src="/static/js/components/services.js"></script>
+    <script src="/static/js/components/tunnels.js"></script>
+    <script src="/static/js/components/logs.js"></script>
+    <script src="/static/js/components/status.js"></script>
+    <script src="/static/js/app.js"></script>
+</body>
+</html>
