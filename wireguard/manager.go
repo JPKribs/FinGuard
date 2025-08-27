@@ -41,9 +41,9 @@ type Manager struct {
 }
 
 const (
-	maxRetryAttempts = 3
-	retryDelay       = 5 * time.Second
-	shutdownTimeout  = 30 * time.Second
+	maxRetryAttempts  = 3
+	managerRetryDelay = 5 * time.Second
+	shutdownTimeout   = 30 * time.Second
 )
 
 // MARK: NewManager
@@ -141,7 +141,7 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 		if err != nil {
 			m.logger.Error("Failed to create tunnel", "name", cfg.Name, "attempt", attempt, "error", err)
 			if attempt < maxRetryAttempts {
-				time.Sleep(retryDelay)
+				time.Sleep(managerRetryDelay)
 				continue
 			}
 			return fmt.Errorf("creating tunnel %s after %d attempts: %w", cfg.Name, maxRetryAttempts, err)
@@ -151,7 +151,7 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 			m.logger.Error("Failed to start tunnel", "name", cfg.Name, "attempt", attempt, "error", err)
 			tunnel.Stop(ctx)
 			if attempt < maxRetryAttempts {
-				time.Sleep(retryDelay)
+				time.Sleep(managerRetryDelay)
 				continue
 			}
 			return fmt.Errorf("starting tunnel %s after %d attempts: %w", cfg.Name, maxRetryAttempts, err)
