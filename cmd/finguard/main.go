@@ -9,7 +9,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 	"time"
 
@@ -22,24 +21,11 @@ import (
 )
 
 const (
-	Version         = "1.0.0"
+	Version         = "1.0.0b2"
 	ShutdownTimeout = 30 * time.Second
 	RetryDelay      = 5 * time.Second
 	MaxRetries      = 3
 )
-
-type Application struct {
-	cfg              *config.Config
-	logger           *internal.Logger
-	health           *internal.HealthChecker
-	tunnelManager    wireguard.TunnelManager
-	proxyServer      *proxy.Server
-	discoveryManager *discovery.Discovery
-	server           *http.Server
-	ctx              context.Context
-	cancel           context.CancelFunc
-	wg               sync.WaitGroup
-}
 
 // MARK: main
 
@@ -62,7 +48,7 @@ func main() {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	app.ctx = ctx
+	app.context = ctx
 	app.cancel = cancel
 	defer cancel()
 
@@ -71,25 +57,25 @@ func main() {
 	}
 
 	app.handleSignals()
-	app.wg.Wait()
+	app.waitGroup.Wait()
 }
 
 // MARK: newApplication
 
 // Creates and configures a new application instance
 func newApplication(configPath string) (*Application, error) {
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("loading config: %w", err)
+	config, error := config.Load(configPath)
+	if error != nil {
+		return nil, fmt.Errorf("loading config: %w", error)
 	}
 
-	logger := internal.NewLogger(cfg.Log.Level)
-	health := internal.NewHealthChecker()
+	logger := internal.NewLogger(config.Log.Level)
+	healthCheck := internal.NewHealthChecker()
 
 	return &Application{
-		cfg:              cfg,
+		config:           config,
 		logger:           logger,
-		health:           health,
+		healthCheck:      healthCheck,
 		tunnelManager:    wireguard.NewManager(logger),
 		proxyServer:      proxy.NewServer(logger),
 		discoveryManager: discovery.NewDiscovery(logger),
@@ -136,9 +122,9 @@ func (app *Application) startTunnelManager(ctx context.Context) error {
 		return err
 	}
 
-	app.wg.Add(1)
+	app.waitGroup.Add(1)
 	go func() {
-		defer app.wg.Done()
+		defer app.waitGroup.Done()
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
 		defer cancel()
@@ -154,7 +140,7 @@ func (app *Application) startTunnelManager(ctx context.Context) error {
 
 // Starts mDNS service discovery if enabled
 func (app *Application) startDiscovery(ctx context.Context) error {
-	if !app.cfg.Discovery.Enable || !app.cfg.Discovery.MDNS.Enabled {
+	if !app.config.Discovery.Enable || !app.config.Discovery.MDNS.Enabled {
 		return nil
 	}
 
@@ -164,9 +150,9 @@ func (app *Application) startDiscovery(ctx context.Context) error {
 
 	app.logger.Info("Started mDNS publisher")
 
-	app.wg.Add(1)
+	app.waitGroup.Add(1)
 	go func() {
-		defer app.wg.Done()
+		defer app.waitGroup.Done()
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
 		defer cancel()
@@ -184,7 +170,7 @@ func (app *Application) startDiscovery(ctx context.Context) error {
 func (app *Application) createTunnels(ctx context.Context) error {
 	var errs []error
 
-	for _, tunnelCfg := range app.cfg.WireGuard.Tunnels {
+	for _, tunnelCfg := range app.config.WireGuard.Tunnels {
 		if err := app.createTunnelWithRetry(ctx, tunnelCfg); err != nil {
 			errs = append(errs, fmt.Errorf("tunnel %s: %w", tunnelCfg.Name, err))
 		}
@@ -233,13 +219,13 @@ func (app *Application) createTunnelWithRetry(ctx context.Context, tunnelCfg con
 
 // Initializes and starts the HTTP proxy server
 func (app *Application) startProxy(ctx context.Context) error {
-	if err := app.proxyServer.Start(ctx, app.cfg.Server.ProxyAddr); err != nil {
+	if err := app.proxyServer.Start(ctx, app.config.Server.ProxyAddr); err != nil {
 		return err
 	}
 
-	app.wg.Add(1)
+	app.waitGroup.Add(1)
 	go func() {
-		defer app.wg.Done()
+		defer app.waitGroup.Done()
 		<-ctx.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
 		defer cancel()
@@ -258,7 +244,7 @@ func (app *Application) addServices() error {
 	var errs []error
 	addedServices := make(map[string]bool)
 
-	for _, serviceCfg := range app.cfg.Services {
+	for _, serviceCfg := range app.config.Services {
 		// Skip if already added (prevents duplicates)
 		if addedServices[serviceCfg.Name] {
 			app.logger.Warn("Skipping duplicate service", "name", serviceCfg.Name)
@@ -285,13 +271,13 @@ func (app *Application) addServices() error {
 
 // Publishes configured services via mDNS
 func (app *Application) publishServices() {
-	if !app.cfg.Discovery.Enable || !app.cfg.Discovery.MDNS.Enabled {
+	if !app.config.Discovery.Enable || !app.config.Discovery.MDNS.Enabled {
 		return
 	}
 
-	proxyPort := config.GetPortFromAddr(app.cfg.Server.ProxyAddr)
+	proxyPort := config.GetPortFromAddr(app.config.Server.ProxyAddr)
 
-	for _, serviceCfg := range app.cfg.Services {
+	for _, serviceCfg := range app.config.Services {
 		if serviceCfg.PublishMDNS {
 			if err := app.discoveryManager.PublishService(serviceCfg, proxyPort); err != nil {
 				app.logger.Error("Failed to publish service via mDNS",
@@ -309,11 +295,11 @@ func (app *Application) publishServices() {
 func (app *Application) updateReadiness() {
 	isReady := app.tunnelManager.IsReady() && app.proxyServer.IsReady()
 
-	if app.cfg.Discovery.Enable && app.cfg.Discovery.MDNS.Enabled {
+	if app.config.Discovery.Enable && app.config.Discovery.MDNS.Enabled {
 		isReady = isReady && app.discoveryManager.IsReady()
 	}
 
-	app.health.SetReady(isReady)
+	app.healthCheck.SetReady(isReady)
 }
 
 // MARK: startManagementServer
@@ -321,35 +307,35 @@ func (app *Application) updateReadiness() {
 // Starts the HTTP management API server
 func (app *Application) startManagementServer() error {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/healthz", app.health.LivenessHandler)
-	mux.HandleFunc("/readyz", app.health.ReadinessHandler)
+	mux.HandleFunc("/healthz", app.healthCheck.LivenessHandler)
+	mux.HandleFunc("/readyz", app.healthCheck.ReadinessHandler)
 
 	// Pass the logger to APIServer
-	apiServer := v1.NewAPIServer(app.cfg, app.proxyServer, app.tunnelManager, app.discoveryManager, app.logger)
+	apiServer := v1.NewAPIServer(app.config, app.proxyServer, app.tunnelManager, app.discoveryManager, app.logger)
 	apiServer.RegisterRoutes(mux)
 
 	app.server = &http.Server{
-		Addr:         app.cfg.Server.HTTPAddr,
+		Addr:         app.config.Server.HTTPAddr,
 		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 30 * time.Second,
 		IdleTimeout:  60 * time.Second,
 	}
 
-	app.wg.Add(1)
+	app.waitGroup.Add(1)
 	go func() {
-		defer app.wg.Done()
-		app.logger.Info("Starting management server", "addr", app.cfg.Server.HTTPAddr)
+		defer app.waitGroup.Done()
+		app.logger.Info("Starting management server", "addr", app.config.Server.HTTPAddr)
 
 		if err := app.server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			app.logger.Error("Management server failed", "error", err)
 		}
 	}()
 
-	app.wg.Add(1)
+	app.waitGroup.Add(1)
 	go func() {
-		defer app.wg.Done()
-		<-app.ctx.Done()
+		defer app.waitGroup.Done()
+		<-app.context.Done()
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
 		defer cancel()
 
@@ -369,9 +355,9 @@ func (app *Application) handleSignals() {
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
-	app.wg.Add(1)
+	app.waitGroup.Add(1)
 	go func() {
-		defer app.wg.Done()
+		defer app.waitGroup.Done()
 
 		for {
 			select {
@@ -384,7 +370,7 @@ func (app *Application) handleSignals() {
 					app.cancel()
 					return
 				}
-			case <-app.ctx.Done():
+			case <-app.context.Done():
 				return
 			}
 		}
@@ -403,7 +389,7 @@ func (app *Application) handleReload() {
 		return
 	}
 
-	app.cfg = newCfg
+	app.config = newCfg
 
 	if err := app.addServices(); err != nil {
 		app.logger.Error("Failed to add services during reload", "error", err)

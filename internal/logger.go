@@ -4,26 +4,11 @@ import (
 	"log/slog"
 	"os"
 	"strings"
-	"sync"
 
 	"github.com/JPKribs/FinGuard/utilities"
 )
 
 const maxLogs = 500
-
-type LogEntry struct {
-	Timestamp string                 `json:"timestamp"`
-	Level     string                 `json:"level"`
-	Message   string                 `json:"message"`
-	Context   map[string]interface{} `json:"context,omitempty"`
-}
-
-type Logger struct {
-	*slog.Logger
-	mu    sync.Mutex
-	logs  []LogEntry
-	OnLog func(level, msg string)
-}
 
 // MARK: NewLogger
 func NewLogger(level string) *Logger {

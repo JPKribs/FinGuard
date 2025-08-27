@@ -13,12 +13,6 @@ import (
 	"github.com/vishvananda/netlink"
 )
 
-type TUNDevice struct {
-	iface *water.Interface
-	name  string
-	mtu   int
-}
-
 const (
 	configTimeout    = 10 * time.Second
 	maxConfigRetries = 3

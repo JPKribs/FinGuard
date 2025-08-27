@@ -7,17 +7,6 @@ import (
 	"time"
 )
 
-type HealthChecker struct {
-	ready int64
-	alive int64
-}
-
-type HealthStatus struct {
-	Status    string    `json:"status"`
-	Timestamp time.Time `json:"timestamp"`
-	Version   string    `json:"version"`
-}
-
 // MARK: NewHealthChecker
 
 // Creates a new health checker with alive status set to true by default.

@@ -3,42 +3,11 @@ package wireguard
 import (
 	"context"
 	"fmt"
-	"sync"
 	"time"
 
 	"github.com/JPKribs/FinGuard/config"
 	"github.com/JPKribs/FinGuard/internal"
 )
-
-type TunnelStatus struct {
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	Interface string `json:"interface"`
-	MTU       int    `json:"mtu"`
-	Peers     int    `json:"peers"`
-	Error     string `json:"error,omitempty"`
-}
-
-type TunnelManager interface {
-	Start(ctx context.Context) error
-	Stop(ctx context.Context) error
-	CreateTunnel(ctx context.Context, cfg config.TunnelConfig) error
-	UpdateTunnel(ctx context.Context, cfg config.TunnelConfig) error
-	DeleteTunnel(ctx context.Context, name string) error
-	Status(ctx context.Context, name string) (TunnelStatus, error)
-	ListTunnels(ctx context.Context) ([]TunnelStatus, error)
-	IsReady() bool
-	Recover(ctx context.Context) error
-}
-
-type Manager struct {
-	logger        *internal.Logger
-	tunnels       map[string]*Tunnel
-	mu            sync.RWMutex
-	running       bool
-	lastError     error
-	retryAttempts int
-}
 
 const (
 	maxRetryAttempts  = 3

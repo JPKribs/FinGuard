@@ -19,23 +19,6 @@ import (
 	"golang.zx2c4.com/wireguard/tun"
 )
 
-type Tunnel struct {
-	name    string
-	config  config.TunnelConfig
-	device  *device.Device
-	tunDev  *TUNDevice
-	logger  *internal.Logger
-	running bool
-	mu      sync.RWMutex
-
-	// Monitoring state
-	stopMonitoring   chan struct{}
-	monitoringActive bool
-	lastError        error
-	reconnectCount   map[string]int
-	endpointCache    map[string]string
-}
-
 const (
 	defaultMonitorInterval = 30 * time.Second
 	defaultStaleTimeout    = 5 * time.Minute
