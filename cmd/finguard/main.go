@@ -22,7 +22,7 @@ import (
 )
 
 const (
-	Version         = "2.0.0"
+	Version         = "1.0.0"
 	ShutdownTimeout = 30 * time.Second
 	RetryDelay      = 5 * time.Second
 	MaxRetries      = 3
