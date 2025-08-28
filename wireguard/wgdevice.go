@@ -5,15 +5,13 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net"
-	"os"
-	"strconv"
 	"strings"
-	"sync"
+	"sync/atomic"
 	"time"
+	"unsafe"
 
 	"github.com/JPKribs/FinGuard/config"
 	"github.com/JPKribs/FinGuard/internal"
-	"github.com/songgao/water"
 	"golang.zx2c4.com/wireguard/conn"
 	"golang.zx2c4.com/wireguard/device"
 	"golang.zx2c4.com/wireguard/tun"
@@ -24,14 +22,13 @@ const (
 	defaultStaleTimeout    = 5 * time.Minute
 	defaultKeepalive       = 25
 	maxReconnectAttempts   = 5
-	endpointCacheTimeout   = 10 * time.Minute
 	deviceStartTimeout     = 30 * time.Second
+	maxBatchSize           = 32
+	bufferPoolSize         = 256
 )
 
 // MARK: NewTunnel
-
-// Creates a new WireGuard tunnel instance with monitoring and recovery capabilities.
-func NewTunnel(cfg config.TunnelConfig, logger *internal.Logger) (*Tunnel, error) {
+func NewTunnel(cfg config.TunnelConfig, logger *internal.Logger, resolver *AsyncResolver) (*Tunnel, error) {
 	if cfg.Name == "" {
 		return nil, fmt.Errorf("tunnel name cannot be empty")
 	}
@@ -40,28 +37,32 @@ func NewTunnel(cfg config.TunnelConfig, logger *internal.Logger) (*Tunnel, error
 		logger = &internal.Logger{}
 	}
 
+	if resolver == nil {
+		resolver = NewAsyncResolver()
+	}
+
 	return &Tunnel{
 		name:           cfg.Name,
 		config:         cfg,
 		logger:         logger,
+		resolver:       resolver,
 		stopMonitoring: make(chan struct{}),
 		reconnectCount: make(map[string]int),
 		endpointCache:  make(map[string]string),
+		bufferPool:     NewPacketBufferPool(bufferPoolSize),
 	}, nil
 }
 
 // MARK: Start
-
-// Starts the WireGuard tunnel with comprehensive error handling and monitoring.
 func (t *Tunnel) Start(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if t.running {
+	if atomic.LoadInt64(&t.running) == 1 {
 		return fmt.Errorf("tunnel %s already running", t.name)
 	}
 
-	t.logger.Info("Starting tunnel", "name", t.name)
+	t.logger.Info("Starting optimized tunnel", "name", t.name)
 
 	ctx, cancel := context.WithTimeout(ctx, deviceStartTimeout)
 	defer cancel()
@@ -94,30 +95,28 @@ func (t *Tunnel) Start(ctx context.Context) error {
 		t.logger.Error("Failed to add some routes", "name", t.name, "error", err)
 	}
 
-	t.running = true
-	t.logger.Info("Tunnel started", "name", t.name, "interface", t.tunDev.Name())
+	atomic.StoreInt64(&t.running, 1)
+	t.logger.Info("Optimized tunnel started", "name", t.name, "interface", t.tunDev.Name())
 
 	t.startMonitoring(ctx)
 	return nil
 }
 
 // MARK: Stop
-
-// Gracefully stops the tunnel and cleans up all resources.
 func (t *Tunnel) Stop(ctx context.Context) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if !t.running {
+	if !atomic.CompareAndSwapInt64(&t.running, 1, 0) {
 		return nil
 	}
 
-	t.logger.Info("Stopping tunnel", "name", t.name)
+	t.logger.Info("Stopping optimized tunnel", "name", t.name)
 
 	t.stopMonitoringRoutine()
 
 	ctx, cancel := context.WithTimeout(ctx, deviceStartTimeout)
 	defer cancel()
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
 	if t.device != nil {
 		t.device.Close()
@@ -130,30 +129,27 @@ func (t *Tunnel) Stop(ctx context.Context) error {
 		t.tunDev = nil
 	}
 
-	t.running = false
 	t.lastError = nil
-	t.logger.Info("Tunnel stopped", "name", t.name)
+	t.logger.Info("Optimized tunnel stopped", "name", t.name)
 	return nil
 }
 
 // MARK: Update
-
-// Updates tunnel configuration with rollback support on failure.
 func (t *Tunnel) Update(ctx context.Context, cfg config.TunnelConfig) error {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
 	if cfg.Name != t.name {
 		return fmt.Errorf("cannot change tunnel name from %s to %s", t.name, cfg.Name)
 	}
 
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
 	oldConfig := t.config
 	t.config = cfg
 
-	if t.running {
+	if atomic.LoadInt64(&t.running) == 1 {
 		if err := t.applyConfiguration(); err != nil {
 			t.config = oldConfig
-			t.lastError = err
+			atomic.StorePointer((*unsafe.Pointer)(unsafe.Pointer(&t.lastError)), unsafe.Pointer(&err))
 			return fmt.Errorf("applying updated config: %w", err)
 		}
 
@@ -164,14 +160,9 @@ func (t *Tunnel) Update(ctx context.Context, cfg config.TunnelConfig) error {
 }
 
 // MARK: Status
-
-// Returns the current status of the tunnel with detailed information.
 func (t *Tunnel) Status(ctx context.Context) TunnelStatus {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
 	state := "stopped"
-	if t.running {
+	if atomic.LoadInt64(&t.running) == 1 {
 		state = "running"
 	}
 
@@ -196,8 +187,6 @@ func (t *Tunnel) Status(ctx context.Context) TunnelStatus {
 }
 
 // MARK: startTUNDevice
-
-// Creates and configures the TUN device for this tunnel.
 func (t *Tunnel) startTUNDevice() error {
 	mtu := t.config.MTU
 	if mtu <= 0 {
@@ -214,8 +203,6 @@ func (t *Tunnel) startTUNDevice() error {
 }
 
 // MARK: addAddresses
-
-// Adds all configured IP addresses to the TUN interface.
 func (t *Tunnel) addAddresses() error {
 	if len(t.config.Addresses) == 0 {
 		return fmt.Errorf("no addresses configured for tunnel %s", t.name)
@@ -232,8 +219,6 @@ func (t *Tunnel) addAddresses() error {
 }
 
 // MARK: addRoutes
-
-// Adds all configured routes through the TUN interface.
 func (t *Tunnel) addRoutes() error {
 	var errors []string
 
@@ -254,8 +239,6 @@ func (t *Tunnel) addRoutes() error {
 }
 
 // MARK: cleanupRoutes
-
-// Removes all routes when stopping the tunnel.
 func (t *Tunnel) cleanupRoutes() {
 	for _, route := range t.config.Routes {
 		if err := t.tunDev.RemoveRoute(route); err != nil {
@@ -265,18 +248,18 @@ func (t *Tunnel) cleanupRoutes() {
 }
 
 // MARK: createWireGuardDevice
-
-// Creates the WireGuard device with proper logging and binding.
 func (t *Tunnel) createWireGuardDevice() error {
-	tunWrapper := &TUNWrapper{
-		iface:  t.tunDev.File(),
-		mtu:    t.config.MTU,
-		name:   t.tunDev.Name(),
-		events: make(chan tun.Event, 1),
+	tunWrapper := &OptimizedTUNWrapper{
+		iface:      t.tunDev.File(),
+		mtu:        t.config.MTU,
+		name:       t.tunDev.Name(),
+		events:     make(chan tun.Event, 1),
+		bufferPool: t.bufferPool,
+		batchSize:  maxBatchSize,
 	}
 	tunWrapper.events <- tun.EventUp
 
-	logLevel := device.LogLevelVerbose
+	logLevel := device.LogLevelError
 	logger := device.NewLogger(logLevel, fmt.Sprintf("[%s] ", t.name))
 
 	bind := conn.NewDefaultBind()
@@ -286,8 +269,6 @@ func (t *Tunnel) createWireGuardDevice() error {
 }
 
 // MARK: cleanupOnFailure
-
-// Cleans up resources when tunnel startup fails.
 func (t *Tunnel) cleanupOnFailure() {
 	if t.device != nil {
 		t.device.Close()
@@ -301,33 +282,31 @@ func (t *Tunnel) cleanupOnFailure() {
 }
 
 // MARK: startMonitoring
-
-// Starts the background monitoring routine for peer connectivity.
 func (t *Tunnel) startMonitoring(ctx context.Context) {
-	if t.monitoringActive {
+	if atomic.LoadInt64(&t.monitoringActive) == 1 {
 		return
 	}
 
-	t.monitoringActive = true
+	atomic.StoreInt64(&t.monitoringActive, 1)
 	go t.monitorConnections(ctx)
 }
 
 // MARK: stopMonitoringRoutine
-
-// Stops the background monitoring routine.
 func (t *Tunnel) stopMonitoringRoutine() {
-	if !t.monitoringActive {
+	if !atomic.CompareAndSwapInt64(&t.monitoringActive, 1, 0) {
 		return
 	}
 
-	t.monitoringActive = false
-	close(t.stopMonitoring)
+	select {
+	case <-t.stopMonitoring:
+	default:
+		close(t.stopMonitoring)
+	}
+
 	t.stopMonitoring = make(chan struct{})
 }
 
 // MARK: monitorConnections
-
-// Background routine that monitors peer connectivity and handles reconnection.
 func (t *Tunnel) monitorConnections(ctx context.Context) {
 	monitorInterval := time.Duration(t.config.MonitorInterval) * time.Second
 	if monitorInterval <= 0 {
@@ -345,7 +324,7 @@ func (t *Tunnel) monitorConnections(ctx context.Context) {
 	lastHandshakes := make(map[string]time.Time)
 	resolvedEndpoints := make(map[string]string)
 
-	t.logger.Info("Starting connection monitor",
+	t.logger.Info("Starting optimized connection monitor",
 		"tunnel", t.name,
 		"interval", monitorInterval,
 		"stale_timeout", staleTimeout)
@@ -357,21 +336,15 @@ func (t *Tunnel) monitorConnections(ctx context.Context) {
 		case <-t.stopMonitoring:
 			return
 		case <-ticker.C:
-			t.mu.RLock()
-			if !t.running {
-				t.mu.RUnlock()
+			if atomic.LoadInt64(&t.running) == 0 {
 				return
 			}
-			t.mu.RUnlock()
-
 			t.performConnectivityCheck(lastHandshakes, resolvedEndpoints, staleTimeout)
 		}
 	}
 }
 
 // MARK: performConnectivityCheck
-
-// Checks peer connectivity and triggers reconnection if needed.
 func (t *Tunnel) performConnectivityCheck(lastHandshakes map[string]time.Time, resolvedEndpoints map[string]string, staleTimeout time.Duration) {
 	if t.device == nil {
 		return
@@ -388,8 +361,6 @@ func (t *Tunnel) performConnectivityCheck(lastHandshakes map[string]time.Time, r
 }
 
 // MARK: processPeerStatus
-
-// Processes WireGuard peer status and handles stale connections.
 func (t *Tunnel) processPeerStatus(status string, lastHandshakes map[string]time.Time, resolvedEndpoints map[string]string, staleTimeout time.Duration) {
 	lines := strings.Split(status, "\n")
 	var currentPeer, currentEndpoint string
@@ -411,8 +382,6 @@ func (t *Tunnel) processPeerStatus(status string, lastHandshakes map[string]time
 }
 
 // MARK: processHandshakeTime
-
-// Processes handshake timestamps and updates peer status.
 func (t *Tunnel) processHandshakeTime(line, currentPeer, currentEndpoint string, lastHandshakes map[string]time.Time, activePeers map[string]bool, resolvedEndpoints map[string]string) {
 	timestampStr := strings.TrimPrefix(line, "last_handshake_time_sec=")
 
@@ -432,8 +401,6 @@ func (t *Tunnel) processHandshakeTime(line, currentPeer, currentEndpoint string,
 }
 
 // MARK: checkStaleConnections
-
-// Identifies and handles stale peer connections.
 func (t *Tunnel) checkStaleConnections(lastHandshakes map[string]time.Time, activePeers map[string]bool, resolvedEndpoints map[string]string, staleTimeout time.Duration) {
 	staleThreshold := time.Now().Add(-staleTimeout)
 
@@ -466,36 +433,24 @@ func (t *Tunnel) checkStaleConnections(lastHandshakes map[string]time.Time, acti
 }
 
 // MARK: parseTimestamp
-
-// Safely parses WireGuard timestamp with multiple format fallbacks.
 func (t *Tunnel) parseTimestamp(timestampStr string) int64 {
-	if i, err := strconv.ParseInt(timestampStr, 10, 64); err == nil {
-		return i
-	}
-
-	formats := []string{
-		"1136239445",
-		"1642782847",
-		time.RFC3339,
-		time.UnixDate,
-	}
-
-	for _, format := range formats {
-		if timestamp, err := time.Parse(format, timestampStr); err == nil {
-			return timestamp.Unix()
+	timestamp := int64(0)
+	for _, c := range []byte(timestampStr) {
+		if c >= '0' && c <= '9' {
+			timestamp = timestamp*10 + int64(c-'0')
+		} else {
+			return 0
 		}
 	}
 
-	if duration, err := time.ParseDuration(timestampStr + "s"); err == nil {
-		return int64(duration.Seconds())
+	if timestamp > 1000000000 && timestamp < 4000000000 {
+		return timestamp
 	}
 
 	return 0
 }
 
 // MARK: attemptPeerRecovery
-
-// Attempts to recover a peer connection by checking endpoint resolution.
 func (t *Tunnel) attemptPeerRecovery(peerKey, currentEndpoint string, lastHandshakes map[string]time.Time, resolvedEndpoints map[string]string) {
 	if lastHandshake, exists := lastHandshakes[peerKey]; exists {
 		if time.Since(lastHandshake) < 2*time.Minute {
@@ -514,43 +469,51 @@ func (t *Tunnel) attemptPeerRecovery(peerKey, currentEndpoint string, lastHandsh
 }
 
 // MARK: checkEndpointResolution
-
-// Checks if peer endpoint needs re-resolution due to IP changes.
 func (t *Tunnel) checkEndpointResolution(peer config.PeerConfig, currentEndpoint, peerKey string, resolvedEndpoints map[string]string) {
-	newEndpoint, err := t.resolveEndpoint(peer.Endpoint)
-	if err != nil {
-		t.logger.Error("Failed to re-resolve endpoint",
-			"tunnel", t.name, "peer", peer.Name, "endpoint", peer.Endpoint, "error", err)
-		return
-	}
+	resultChan := t.resolver.ResolveAsync(peer.Endpoint, 5*time.Second)
 
-	if newEndpoint != currentEndpoint {
-		t.logger.Info("Endpoint IP changed, updating peer",
-			"tunnel", t.name,
-			"peer", peer.Name,
-			"old_endpoint", currentEndpoint,
-			"new_endpoint", newEndpoint)
+	select {
+	case result := <-resultChan:
+		if result.err != nil {
+			t.logger.Error("Failed to re-resolve endpoint",
+				"tunnel", t.name, "peer", peer.Name, "endpoint", peer.Endpoint, "error", result.err)
+			return
+		}
 
-		t.reconnectCount[peerKey]++
-		t.updatePeerEndpoint(peer, newEndpoint, resolvedEndpoints)
+		if result.endpoint != currentEndpoint {
+			t.logger.Info("Endpoint IP changed, updating peer",
+				"tunnel", t.name,
+				"peer", peer.Name,
+				"old_endpoint", currentEndpoint,
+				"new_endpoint", result.endpoint)
+
+			t.reconnectCount[peerKey]++
+			t.updatePeerEndpoint(peer, result.endpoint, resolvedEndpoints)
+		}
+	case <-time.After(10 * time.Second):
+		t.logger.Warn("Endpoint resolution timed out", "tunnel", t.name, "peer", peer.Name)
 	}
 }
 
 // MARK: attemptPeerReconnection
-
-// Attempts to reconnect a peer by finding and updating its configuration.
 func (t *Tunnel) attemptPeerReconnection(peerKey string, resolvedEndpoints map[string]string) {
 	for _, peer := range t.config.Peers {
 		if peerPublicKeyHex, err := t.base64ToHex(peer.PublicKey); err == nil && peerPublicKeyHex == peerKey {
 			if peer.Endpoint != "" {
-				newEndpoint, err := t.resolveEndpoint(peer.Endpoint)
-				if err != nil {
-					t.logger.Error("Failed to resolve endpoint for reconnection",
-						"tunnel", t.name, "peer", peer.Name, "endpoint", peer.Endpoint, "error", err)
-					return
-				}
+				resultChan := t.resolver.ResolveAsync(peer.Endpoint, 5*time.Second)
 
-				t.updatePeerEndpoint(peer, newEndpoint, resolvedEndpoints)
+				select {
+				case result := <-resultChan:
+					if result.err != nil {
+						t.logger.Error("Failed to resolve endpoint for reconnection",
+							"tunnel", t.name, "peer", peer.Name, "endpoint", peer.Endpoint, "error", result.err)
+						return
+					}
+
+					t.updatePeerEndpoint(peer, result.endpoint, resolvedEndpoints)
+				case <-time.After(10 * time.Second):
+					t.logger.Warn("Endpoint resolution timeout during reconnection", "tunnel", t.name, "peer", peer.Name)
+				}
 			}
 			break
 		}
@@ -558,8 +521,6 @@ func (t *Tunnel) attemptPeerReconnection(peerKey string, resolvedEndpoints map[s
 }
 
 // MARK: updatePeerEndpoint
-
-// Updates a peer's endpoint via WireGuard UAPI with caching.
 func (t *Tunnel) updatePeerEndpoint(peer config.PeerConfig, newEndpoint string, resolvedEndpoints map[string]string) {
 	peerKey := fmt.Sprintf("%s:%s", t.name, peer.Name)
 
@@ -589,8 +550,6 @@ func (t *Tunnel) updatePeerEndpoint(peer config.PeerConfig, newEndpoint string, 
 }
 
 // MARK: applyConfiguration
-
-// Applies WireGuard configuration to the device with validation.
 func (t *Tunnel) applyConfiguration() error {
 	if t.device == nil {
 		return fmt.Errorf("device not initialized")
@@ -627,8 +586,6 @@ func (t *Tunnel) applyConfiguration() error {
 }
 
 // MARK: buildPeerConfig
-
-// Builds WireGuard UAPI configuration for a single peer.
 func (t *Tunnel) buildPeerConfig(peer config.PeerConfig) (string, error) {
 	publicKeyHex, err := t.base64ToHex(peer.PublicKey)
 	if err != nil {
@@ -638,11 +595,19 @@ func (t *Tunnel) buildPeerConfig(peer config.PeerConfig) (string, error) {
 	config := fmt.Sprintf("public_key=%s\n", publicKeyHex)
 
 	if peer.Endpoint != "" {
-		resolvedEndpoint, err := t.resolveEndpoint(peer.Endpoint)
-		if err != nil {
-			return "", fmt.Errorf("failed to resolve endpoint %s: %w", peer.Endpoint, err)
+		if resolved, ok := t.resolver.ResolveFast(peer.Endpoint); ok {
+			config += fmt.Sprintf("endpoint=%s\n", resolved)
+		} else {
+			resultChan := t.resolver.ResolveAsync(peer.Endpoint, 5*time.Second)
+			select {
+			case result := <-resultChan:
+				if result.err == nil {
+					config += fmt.Sprintf("endpoint=%s\n", result.endpoint)
+				}
+			case <-time.After(5 * time.Second):
+				config += fmt.Sprintf("endpoint=%s\n", peer.Endpoint)
+			}
 		}
-		config += fmt.Sprintf("endpoint=%s\n", resolvedEndpoint)
 	}
 
 	if peer.Preshared != "" {
@@ -675,69 +640,7 @@ func (t *Tunnel) buildPeerConfig(peer config.PeerConfig) (string, error) {
 	return config, nil
 }
 
-// MARK: resolveEndpoint
-
-// Resolves hostname to IP address with caching and timeout handling.
-func (t *Tunnel) resolveEndpoint(endpoint string) (string, error) {
-	parts := strings.Split(endpoint, ":")
-	if len(parts) != 2 {
-		return "", fmt.Errorf("invalid endpoint format: %s", endpoint)
-	}
-
-	hostname := parts[0]
-	port := parts[1]
-
-	if net.ParseIP(hostname) != nil {
-		return endpoint, nil
-	}
-
-	if cached, exists := t.endpointCache[endpoint]; exists {
-		if time.Since(time.Now()) < endpointCacheTimeout {
-			return cached, nil
-		}
-	}
-
-	resolver := &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			d := net.Dialer{Timeout: 10 * time.Second}
-			return d.DialContext(ctx, network, address)
-		},
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-
-	ips, err := resolver.LookupIPAddr(ctx, hostname)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve hostname %s: %w", hostname, err)
-	}
-
-	if len(ips) == 0 {
-		return "", fmt.Errorf("no IP addresses found for hostname %s", hostname)
-	}
-
-	var selectedIP net.IP
-	for _, ip := range ips {
-		if ip.IP.To4() != nil {
-			selectedIP = ip.IP
-			break
-		}
-	}
-
-	if selectedIP == nil {
-		selectedIP = ips[0].IP
-	}
-
-	resolved := fmt.Sprintf("%s:%s", selectedIP.String(), port)
-	t.endpointCache[endpoint] = resolved
-
-	return resolved, nil
-}
-
 // MARK: base64ToHex
-
-// Converts base64-encoded WireGuard key to hexadecimal format.
 func (t *Tunnel) base64ToHex(b64 string) (string, error) {
 	b64 = strings.TrimSpace(b64)
 	if len(b64) != 44 {
@@ -754,136 +657,4 @@ func (t *Tunnel) base64ToHex(b64 string) (string, error) {
 	}
 
 	return fmt.Sprintf("%x", decoded), nil
-}
-
-// TUNWrapper adapts water.Interface to wireguard/tun.Device interface
-type TUNWrapper struct {
-	iface  *water.Interface
-	mtu    int
-	name   string
-	events chan tun.Event
-	closed bool
-	mu     sync.Mutex
-}
-
-// MARK: File
-
-// Returns nil as water interface doesn't expose file descriptor directly.
-func (w *TUNWrapper) File() *os.File {
-	return nil
-}
-
-// MARK: Read
-
-// Reads packets from the TUN interface with proper buffer handling.
-func (w *TUNWrapper) Read(bufs [][]byte, sizes []int, offset int) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if w.closed || len(bufs) == 0 || w.iface == nil {
-		return 0, net.ErrClosed
-	}
-
-	n, err := w.iface.Read(bufs[0][offset:])
-	if n > 0 {
-		sizes[0] = n
-		return 1, nil
-	}
-
-	return 0, err
-}
-
-// MARK: Write
-
-// Writes packets to the TUN interface with error handling.
-func (w *TUNWrapper) Write(bufs [][]byte, offset int) (int, error) {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if w.closed || w.iface == nil {
-		return 0, net.ErrClosed
-	}
-
-	for i, buf := range bufs {
-		if len(buf) <= offset {
-			continue
-		}
-
-		_, err := w.iface.Write(buf[offset:])
-		if err != nil {
-			return i, err
-		}
-	}
-
-	return len(bufs), nil
-}
-
-// MARK: Flush
-
-// Flushes any pending writes (no-op for TUN interfaces).
-func (w *TUNWrapper) Flush() error {
-	return nil
-}
-
-// MARK: MTU
-
-// Returns the configured MTU size for this interface.
-func (w *TUNWrapper) MTU() (int, error) {
-	if w.mtu <= 0 {
-		return 1420, nil
-	}
-	return w.mtu, nil
-}
-
-// MARK: Name
-
-// Returns the interface name.
-func (w *TUNWrapper) Name() (string, error) {
-	if w.name == "" {
-		return "unknown", nil
-	}
-	return w.name, nil
-}
-
-// MARK: Events
-
-// Returns the events channel for interface state changes.
-func (w *TUNWrapper) Events() <-chan tun.Event {
-	if w.events == nil {
-		w.events = make(chan tun.Event, 1)
-		w.events <- tun.EventUp
-	}
-	return w.events
-}
-
-// MARK: Close
-
-// Closes the TUN wrapper and underlying interface safely.
-func (w *TUNWrapper) Close() error {
-	w.mu.Lock()
-	defer w.mu.Unlock()
-
-	if w.closed {
-		return nil
-	}
-
-	w.closed = true
-
-	if w.events != nil {
-		close(w.events)
-		w.events = nil
-	}
-
-	if w.iface != nil {
-		return w.iface.Close()
-	}
-
-	return nil
-}
-
-// MARK: BatchSize
-
-// Returns the batch size for packet processing (single packet mode).
-func (w *TUNWrapper) BatchSize() int {
-	return 1
 }
