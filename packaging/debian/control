@@ -1,0 +1,17 @@
+Package: finguard
+Version: 1.0.0
+Section: net
+Priority: optional
+Architecture: amd64
+Depends: libc6, avahi-daemon, systemd
+Maintainer: Joseph Parker Kribs <your-email@example.com>
+Description: High-performance userspace WireGuard proxy with web management
+ FinGuard is a modern WireGuard proxy solution that provides:
+  - Userspace WireGuard implementation
+  - HTTP reverse proxy with subdomain routing
+  - Web-based management interface
+  - mDNS service discovery via Avahi
+  - Real-time connection monitoring
+  - Automatic route management
+ .
+ This package includes systemd integration for production deployment.

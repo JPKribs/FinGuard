@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+# MARK: Stop and disable the service before removal
+if [ -x /bin/systemctl ]; then
+    echo "Stopping FinGuard service..."
+    systemctl stop finguard.service || true
+    systemctl disable finguard.service || true
+fi
+
+exit 0

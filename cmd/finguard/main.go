@@ -27,11 +27,6 @@ const (
 	MaxRetries      = 3
 )
 
-var (
-	shouldRestart  = false
-	executablePath string
-)
-
 // MARK: main
 func main() {
 	var (
@@ -45,37 +40,17 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Store executable path for restart
-	var err error
-	executablePath, err = os.Executable()
-	if err != nil {
-		log.Fatalf("Failed to get executable path: %v", err)
-	}
-
-	// Main application loop for restart handling
+	// Main loop for restart handling (cross-platform)
 	for {
-		shouldRestart = false
+		internal.SetRestartFlag(false)
 
-		app, err := newApplication(*configPath)
-		if err != nil {
-			log.Fatalf("Failed to initialize application: %v", err)
+		if err := runApplication(*configPath); err != nil {
+			log.Fatalf("Application error: %v", err)
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		app.context = ctx
-		app.cancel = cancel
-
-		if err := app.start(ctx); err != nil {
-			cancel()
-			log.Fatalf("Failed to start application: %v", err)
-		}
-
-		app.handleSignals()
-		app.waitGroup.Wait()
-		cancel()
-
-		if !shouldRestart {
-			break
+		// Check if restart was requested
+		if !internal.ShouldRestart() {
+			break // Normal shutdown
 		}
 
 		log.Println("Restarting application...")
@@ -135,6 +110,28 @@ func (app *Application) start(ctx context.Context) error {
 	app.updateReadiness()
 
 	return app.startManagementServer()
+}
+
+// MARK: runApplication
+func runApplication(configPath string) error {
+	app, err := newApplication(configPath)
+	if err != nil {
+		return fmt.Errorf("failed to initialize application: %w", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	app.context = ctx
+	app.cancel = cancel
+	defer cancel()
+
+	if err := app.start(ctx); err != nil {
+		return fmt.Errorf("failed to start application: %w", err)
+	}
+
+	app.handleSignals()
+	app.waitGroup.Wait()
+
+	return nil
 }
 
 // MARK: startTunnelManager
@@ -374,7 +371,7 @@ func (app *Application) startManagementServer() error {
 // MARK: handleSignals
 func (app *Application) handleSignals() {
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
 
 	app.waitGroup.Add(1)
 	go func() {
@@ -386,14 +383,8 @@ func (app *Application) handleSignals() {
 				switch sig {
 				case syscall.SIGHUP:
 					app.handleReload()
-				case syscall.SIGUSR1:
-					app.logger.Info("Received restart signal")
-					shouldRestart = true
-					app.cancel()
-					return
 				case syscall.SIGINT, syscall.SIGTERM:
 					app.logger.Info("Received shutdown signal", "signal", sig)
-					shouldRestart = false
 					app.cancel()
 					return
 				}

@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -172,15 +174,16 @@ func (a *APIServer) handleSystemRestart(w http.ResponseWriter, r *http.Request) 
 	// Send response before initiating restart
 	a.respondWithSuccess(w, "System restart initiated", nil)
 
-	// Trigger restart in a goroutine to allow response to be sent
 	go func() {
 		time.Sleep(1 * time.Second) // Give time for response to be sent
 		a.logger.Info("Initiating system restart...")
 
-		// Send SIGTERM to self to trigger graceful shutdown
-		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
-			a.logger.Error("Failed to send restart signal", "error", err)
+		if a.trySystemctlRestart() {
+			return
 		}
+
+		// Fallback: signal the application to restart
+		a.signalRestart()
 	}()
 }
 
@@ -196,16 +199,79 @@ func (a *APIServer) handleSystemShutdown(w http.ResponseWriter, r *http.Request)
 	// Send response before initiating shutdown
 	a.respondWithSuccess(w, "System shutdown initiated", nil)
 
-	// Trigger shutdown in a goroutine to allow response to be sent
 	go func() {
 		time.Sleep(1 * time.Second) // Give time for response to be sent
 		a.logger.Info("Initiating system shutdown...")
 
-		// Send SIGTERM to self to trigger graceful shutdown
-		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
-			a.logger.Error("Failed to send shutdown signal", "error", err)
+		if a.trySystemctlStop() {
+			return
 		}
+
+		// Fallback: signal the application to shutdown
+		a.signalShutdown()
 	}()
+}
+
+// MARK: trySystemctlRestart
+func (a *APIServer) trySystemctlRestart() bool {
+	// Only try systemctl on Linux
+	if runtime.GOOS != "linux" {
+		return false
+	}
+
+	// Check if systemctl is available
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		a.logger.Debug("systemctl not found, using fallback method")
+		return false
+	}
+
+	// Try to restart via systemctl
+	cmd := exec.Command("systemctl", "restart", "finguard")
+	if err := cmd.Run(); err != nil {
+		a.logger.Warn("systemctl restart failed", "error", err)
+		return false
+	}
+
+	a.logger.Info("Successfully initiated restart via systemctl")
+	return true
+}
+
+// MARK: trySystemctlStop
+func (a *APIServer) trySystemctlStop() bool {
+	// Only try systemctl on Linux
+	if runtime.GOOS != "linux" {
+		return false
+	}
+
+	// Check if systemctl is available
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		a.logger.Debug("systemctl not found, using fallback method")
+		return false
+	}
+
+	// Try to stop via systemctl
+	cmd := exec.Command("systemctl", "stop", "finguard")
+	if err := cmd.Run(); err != nil {
+		a.logger.Warn("systemctl stop failed", "error", err)
+		return false
+	}
+
+	a.logger.Info("Successfully initiated stop via systemctl")
+	return true
+}
+
+// MARK: signalRestart
+func (a *APIServer) signalRestart() {
+	// Set restart flag and signal shutdown
+	internal.SetRestartFlag(true)
+	a.signalShutdown()
+}
+
+// MARK: signalShutdown
+func (a *APIServer) signalShutdown() {
+	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+		a.logger.Error("Failed to send shutdown signal", "error", err)
+	}
 }
 
 // MARK: handleServices

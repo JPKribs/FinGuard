@@ -1,0 +1,48 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+    purge)
+        # MARK: Remove user and group on purge
+        echo "Purging FinGuard user and data..."
+        
+        # Remove systemd service files
+        rm -f /etc/systemd/system/finguard.service
+        systemctl daemon-reload 2>/dev/null || true
+        
+        # Remove logrotate config
+        rm -f /etc/logrotate.d/finguard
+        
+        # Remove user and group
+        if getent passwd finguard > /dev/null 2>&1; then
+            deluser finguard || true
+        fi
+        
+        if getent group finguard > /dev/null 2>&1; then
+            delgroup finguard || true
+        fi
+        
+        # Remove data directories (ask user first)
+        if [ -d /var/lib/finguard ] || [ -d /var/log/finguard ]; then
+            echo ""
+            echo "The following directories contain FinGuard data:"
+            [ -d /var/lib/finguard ] && echo "  - /var/lib/finguard (runtime data)"
+            [ -d /var/log/finguard ] && echo "  - /var/log/finguard (logs)"
+            echo ""
+            echo "These directories have been preserved."
+            echo "Remove manually if desired:"
+            [ -d /var/lib/finguard ] && echo "  sudo rm -rf /var/lib/finguard"
+            [ -d /var/log/finguard ] && echo "  sudo rm -rf /var/log/finguard"
+        fi
+        
+        # Note: We intentionally keep /etc/finguard for config preservation
+        echo ""
+        echo "Configuration files in /etc/finguard have been preserved."
+        echo "Remove manually if desired: sudo rm -rf /etc/finguard"
+        ;;
+    remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
+        # Don't remove user/data on regular removal or upgrade
+        ;;
+esac
+
+exit 0
