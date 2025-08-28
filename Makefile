@@ -1,19 +1,15 @@
-.PHONY: build test clean run lint install-tools keys test-proxy
+.PHONY: build test clean run lint install-tools version release
 
 BINARY_NAME=finguard
 BUILD_DIR=bin
-MAIN_PATH=./cmd/finguard
-VERSION=1.0.0b2
+VERSION=1.0.0-dev
 
 build:
 	mkdir -p $(BUILD_DIR)
-	go build -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
+	CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/finguard
 
 test:
 	go test -v ./...
-
-test-race:
-	go test -race -v ./...
 
 clean:
 	rm -rf $(BUILD_DIR)
@@ -21,12 +17,6 @@ clean:
 
 run: build
 	./$(BUILD_DIR)/$(BINARY_NAME) --config config.yaml
-
-test-proxy: build
-	./$(BUILD_DIR)/$(BINARY_NAME) --config config-test.yaml
-
-lint:
-	golangci-lint run
 
 fmt:
 	go fmt ./...
@@ -37,17 +27,19 @@ vet:
 tidy:
 	go mod tidy
 
-install-tools:
-	go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-
-deps:
-	go mod download
+version:
+	@echo $(VERSION)
 
 release:
 	mkdir -p $(BUILD_DIR)
-	GOOS=windows GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64-${VERSION}.exe $(MAIN_PATH)
-	GOOS=linux GOARCH=amd64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64-${VERSION} $(MAIN_PATH)
-	GOOS=linux GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64-${VERSION} $(MAIN_PATH)
-	GOOS=darwin GOARCH=arm64 go build -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64-${VERSION} $(MAIN_PATH)
+	@echo "Building release binaries for version $(VERSION)..."
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)-windows-amd64-$(VERSION).exe ./cmd/finguard
+	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)-windows-arm64-$(VERSION).exe ./cmd/finguard
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-amd64-$(VERSION) ./cmd/finguard
+	GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)-linux-arm64-$(VERSION) ./cmd/finguard
+	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-amd64-$(VERSION) ./cmd/finguard
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME)-darwin-arm64-$(VERSION) ./cmd/finguard
+	@echo "Release binaries built in $(BUILD_DIR)/"
+	@ls -la $(BUILD_DIR)/*-$(VERSION)*
 
 all: fmt vet test build

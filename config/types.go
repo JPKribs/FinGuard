@@ -8,8 +8,17 @@ type Config struct {
 	Services      []ServiceConfig `yaml:"services"`
 	Discovery     DiscoveryConfig `yaml:"discovery"`
 	Log           LogConfig       `yaml:"log"`
+	Update        UpdateConfig    `yaml:"update"` // New field
 	ServicesFile  string          `yaml:"services_file"`
 	WireGuardFile string          `yaml:"wireguard_file"`
+	UpdateFile    string          `yaml:"update_file"` // New field
+}
+
+type UpdateConfig struct {
+	Enabled   bool   `yaml:"enabled"`
+	Schedule  string `yaml:"schedule"`
+	AutoApply bool   `yaml:"auto_apply"`
+	BackupDir string `yaml:"backup_dir"`
 }
 
 type ServerConfig struct {

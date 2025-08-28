@@ -17,6 +17,7 @@ import (
 	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/proxy"
+	"github.com/JPKribs/FinGuard/updater"
 	"github.com/JPKribs/FinGuard/wireguard"
 )
 
@@ -70,6 +71,8 @@ func newApplication(configPath string) (*Application, error) {
 	logger := internal.NewLogger(config.Log.Level)
 	healthCheck := internal.NewHealthChecker()
 
+	updateManager := updater.NewUpdateManager(config, logger, Version)
+
 	return &Application{
 		config:           config,
 		logger:           logger,
@@ -77,6 +80,7 @@ func newApplication(configPath string) (*Application, error) {
 		tunnelManager:    wireguard.NewManager(logger),
 		proxyServer:      proxy.NewServer(logger),
 		discoveryManager: discovery.NewDiscovery(logger),
+		updateManager:    updateManager,
 	}, nil
 }
 
@@ -92,6 +96,11 @@ func (app *Application) start(ctx context.Context) error {
 
 	if err := app.startDiscovery(ctx); err != nil {
 		return fmt.Errorf("starting discovery: %w", err)
+	}
+
+	// Start update manager
+	if err := app.startUpdateManager(ctx); err != nil {
+		app.logger.Warn("Failed to start update manager", "error", err)
 	}
 
 	if err := app.createTunnels(ctx); err != nil {
@@ -130,6 +139,32 @@ func runApplication(configPath string) error {
 
 	app.handleSignals()
 	app.waitGroup.Wait()
+
+	return nil
+}
+
+// MARK: startUpdateManager
+func (app *Application) startUpdateManager(ctx context.Context) error {
+	if app.updateManager == nil {
+		return nil
+	}
+
+	if err := app.updateManager.Start(); err != nil {
+		return err
+	}
+
+	app.waitGroup.Add(1)
+	go func() {
+		defer app.waitGroup.Done()
+		<-ctx.Done()
+
+		_, cancel := context.WithTimeout(context.Background(), ShutdownTimeout)
+		defer cancel()
+
+		if err := app.updateManager.Stop(); err != nil {
+			app.logger.Error("Update manager shutdown failed", "error", err)
+		}
+	}()
 
 	return nil
 }
@@ -323,15 +358,13 @@ func (app *Application) updateReadiness() {
 }
 
 // MARK: startManagementServer
-
-// Starts the HTTP management API server
 func (app *Application) startManagementServer() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", app.healthCheck.LivenessHandler)
 	mux.HandleFunc("/readyz", app.healthCheck.ReadinessHandler)
 
-	// Pass the logger to APIServer
-	apiServer := v1.NewAPIServer(app.config, app.proxyServer, app.tunnelManager, app.discoveryManager, app.logger)
+	// Pass the update manager to APIServer
+	apiServer := v1.NewAPIServer(app.config, app.proxyServer, app.tunnelManager, app.discoveryManager, app.logger, app.updateManager)
 	apiServer.RegisterRoutes(mux)
 
 	app.server = &http.Server{

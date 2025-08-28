@@ -11,6 +11,10 @@ class StatusManager {
             
             StatusManager.renderSystemStatus(status);
             
+            if (window.UpdateManager) {
+                window.UpdateManager.loadUpdateStatus();
+            }
+            
         } catch (error) {
             console.error('Failed to load status:', error);
             if (!error.message.includes('Authentication')) {

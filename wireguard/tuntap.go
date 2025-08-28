@@ -21,7 +21,6 @@ const (
 
 // MARK: CreateTUN
 
-// Creates a new TUN device with platform-specific configuration and fallback handling.
 func CreateTUN(name string, mtu int) (*TUNDevice, error) {
 	if mtu <= 0 || mtu > 65536 {
 		mtu = 1420 // Safe default
@@ -29,15 +28,6 @@ func CreateTUN(name string, mtu int) (*TUNDevice, error) {
 
 	config := water.Config{
 		DeviceType: water.TUN,
-	}
-
-	if runtime.GOOS == "darwin" {
-		config.Name = ""
-	} else {
-		if name == "" {
-			name = "wg0"
-		}
-		config.Name = name
 	}
 
 	var iface *water.Interface

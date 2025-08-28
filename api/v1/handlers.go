@@ -12,13 +12,13 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
 
 	"github.com/JPKribs/FinGuard/config"
 	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/proxy"
+	"github.com/JPKribs/FinGuard/updater"
 	"github.com/JPKribs/FinGuard/utilities"
 	"github.com/JPKribs/FinGuard/wireguard"
 )
@@ -86,18 +86,36 @@ type APIServer struct {
 	tunnelManager    wireguard.TunnelManager
 	discoveryManager *discovery.Discovery
 	logger           *internal.Logger
+	updateManager    *updater.UpdateManager
+}
+
+type UpdateInfoResponse struct {
+	Available         bool      `json:"available"`
+	CurrentVersion    string    `json:"current_version"`
+	LatestVersion     string    `json:"latest_version"`
+	ReleaseNotes      string    `json:"release_notes"`
+	LastCheckTime     time.Time `json:"last_check_time"`
+	NextCheckTime     time.Time `json:"next_check_time"`
+	UpdateSchedule    string    `json:"update_schedule"`
+	AutoUpdateEnabled bool      `json:"auto_update_enabled"`
+}
+
+type UpdateConfigRequest struct {
+	Enabled   bool   `json:"enabled"`
+	Schedule  string `json:"schedule"`
+	AutoApply bool   `json:"auto_apply"`
+	BackupDir string `json:"backup_dir"`
 }
 
 // MARK: NewAPIServer
-
-// Creates a new API server instance with all dependencies
-func NewAPIServer(cfg *config.Config, proxyServer *proxy.Server, tunnelManager wireguard.TunnelManager, discoveryManager *discovery.Discovery, logger *internal.Logger) *APIServer {
+func NewAPIServer(cfg *config.Config, proxyServer *proxy.Server, tunnelManager wireguard.TunnelManager, discoveryManager *discovery.Discovery, logger *internal.Logger, updateManager *updater.UpdateManager) *APIServer {
 	return &APIServer{
 		cfg:              cfg,
 		proxyServer:      proxyServer,
 		tunnelManager:    tunnelManager,
 		discoveryManager: discoveryManager,
 		logger:           logger,
+		updateManager:    updateManager,
 	}
 }
 
@@ -116,6 +134,10 @@ func (a *APIServer) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/system/shutdown", a.authMiddleware(a.handleSystemShutdown))
 	mux.HandleFunc("/api/v1/status", a.authMiddleware(a.handleStatus))
 	mux.HandleFunc("/api/v1/logs", a.authMiddleware(a.handleLogs))
+	mux.HandleFunc("/api/v1/update/status", a.authMiddleware(a.handleUpdateStatus))
+	mux.HandleFunc("/api/v1/update/check", a.authMiddleware(a.handleUpdateCheck))
+	mux.HandleFunc("/api/v1/update/apply", a.authMiddleware(a.handleUpdateApply))
+	mux.HandleFunc("/api/v1/update/config", a.authMiddleware(a.handleUpdateConfig))
 }
 
 // MARK: handleWebUI
@@ -269,7 +291,13 @@ func (a *APIServer) signalRestart() {
 
 // MARK: signalShutdown
 func (a *APIServer) signalShutdown() {
-	if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+	process, err := os.FindProcess(os.Getpid())
+	if err != nil {
+		a.logger.Error("Failed to find process", "error", err)
+		return
+	}
+
+	if err := process.Signal(os.Interrupt); err != nil {
 		a.logger.Error("Failed to send shutdown signal", "error", err)
 	}
 }
@@ -1040,4 +1068,133 @@ func (a *APIServer) respondWithError(w http.ResponseWriter, statusCode int, erro
 		Error:   errorMessage,
 	}
 	json.NewEncoder(w).Encode(response)
+}
+
+// MARK: handleUpdateStatus
+func (a *APIServer) handleUpdateStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	if a.updateManager == nil {
+		a.respondWithError(w, http.StatusServiceUnavailable, "Update manager not available")
+		return
+	}
+
+	status := a.updateManager.GetUpdateStatus()
+	a.respondWithSuccess(w, "Update status retrieved", status)
+}
+
+// MARK: handleUpdateCheck
+func (a *APIServer) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	if a.updateManager == nil {
+		a.respondWithError(w, http.StatusServiceUnavailable, "Update manager not available")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	info, err := a.updateManager.CheckForUpdates(ctx)
+	if err != nil {
+		a.respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to check for updates: %v", err))
+		return
+	}
+
+	a.respondWithSuccess(w, "Update check completed", info)
+}
+
+// MARK: handleUpdateApply
+func (a *APIServer) handleUpdateApply(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	if a.updateManager == nil {
+		a.respondWithError(w, http.StatusServiceUnavailable, "Update manager not available")
+		return
+	}
+
+	a.logger.Info("Manual update requested via API")
+
+	// Send response before initiating update
+	a.respondWithSuccess(w, "Update initiated - application will restart if successful", nil)
+
+	go func() {
+		time.Sleep(1 * time.Second) // Give time for response to be sent
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+
+		if err := a.updateManager.PerformUpdate(ctx); err != nil {
+			a.logger.Error("Manual update failed", "error", err)
+		}
+	}()
+}
+
+// MARK: handleUpdateConfig
+func (a *APIServer) handleUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	switch r.Method {
+	case http.MethodGet:
+		a.handleGetUpdateConfig(w, r)
+	case http.MethodPost:
+		a.handleSetUpdateConfig(w, r)
+	default:
+		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+	}
+}
+
+// MARK: handleGetUpdateConfig
+func (a *APIServer) handleGetUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	config := UpdateConfigRequest{
+		Enabled:   a.cfg.Update.Enabled,
+		Schedule:  a.cfg.Update.Schedule,
+		AutoApply: a.cfg.Update.AutoApply,
+		BackupDir: a.cfg.Update.BackupDir,
+	}
+
+	a.respondWithSuccess(w, "Update configuration retrieved", config)
+}
+
+// MARK: handleSetUpdateConfig
+func (a *APIServer) handleSetUpdateConfig(w http.ResponseWriter, r *http.Request) {
+	var req UpdateConfigRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		a.respondWithError(w, http.StatusBadRequest, "Invalid JSON: "+err.Error())
+		return
+	}
+
+	if req.Schedule == "" {
+		req.Schedule = "0 3 * * *"
+	}
+	if req.BackupDir == "" {
+		req.BackupDir = "./backups"
+	}
+
+	updateConfig := config.UpdateConfig{
+		Enabled:   req.Enabled,
+		Schedule:  req.Schedule,
+		AutoApply: req.AutoApply,
+		BackupDir: req.BackupDir,
+	}
+
+	if err := a.cfg.UpdateUpdateConfig(updateConfig); err != nil {
+		a.respondWithError(w, http.StatusBadRequest, "Invalid configuration: "+err.Error())
+		return
+	}
+
+	if a.updateManager != nil {
+		if err := a.updateManager.UpdateSchedule(req.Schedule); err != nil {
+			a.logger.Warn("Failed to update scheduler", "error", err)
+		}
+	}
+
+	a.respondWithSuccess(w, "Update configuration saved", updateConfig)
 }

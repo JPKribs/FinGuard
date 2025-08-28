@@ -22,6 +22,8 @@ const (
 	DefaultRetries         = 3
 	ServicesFileName       = "services.yaml"
 	WireGuardFileName      = "wireguard.yaml"
+	UpdateFileName         = "update.yaml"
+	DefaultUpdateSchedule  = "0 3 * * *"
 )
 
 // MARK: Load
@@ -52,8 +54,6 @@ func Load(path string) (*Config, error) {
 }
 
 // MARK: setDefaults
-
-// Applies default values to unset configuration fields.
 func (c *Config) setDefaults() {
 	if c.Server.HTTPAddr == "" {
 		c.Server.HTTPAddr = DefaultHTTPAddr
@@ -70,7 +70,19 @@ func (c *Config) setDefaults() {
 	if c.WireGuardFile == "" {
 		c.WireGuardFile = WireGuardFileName
 	}
+	if c.UpdateFile == "" {
+		c.UpdateFile = UpdateFileName
+	}
 
+	// Set update defaults
+	if c.Update.Schedule == "" {
+		c.Update.Schedule = DefaultUpdateSchedule
+	}
+	if c.Update.BackupDir == "" {
+		c.Update.BackupDir = "./backups"
+	}
+
+	// Existing setDefaults code for tunnels...
 	for i := range c.WireGuard.Tunnels {
 		tunnel := &c.WireGuard.Tunnels[i]
 		if tunnel.MTU == 0 {
@@ -98,14 +110,15 @@ func (c *Config) setDefaults() {
 }
 
 // MARK: loadExternalConfigs
-
-// Loads services and WireGuard configurations from separate files.
 func (c *Config) loadExternalConfigs() error {
 	if err := c.loadServicesFile(); err != nil {
 		return fmt.Errorf("loading services file: %w", err)
 	}
 	if err := c.loadWireGuardFile(); err != nil {
 		return fmt.Errorf("loading wireguard file: %w", err)
+	}
+	if err := c.loadUpdateFile(); err != nil {
+		return fmt.Errorf("loading update file: %w", err)
 	}
 	return nil
 }
@@ -157,9 +170,30 @@ func (c *Config) loadWireGuardFile() error {
 	return nil
 }
 
-// MARK: createEmptyFile
+// MARK: loadUpdateFile
+func (c *Config) loadUpdateFile() error {
+	if _, err := os.Stat(c.UpdateFile); os.IsNotExist(err) {
+		return c.createEmptyFile(c.UpdateFile, UpdateConfig{
+			Enabled:   false,
+			Schedule:  DefaultUpdateSchedule,
+			AutoApply: false,
+			BackupDir: "./backups",
+		})
+	}
 
-// Creates an empty YAML file with the specified structure.
+	data, err := os.ReadFile(c.UpdateFile)
+	if err != nil {
+		return fmt.Errorf("reading update file: %w", err)
+	}
+
+	if err := yaml.Unmarshal(data, &c.Update); err != nil {
+		return fmt.Errorf("parsing update file: %w", err)
+	}
+
+	return nil
+}
+
+// MARK: createEmptyFile
 func (c *Config) createEmptyFile(filename string, structure interface{}) error {
 	data, err := yaml.Marshal(structure)
 	if err != nil {
@@ -442,4 +476,25 @@ func GetPortFromAddr(addr string) int {
 	}
 
 	return port
+}
+
+// MARK: SaveUpdate
+func (c *Config) SaveUpdate() error {
+	return c.saveToFile(c.UpdateFile, c.Update)
+}
+
+// MARK: UpdateUpdateConfig
+func (c *Config) UpdateUpdateConfig(cfg UpdateConfig) error {
+	if cfg.Schedule == "" {
+		return fmt.Errorf("schedule cannot be empty")
+	}
+
+	// Basic cron validation
+	fields := strings.Fields(cfg.Schedule)
+	if len(fields) != 5 {
+		return fmt.Errorf("invalid cron format, expected 5 fields")
+	}
+
+	c.Update = cfg
+	return c.SaveUpdate()
 }

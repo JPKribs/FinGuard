@@ -7,4 +7,5 @@
 # Configuration files
 config.yaml
 services.yaml
+update.yaml
 wireguard.yaml

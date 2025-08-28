@@ -28,6 +28,22 @@
                 <h3>System Status</h3>
                 <div id="systemStatus"></div>
             </div>
+
+            <div class="card">
+                <h3>Updates</h3>
+                <div id="updateStatus"></div>
+                <div class="update-controls" style="margin-top: 1rem; display: none;" id="updateControls">
+                    <button onclick="window.UpdateManager.checkForUpdate()" class="btn-secondary">
+                        Check for Updates
+                    </button>
+                    <button onclick="window.UpdateManager.applyUpdate()" class="btn-warning" id="applyUpdateBtn" style="display: none;">
+                        Apply Update
+                    </button>
+                    <button onclick="window.UpdateManager.showUpdateConfig()" class="btn-secondary">
+                        Configure Auto-Updates
+                    </button>
+                </div>
+            </div>
             
             <div class="card">
                 <h3>System Controls</h3>
@@ -222,6 +238,45 @@
         </div>
     </div>
 
+        <!-- Update configuration modal -->
+    <div id="updateConfigModal" class="token-modal" style="display: none;">
+        <div class="token-modal-content">
+            <h3>Auto-Update Configuration</h3>
+            <form id="updateConfigForm">
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="updateEnabled" style="width: auto; margin-right: 0.5rem;">
+                        Enable Auto-Updates
+                    </label>
+                </div>
+                <div class="form-group">
+                    <label>Update Schedule (Cron Format)</label>
+                    <input type="text" id="updateSchedule" placeholder="0 3 * * *" required>
+                    <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                        Format: minute hour day month weekday (e.g., "0 3 * * *" = daily at 3 AM)
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label>
+                        <input type="checkbox" id="autoApply" style="width: auto; margin-right: 0.5rem;">
+                        Automatically Apply Updates
+                    </label>
+                    <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                        If disabled, updates will only be checked but not applied automatically
+                    </small>
+                </div>
+                <div class="form-group">
+                    <label>Backup Directory</label>
+                    <input type="text" id="backupDir" placeholder="./backups" required>
+                </div>
+                <div class="token-actions">
+                    <button type="submit">Save Configuration</button>
+                    <button type="button" onclick="window.UpdateManager.hideUpdateConfig()">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Load JavaScript modules -->
     <script src="/static/js/components/config.js"></script>
     <script src="/static/js/components/utils.js"></script>
@@ -231,6 +286,7 @@
     <script src="/static/js/components/tunnels.js"></script>
     <script src="/static/js/components/logs.js"></script>
     <script src="/static/js/components/status.js"></script>
+    <script src="/static/js/components/updater.js"></script>
     <script src="/static/js/app.js"></script>
 </body>
 </html>

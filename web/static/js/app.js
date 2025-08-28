@@ -8,7 +8,11 @@ class App {
         window.LogsManager.initializeFilter();
         window.LogsManager.loadLogs();
         window.LogsManager.startLogsRefresh();
-        
+
+        if (window.UpdateManager) {
+            window.UpdateManager.initializeCronHelp();
+        }
+
         // Setup tab navigation
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', function() {

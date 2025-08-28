@@ -21,17 +21,28 @@ done
 
 # MARK: Find the .deb package
 DEB_FILE=""
-if [ -f "./build/debian/finguard_1.0.0-beta2_amd64.deb" ]; then
-    DEB_FILE="./build/debian/finguard_1.0.0-beta2_amd64.deb"
-elif [ -f "./finguard_1.0.0-beta2_amd64.deb" ]; then
-    DEB_FILE="./finguard_1.0.0-beta2_amd64.deb"
-else
+# Look for any finguard .deb file in common locations
+for location in "./build/debian/finguard_"*"_amd64.deb" "./finguard_"*"_amd64.deb" "./"*"finguard"*".deb"; do
+    if [ -f $location ]; then
+        DEB_FILE="$location"
+        break
+    fi
+done
+
+if [ -z "$DEB_FILE" ]; then
     echo "❌ FinGuard .deb package not found!"
-    echo "Please run './packaging/debian/build-deb.sh' first"
+    echo "Please run 'make deb' or './packaging/debian/build-deb.sh' first"
+    echo "Searched in:"
+    echo "  - ./build/debian/"
+    echo "  - ./ (current directory)"
     exit 1
 fi
 
 echo "📦 Found package: $DEB_FILE"
+
+# Extract version from package name for display
+PACKAGE_VERSION=$(echo "$DEB_FILE" | sed -n 's/.*finguard_\([^_]*\)_amd64\.deb/\1/p' || echo "unknown")
+echo "🏷️  Version: $PACKAGE_VERSION"
 
 # MARK: Install dependencies
 echo "📥 Installing dependencies..."
@@ -48,12 +59,12 @@ dpkg -i "$DEB_FILE" || {
 # MARK: Generate secure admin token if needed
 CONFIG_FILE="/etc/finguard/config.yaml"
 if [ -f "$CONFIG_FILE" ] && grep -q "REPLACE_ME_WITH_SECURE_TOKEN" "$CONFIG_FILE"; then
-    echo "🔑 Generating secure admin token..."
+    echo "🔐 Generating secure admin token..."
     # Generate a 32-character random token
     NEW_TOKEN=$(openssl rand -hex 16 2>/dev/null || dd if=/dev/urandom bs=16 count=1 2>/dev/null | xxd -p | tr -d '\n')
     sed -i "s/REPLACE_ME_WITH_SECURE_TOKEN/$NEW_TOKEN/" "$CONFIG_FILE"
     echo "✅ Admin token updated in $CONFIG_FILE"
-    echo "🔐 Your admin token: $NEW_TOKEN"
+    echo "🔑 Your admin token: $NEW_TOKEN"
     echo ""
     echo "⚠️  IMPORTANT: Save this token! You'll need it to access the web interface."
     echo ""
@@ -78,13 +89,14 @@ if systemctl is-active --quiet finguard; then
     echo "   Main config: /etc/finguard/config.yaml"
     echo "   Services:    /etc/finguard/services.yaml"
     echo "   WireGuard:   /etc/finguard/wireguard.yaml"
+    echo "   Updates:     /etc/finguard/update.yaml"
     echo ""
     
     # Show admin token again
     if [ -f "$CONFIG_FILE" ]; then
         ADMIN_TOKEN=$(grep "admin_token:" "$CONFIG_FILE" | sed 's/.*admin_token: *"*\([^"]*\)"*.*/\1/')
         if [ "$ADMIN_TOKEN" != "REPLACE_ME_WITH_SECURE_TOKEN" ]; then
-            echo "🔐 Your admin token: $ADMIN_TOKEN"
+            echo "🔑 Your admin token: $ADMIN_TOKEN"
             echo ""
         fi
     fi

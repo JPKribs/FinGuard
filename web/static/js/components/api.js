@@ -97,6 +97,33 @@ class APIClient {
     static async getLogs(query = '') {
         return await APIClient.apiCall(`/logs${query}`);
     }
+
+        static async getUpdateStatus() {
+        return await APIClient.apiCall('/update/status');
+    }
+
+    static async checkForUpdate() {
+        return await APIClient.apiCall('/update/check', {
+            method: 'POST'
+        });
+    }
+
+    static async applyUpdate() {
+        return await APIClient.apiCall('/update/apply', {
+            method: 'POST'
+        });
+    }
+
+    static async getUpdateConfig() {
+        return await APIClient.apiCall('/update/config');
+    }
+
+    static async saveUpdateConfig(config) {
+        return await APIClient.apiCall('/update/config', {
+            method: 'POST',
+            body: JSON.stringify(config)
+        });
+    }
 }
 
 // Export to global scope
