@@ -38,16 +38,21 @@ type ServiceStatusResponse struct {
 
 type TunnelStatus = wireguard.TunnelStatus
 
+// MARK: TunnelCreateRequest
 type TunnelCreateRequest struct {
-	Name       string              `json:"name"`
-	ListenPort int                 `json:"listen_port"`
-	PrivateKey string              `json:"private_key"`
-	MTU        int                 `json:"mtu"`
-	Addresses  []string            `json:"addresses"`
-	Routes     []string            `json:"routes"`
-	Peers      []PeerCreateRequest `json:"peers"`
+	Name                   string              `json:"name"`
+	ListenPort             int                 `json:"listen_port"`
+	PrivateKey             string              `json:"private_key"`
+	MTU                    int                 `json:"mtu"`
+	Addresses              []string            `json:"addresses"`
+	Routes                 []string            `json:"routes"`
+	Peers                  []PeerCreateRequest `json:"peers"`
+	MonitorInterval        int                 `json:"monitor_interval"`
+	StaleConnectionTimeout int                 `json:"stale_connection_timeout"`
+	ReconnectionRetries    int                 `json:"reconnection_retries"`
 }
 
+// MARK: PeerCreateRequest
 type PeerCreateRequest struct {
 	Name                string   `json:"name"`
 	PublicKey           string   `json:"public_key"`
@@ -102,6 +107,7 @@ func (a *APIServer) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/services/", a.authMiddleware(a.handleServiceByName))
 	mux.HandleFunc("/api/v1/tunnels", a.authMiddleware(a.handleTunnels))
 	mux.HandleFunc("/api/v1/tunnels/", a.authMiddleware(a.handleTunnelByName))
+	mux.HandleFunc("/api/v1/tunnels/restart/", a.authMiddleware(a.handleTunnelRestart))
 	mux.HandleFunc("/api/v1/status", a.authMiddleware(a.handleStatus))
 	mux.HandleFunc("/api/v1/logs", a.authMiddleware(a.handleLogs))
 }
@@ -225,11 +231,14 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add route to tunnel if service is connected to one
+	var tunnelToRestart *config.TunnelConfig
 	if svc.Tunnel != "" {
 		if err := a.addServiceRouteToTunnel(svc); err != nil {
 			a.respondWithError(w, http.StatusInternalServerError, "Failed to add route to tunnel: "+err.Error())
 			return
 		}
+		// Get tunnel config for restart
+		tunnelToRestart = a.cfg.GetTunnel(svc.Tunnel)
 	}
 
 	if err := a.cfg.AddService(svc); err != nil {
@@ -253,13 +262,65 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 
 	a.publishServiceMDNS(svc)
 
+	// Restart tunnel to activate new route immediately
+	if tunnelToRestart != nil {
+		a.logger.Info("Restarting tunnel to activate new service route",
+			"service", svc.Name, "tunnel", svc.Tunnel)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := a.restartTunnel(ctx, *tunnelToRestart); err != nil {
+			a.logger.Warn("Failed to restart tunnel after adding service",
+				"service", svc.Name, "tunnel", svc.Tunnel, "error", err)
+			// Don't fail the service creation, just log the warning
+		} else {
+			a.logger.Info("Successfully restarted tunnel with new route",
+				"service", svc.Name, "tunnel", svc.Tunnel)
+		}
+	}
+
 	// Enhanced success message
 	successMessage := fmt.Sprintf("Service %s added successfully", svc.Name)
 	if svc.Tunnel != "" {
-		successMessage += fmt.Sprintf(" with route to tunnel %s", svc.Tunnel)
+		successMessage += fmt.Sprintf(" with route to tunnel %s (tunnel restarted)", svc.Tunnel)
 	}
 
 	a.respondWithSuccess(w, successMessage, svc)
+}
+
+// MARK: restartTunnel
+func (a *APIServer) restartTunnel(ctx context.Context, tunnelConfig config.TunnelConfig) error {
+	// Check if tunnel is currently running
+	status, err := a.tunnelManager.Status(ctx, tunnelConfig.Name)
+	if err != nil {
+		return fmt.Errorf("getting tunnel status: %w", err)
+	}
+
+	// Only restart if tunnel is currently running
+	if status.State != "running" {
+		a.logger.Info("Tunnel not running, skipping restart", "tunnel", tunnelConfig.Name)
+		return nil
+	}
+
+	a.logger.Info("Stopping tunnel for restart", "tunnel", tunnelConfig.Name)
+
+	// Stop the tunnel
+	if err := a.tunnelManager.DeleteTunnel(ctx, tunnelConfig.Name); err != nil {
+		return fmt.Errorf("stopping tunnel for restart: %w", err)
+	}
+
+	// Small delay to ensure cleanup
+	time.Sleep(1 * time.Second)
+
+	a.logger.Info("Starting tunnel after restart", "tunnel", tunnelConfig.Name)
+
+	// Start the tunnel again with updated config
+	if err := a.tunnelManager.CreateTunnel(ctx, tunnelConfig); err != nil {
+		return fmt.Errorf("restarting tunnel: %w", err)
+	}
+
+	return nil
 }
 
 // MARK: handleDeleteService
@@ -592,6 +653,36 @@ func (a *APIServer) handleGetTunnel(w http.ResponseWriter, r *http.Request, ctx 
 	a.respondWithSuccess(w, "Tunnel retrieved", status)
 }
 
+// MARK: handleTunnelRestart
+func (a *APIServer) handleTunnelRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	tunnelName := strings.TrimPrefix(r.URL.Path, "/api/v1/tunnels/restart/")
+	if tunnelName == "" {
+		a.respondWithError(w, http.StatusBadRequest, "Tunnel name required")
+		return
+	}
+
+	tunnelConfig := a.cfg.GetTunnel(tunnelName)
+	if tunnelConfig == nil {
+		a.respondWithError(w, http.StatusNotFound, "Tunnel not found")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	if err := a.restartTunnel(ctx, *tunnelConfig); err != nil {
+		a.respondWithError(w, http.StatusInternalServerError, fmt.Sprintf("Failed to restart tunnel: %v", err))
+		return
+	}
+
+	a.respondWithSuccess(w, fmt.Sprintf("Tunnel %s restarted successfully", tunnelName), nil)
+}
+
 // MARK: handleDeleteTunnel
 
 // Removes a tunnel from configuration and stops it
@@ -664,27 +755,40 @@ func (a *APIServer) buildTunnelConfig(req TunnelCreateRequest) config.TunnelConf
 	if req.MTU == 0 {
 		req.MTU = 1420
 	}
+	if req.MonitorInterval == 0 {
+		req.MonitorInterval = 30
+	}
+	if req.StaleConnectionTimeout == 0 {
+		req.StaleConnectionTimeout = 300
+	}
+	if req.ReconnectionRetries == 0 {
+		req.ReconnectionRetries = 3
+	}
 
 	peers := make([]config.PeerConfig, len(req.Peers))
 	for i, peerReq := range req.Peers {
 		peers[i] = config.PeerConfig{
-			Name:       peerReq.Name,
-			PublicKey:  peerReq.PublicKey,
-			AllowedIPs: peerReq.AllowedIPs,
-			Endpoint:   peerReq.Endpoint,
-			Preshared:  peerReq.PresharedKey,
-			Persistent: peerReq.PersistentKeepalive > 0,
+			Name:                   peerReq.Name,
+			PublicKey:              peerReq.PublicKey,
+			AllowedIPs:             peerReq.AllowedIPs,
+			Endpoint:               peerReq.Endpoint,
+			Preshared:              peerReq.PresharedKey,
+			Persistent:             peerReq.PersistentKeepalive > 0,
+			PersistentKeepaliveInt: peerReq.PersistentKeepalive,
 		}
 	}
 
 	return config.TunnelConfig{
-		Name:       req.Name,
-		ListenPort: req.ListenPort,
-		PrivateKey: req.PrivateKey,
-		MTU:        req.MTU,
-		Addresses:  req.Addresses,
-		Routes:     req.Routes,
-		Peers:      peers,
+		Name:                   req.Name,
+		ListenPort:             req.ListenPort,
+		PrivateKey:             req.PrivateKey,
+		MTU:                    req.MTU,
+		Addresses:              req.Addresses,
+		Routes:                 req.Routes,
+		Peers:                  peers,
+		MonitorInterval:        req.MonitorInterval,
+		StaleConnectionTimeout: req.StaleConnectionTimeout,
+		ReconnectionRetries:    req.ReconnectionRetries,
 	}
 }
 

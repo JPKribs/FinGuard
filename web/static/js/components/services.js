@@ -66,7 +66,7 @@ class ServicesManager {
                     <!-- Right column -->
                     <div style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; margin-left: 1rem; padding-left: 1rem; border-left: 1px solid var(--color-border); align-self: stretch;">
                         <span class="status ${service.status === 'running' ? 'running' : 'stopped'}">${service.status}</span>
-                        <button class="btn-danger" onclick="window.ServicesManager.deleteService('${window.Utils.escapeHtml(service.name)}')">Delete</button>                   
+                        <button class="btn-danger btn-small" onclick="window.ServicesManager.deleteService('${window.Utils.escapeHtml(service.name)}')">Delete</button>                   
                     </div>
                 </div>
             `;
@@ -118,6 +118,7 @@ class ServicesManager {
         }
     }
 
+    // MARK: initializeForm
     static initializeForm() {
         const form = document.getElementById('serviceForm');
         if (!form) {
@@ -134,8 +135,9 @@ class ServicesManager {
                 
                 if (this.value) {
                     helpText.innerHTML = `
-                        <small style="color: var(--color-secondary);">
-                            Service IP will be automatically added as a /32 route to tunnel "${this.value}"
+                        <small style="color: var(--color-text-secondary);">
+                            Service IP will be automatically added as a /32 route to tunnel "${this.value}".
+                            <br><strong>Note:</strong> The tunnel will be restarted to activate the route immediately.
                         </small>
                     `;
                     helpText.classList.remove('hidden');
@@ -179,14 +181,24 @@ class ServicesManager {
                 // Show loading state
                 const submitButton = form.querySelector('button[type="submit"]');
                 const originalText = submitButton.textContent;
-                submitButton.textContent = 'Adding Service...';
+                
+                if (service.tunnel) {
+                    submitButton.textContent = 'Adding Service & Restarting Tunnel...';
+                    window.Utils.showAlert('Adding service with tunnel route (tunnel will restart)...', 'info');
+                } else {
+                    submitButton.textContent = 'Adding Service...';
+                }
+                
                 submitButton.disabled = true;
 
                 await window.APIClient.addService(service);
                 
-                const successMessage = service.tunnel ? 
-                    `Service "${service.name}" added successfully with route to tunnel "${service.tunnel}"! 🎉` :
-                    `Service "${service.name}" added successfully! 🎉`;
+                let successMessage;
+                if (service.tunnel) {
+                    successMessage = `Service "${service.name}" added successfully with route to tunnel "${service.tunnel}"! Tunnel has been restarted to activate the route. 🎉`;
+                } else {
+                    successMessage = `Service "${service.name}" added successfully! 🎉`;
+                }
                 
                 window.Utils.showAlert(successMessage, 'success');
                 form.reset();
@@ -199,9 +211,12 @@ class ServicesManager {
                 
                 ServicesManager.loadServices();
                 
-                // Reload tunnels to show updated routes if a tunnel was selected
+                // Reload tunnels to show updated routes and status
                 if (service.tunnel && window.TunnelsManager) {
-                    window.TunnelsManager.loadTunnels();
+                    // Small delay to allow tunnel restart to complete
+                    setTimeout(() => {
+                        window.TunnelsManager.loadTunnels();
+                    }, 2000);
                 }
 
                 // Restore button
@@ -210,7 +225,13 @@ class ServicesManager {
                 
             } catch (error) {
                 console.error('Failed to add service:', error);
-                window.Utils.showAlert(`Failed to add service: ${error.message}`, 'error');
+                
+                let errorMessage = `Failed to add service: ${error.message}`;
+                if (error.message.includes('tunnel')) {
+                    errorMessage += '\n\nNote: The service may have been created but the tunnel restart failed. Check the tunnel status.';
+                }
+                
+                window.Utils.showAlert(errorMessage, 'error');
                 
                 // Restore button
                 const submitButton = form.querySelector('button[type="submit"]');

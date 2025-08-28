@@ -88,7 +88,7 @@
             <div class="two-column">
                 <div>
                     <div class="card">
-                        <h3>Create WireGuard Client</h3>
+                        <h3>Create Tunnel</h3>
                         <form id="tunnelForm">
                             <div class="form-group">
                                 <label>Tunnel Name</label>
@@ -105,8 +105,35 @@
                                 <input type="text" id="tunnelAddress" required>
                             </div>
                             <div class="form-group">
+                                <label>Listen Port (optional)</label>
+                                <input type="number" id="tunnelListenPort" placeholder="0 (auto)" min="0" max="65535">
+                            </div>
+                            <div class="form-group">
                                 <label>MTU</label>
-                                <input type="number" id="tunnelMTU" placeholder="1420" value="1420">
+                                <input type="number" id="tunnelMTU" placeholder="1420" value="1420" min="576" max="65536">
+                            </div>
+
+                            <h4>Advanced Settings</h4>
+                            <div class="form-group">
+                                <label>Monitor Interval (seconds)</label>
+                                <input type="number" id="tunnelMonitorInterval" placeholder="30" value="30" min="10" max="3600">
+                                <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                                    How often to check peer connection health
+                                </small>
+                            </div>
+                            <div class="form-group">
+                                <label>Stale Connection Timeout (seconds)</label>
+                                <input type="number" id="tunnelStaleTimeout" placeholder="300" value="300" min="60" max="7200">
+                                <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                                    When to consider a peer connection stale
+                                </small>
+                            </div>
+                            <div class="form-group">
+                                <label>Reconnection Retries</label>
+                                <input type="number" id="tunnelReconnectRetries" placeholder="3" value="3" min="1" max="10">
+                                <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                                    Maximum reconnection attempts for failed peers
+                                </small>
                             </div>
                             
                             <h4>Peer Configuration</h4>
@@ -129,11 +156,14 @@
                                         <input type="text" class="peer-allowed-ips" placeholder="10.20.0.0/24,10.20.1.0/24" required>
                                     </div>
                                     <div class="form-group">
-                                        <label>Persistent Keepalive</label>
-                                        <input type="number" class="peer-keepalive" placeholder="25" value="25">
+                                        <label>Persistent Keepalive (seconds)</label>
+                                        <input type="number" class="peer-keepalive" placeholder="25" value="25" min="0" max="65535">
+                                        <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                                            Set to 0 to disable keepalive
+                                        </small>
                                     </div>
                                     <div class="form-group">
-                                        <label>Preshared Key</label>
+                                        <label>Preshared Key (optional)</label>
                                         <textarea class="peer-preshared" placeholder="Optional preshared key" rows="2"></textarea>
                                     </div>
                                 </div>
@@ -146,7 +176,6 @@
                         </form>
                     </div>
                 </div>
-                
                 <div>
                     <div class="card">
                         <h3>Active Tunnels</h3>

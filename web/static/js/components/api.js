@@ -66,6 +66,12 @@ class APIClient {
         });
     }
 
+    static async restartTunnel(name) {
+        return await APIClient.apiCall(`/tunnels/restart/${encodeURIComponent(name)}`, {
+            method: 'POST'
+        });
+    }
+
     static async deleteTunnel(name) {
         return await APIClient.apiCall(`/tunnels/${encodeURIComponent(name)}`, { 
             method: 'DELETE' 
