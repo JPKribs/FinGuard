@@ -28,6 +28,21 @@
                 <h3>System Status</h3>
                 <div id="systemStatus"></div>
             </div>
+            
+            <div class="card">
+                <h3>System Controls</h3>
+                <div class="system-controls">
+                    <button onclick="window.StatusManager.restartSystem()" class="btn-warning">
+                        Restart
+                    </button>
+                    <button onclick="window.StatusManager.shutdownSystem()" class="btn-danger">
+                        Shutdown
+                    </button>
+                    <button onclick="window.StatusManager.signOut()" class="btn-secondary">
+                        Sign Out
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Services Tab -->

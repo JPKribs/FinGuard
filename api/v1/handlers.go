@@ -7,8 +7,10 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/JPKribs/FinGuard/config"
@@ -108,6 +110,8 @@ func (a *APIServer) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/v1/tunnels", a.authMiddleware(a.handleTunnels))
 	mux.HandleFunc("/api/v1/tunnels/", a.authMiddleware(a.handleTunnelByName))
 	mux.HandleFunc("/api/v1/tunnels/restart/", a.authMiddleware(a.handleTunnelRestart))
+	mux.HandleFunc("/api/v1/system/restart", a.authMiddleware(a.handleSystemRestart))
+	mux.HandleFunc("/api/v1/system/shutdown", a.authMiddleware(a.handleSystemShutdown))
 	mux.HandleFunc("/api/v1/status", a.authMiddleware(a.handleStatus))
 	mux.HandleFunc("/api/v1/logs", a.authMiddleware(a.handleLogs))
 }
@@ -154,6 +158,54 @@ func (a *APIServer) extractToken(r *http.Request) string {
 	}
 
 	return token
+}
+
+// MARK: handleSystemRestart
+func (a *APIServer) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	a.logger.Info("System restart requested via API")
+
+	// Send response before initiating restart
+	a.respondWithSuccess(w, "System restart initiated", nil)
+
+	// Trigger restart in a goroutine to allow response to be sent
+	go func() {
+		time.Sleep(1 * time.Second) // Give time for response to be sent
+		a.logger.Info("Initiating system restart...")
+
+		// Send SIGTERM to self to trigger graceful shutdown
+		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+			a.logger.Error("Failed to send restart signal", "error", err)
+		}
+	}()
+}
+
+// MARK: handleSystemShutdown
+func (a *APIServer) handleSystemShutdown(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
+		return
+	}
+
+	a.logger.Info("System shutdown requested via API")
+
+	// Send response before initiating shutdown
+	a.respondWithSuccess(w, "System shutdown initiated", nil)
+
+	// Trigger shutdown in a goroutine to allow response to be sent
+	go func() {
+		time.Sleep(1 * time.Second) // Give time for response to be sent
+		a.logger.Info("Initiating system shutdown...")
+
+		// Send SIGTERM to self to trigger graceful shutdown
+		if err := syscall.Kill(os.Getpid(), syscall.SIGTERM); err != nil {
+			a.logger.Error("Failed to send shutdown signal", "error", err)
+		}
+	}()
 }
 
 // MARK: handleServices

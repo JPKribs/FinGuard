@@ -49,6 +49,26 @@ button:active {
     box-shadow: var(--shadow-danger);
 }
 
+.btn-warning {
+    background: linear-gradient(135deg, var(--color-warning), #d97706);
+    color: #000;
+}
+
+.btn-warning:hover {
+    background: linear-gradient(135deg, #d97706, #b45309);
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.btn-secondary {
+    background: linear-gradient(135deg, #6b7280, #4b5563);
+    color: var(--color-text-primary);
+}
+
+.btn-secondary:hover {
+    background: linear-gradient(135deg, #4b5563, #374151);
+    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+}
+
 .btn-small {
     padding: 0.4rem 0.8rem;
     font-size: 0.8rem;
@@ -59,4 +79,20 @@ button:active {
     display: flex;
     gap: 0.5rem;
     align-items: center;
+}
+
+/* System control buttons grid */
+.system-controls {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    width: 100%;
+}
+
+/* Mobile responsive - stack buttons vertically on small screens */
+@media (max-width: 768px) {
+    .system-controls {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
 }

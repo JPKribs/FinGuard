@@ -38,6 +38,18 @@ class APIClient {
         }
     }
 
+    static async restartSystem() {
+        return await APIClient.apiCall('/system/restart', {
+            method: 'POST'
+        });
+    }
+
+    static async shutdownSystem() {
+        return await APIClient.apiCall('/system/shutdown', {
+            method: 'POST'
+        });
+    }
+
     static async getServices() {
         return await APIClient.apiCall('/services');
     }

@@ -27,9 +27,12 @@ const (
 	MaxRetries      = 3
 )
 
-// MARK: main
+var (
+	shouldRestart  = false
+	executablePath string
+)
 
-// Application entry point with command line parsing and error handling
+// MARK: main
 func main() {
 	var (
 		configPath = flag.String("config", "config.yaml", "Path to configuration file")
@@ -42,22 +45,42 @@ func main() {
 		os.Exit(0)
 	}
 
-	app, err := newApplication(*configPath)
+	// Store executable path for restart
+	var err error
+	executablePath, err = os.Executable()
 	if err != nil {
-		log.Fatalf("Failed to initialize application: %v", err)
+		log.Fatalf("Failed to get executable path: %v", err)
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	app.context = ctx
-	app.cancel = cancel
-	defer cancel()
+	// Main application loop for restart handling
+	for {
+		shouldRestart = false
 
-	if err := app.start(ctx); err != nil {
-		log.Fatalf("Failed to start application: %v", err)
+		app, err := newApplication(*configPath)
+		if err != nil {
+			log.Fatalf("Failed to initialize application: %v", err)
+		}
+
+		ctx, cancel := context.WithCancel(context.Background())
+		app.context = ctx
+		app.cancel = cancel
+
+		if err := app.start(ctx); err != nil {
+			cancel()
+			log.Fatalf("Failed to start application: %v", err)
+		}
+
+		app.handleSignals()
+		app.waitGroup.Wait()
+		cancel()
+
+		if !shouldRestart {
+			break
+		}
+
+		log.Println("Restarting application...")
+		time.Sleep(2 * time.Second) // Brief pause before restart
 	}
-
-	app.handleSignals()
-	app.waitGroup.Wait()
 }
 
 // MARK: newApplication
@@ -349,11 +372,9 @@ func (app *Application) startManagementServer() error {
 }
 
 // MARK: handleSignals
-
-// Processes OS signals for graceful shutdown and configuration reload
 func (app *Application) handleSignals() {
 	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM, syscall.SIGHUP, syscall.SIGUSR1)
 
 	app.waitGroup.Add(1)
 	go func() {
@@ -365,8 +386,14 @@ func (app *Application) handleSignals() {
 				switch sig {
 				case syscall.SIGHUP:
 					app.handleReload()
+				case syscall.SIGUSR1:
+					app.logger.Info("Received restart signal")
+					shouldRestart = true
+					app.cancel()
+					return
 				case syscall.SIGINT, syscall.SIGTERM:
 					app.logger.Info("Received shutdown signal", "signal", sig)
+					shouldRestart = false
 					app.cancel()
 					return
 				}

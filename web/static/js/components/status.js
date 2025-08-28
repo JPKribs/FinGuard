@@ -81,6 +81,86 @@ class StatusManager {
         `;
     }
 
+    // MARK: restartSystem
+    static async restartSystem() {
+        if (!confirm('Restart the FinGuard application?\n\nThis will temporarily disconnect all services and tunnels during the restart process.')) {
+            return;
+        }
+
+        try {
+            window.Utils.showAlert('Initiating system restart...', 'info');
+            
+            await window.APIClient.restartSystem();
+            
+            window.Utils.showAlert('System restart initiated! The application will be back online shortly.', 'success');
+            
+            // Show reconnection message after a delay
+            setTimeout(() => {
+                window.Utils.showAlert('Application is restarting. Please refresh the page in a few seconds.', 'info');
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Failed to restart system:', error);
+            window.Utils.showAlert(`Failed to restart system: ${error.message}`, 'error');
+        }
+    }
+
+    // MARK: shutdownSystem
+    static async shutdownSystem() {
+        if (!confirm('Shutdown the FinGuard application?\n\nThis will stop all services and tunnels. You will need to manually restart the application.')) {
+            return;
+        }
+
+        try {
+            window.Utils.showAlert('Initiating system shutdown...', 'warning');
+            
+            await window.APIClient.shutdownSystem();
+            
+            window.Utils.showAlert('System shutdown initiated. The application will stop shortly.', 'success');
+            
+            // Show final message after a delay
+            setTimeout(() => {
+                window.Utils.showAlert('Application is shutting down. This page will become unavailable.', 'warning');
+            }, 2000);
+            
+        } catch (error) {
+            console.error('Failed to shutdown system:', error);
+            window.Utils.showAlert(`Failed to shutdown system: ${error.message}`, 'error');
+        }
+    }
+
+    // MARK: signOut
+    static signOut() {
+        if (!confirm('Sign out of FinGuard?\n\nYou will need to re-enter your admin token to access the interface.')) {
+            return;
+        }
+
+        // Clear token from config and localStorage
+        localStorage.removeItem('adminToken');
+        if (window.FinGuardConfig) {
+            window.FinGuardConfig.ADMIN_TOKEN = null;
+        }
+        
+        window.Utils.showAlert('Signed out successfully. Redirecting to login...', 'success');
+        
+        // Stop any active refresh intervals
+        StatusManager.stopStatusRefresh();
+        if (window.LogsManager) {
+            window.LogsManager.stopLogsRefresh();
+        }
+        
+        // Clear the page content and show auth modal after a brief delay
+        setTimeout(() => {
+            // Hide all content tabs
+            document.querySelectorAll('.content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Show login modal
+            window.AuthManager.showTokenModal();
+        }, 1000);
+    }
+
     static startStatusRefresh() {
         if (StatusManager.statusRefreshInterval) {
             clearInterval(StatusManager.statusRefreshInterval);

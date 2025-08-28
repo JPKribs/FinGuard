@@ -10,6 +10,9 @@ class AuthManager {
     }
 
     static showTokenModal() {
+        // Remove any existing modal first
+        AuthManager.hideTokenModal();
+        
         const modal = document.createElement('div');
         modal.id = 'tokenModal';
         modal.className = 'token-modal';
@@ -22,7 +25,7 @@ class AuthManager {
                         <input type="password" id="tokenInput" placeholder="Enter admin token" required>
                         <div class="token-actions">
                             <button type="submit">Authenticate</button>
-                            <button type="button" onclick="window.AuthManager.clearToken()">Clear Stored Token</button>
+                            <button type="button" onclick="window.AuthManager.clearStoredToken()">Clear Stored Token</button>
                         </div>
                     </div>
                 </form>
@@ -47,10 +50,11 @@ class AuthManager {
     }
 
     static hideTokenModal() {
-        const modal = document.getElementById('tokenModal');
-        if (modal) {
+        // Remove all existing modals
+        const existingModals = document.querySelectorAll('#tokenModal');
+        existingModals.forEach(modal => {
             modal.remove();
-        }
+        });
     }
 
     static showTokenError(message) {
@@ -107,7 +111,21 @@ class AuthManager {
             window.FinGuardConfig.ADMIN_TOKEN = null;
         }
         AuthManager.hideTokenModal();
-        setTimeout(AuthManager.showTokenModal, 100);
+        // Small delay to ensure cleanup is complete
+        setTimeout(() => {
+            AuthManager.showTokenModal();
+        }, 200);
+    }
+
+    static clearStoredToken() {
+        localStorage.removeItem('adminToken');
+        if (window.FinGuardConfig) {
+            window.FinGuardConfig.ADMIN_TOKEN = null;
+        }
+        AuthManager.hideTokenModal();
+        setTimeout(() => {
+            AuthManager.showTokenModal();
+        }, 100);
     }
 }
 
