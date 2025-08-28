@@ -46,12 +46,13 @@ type TunnelManager interface {
 
 // MARK: TunnelStatus
 type TunnelStatus struct {
-	Name      string `json:"name"`
-	State     string `json:"state"`
-	Interface string `json:"interface"`
-	MTU       int    `json:"mtu"`
-	Peers     int    `json:"peers"`
-	Error     string `json:"error,omitempty"`
+	Name      string   `json:"name"`
+	State     string   `json:"state"`
+	Interface string   `json:"interface"`
+	MTU       int      `json:"mtu"`
+	Peers     int      `json:"peers"`
+	Routes    []string `json:"routes,omitempty"`
+	Error     string   `json:"error,omitempty"`
 }
 
 // MARK: TUNDevice

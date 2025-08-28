@@ -19,32 +19,41 @@ class TunnelsManager {
 
     static renderTunnelsList(tunnels) {
         const tunnelsList = document.getElementById('tunnelsList');
-        
+
         if (tunnels.length === 0) {
             tunnelsList.innerHTML = '<p style="color: var(--color-text-secondary); text-align: center; padding: 2rem;">No tunnels configured</p>';
             return;
         }
-        
+
         tunnelsList.innerHTML = tunnels.map(tunnel => {
-            const details = [];
-            
-            if (tunnel.interface) {
-                details.push(`Interface: ${tunnel.interface}`);
-            }
-            
-            details.push(`Peers: ${tunnel.peers || 0}`);
-            details.push(`MTU: ${tunnel.mtu || 'N/A'}`);
-            
+            const infoRows = [];
+            if (tunnel.interface) infoRows.push({ label: 'Interface', value: tunnel.interface });
+            infoRows.push({ label: 'Peers', value: tunnel.peers || 0 });
+            infoRows.push({ label: 'MTU', value: tunnel.mtu || 'N/A' });
+            if (tunnel.routes && tunnel.routes.length > 0) infoRows.push({ label: 'Routes', value: tunnel.routes.join(', ') });
+
             return `
-                <div class="list-item">
-                    <div>
-                        <strong>${window.Utils.escapeHtml(tunnel.name)}</strong><br>
-                        <small>${details.join(' | ')}</small>
+                <div class="list-item" style="display: flex; position: relative;">
+
+                    <!-- Left column -->
+                    <div style="flex: 1; display: flex; flex-direction: column;">
+                        <strong>${window.Utils.escapeHtml(tunnel.name)}</strong>
+                        ${infoRows.map(row => `
+                            <div style="display: flex; justify-content: space-between;">
+                                <small style="color: var(--color-text-secondary);">${row.label}:</small>
+                                <small style="color: var(--color-accent); font-weight: bold; font-family: monospace; display: block;">
+                                    ${window.Utils.escapeHtml(String(row.value))}
+                                </small>
+                            </div>
+                        `).join('')}
                     </div>
-                    <div class="actions">
+
+                    <!-- Right column -->
+                    <div style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; margin-left: 1rem; padding-left: 1rem; border-left: 1px solid var(--color-border); align-self: stretch;">
                         <span class="status ${tunnel.state === 'running' ? 'running' : 'stopped'}">${tunnel.state}</span>
-                        <button class="btn-danger" onclick="window.TunnelsManager.deleteTunnel('${window.Utils.escapeHtml(tunnel.name)}')">Delete</button>
+                        <button class="btn-danger">Delete</button>
                     </div>
+
                 </div>
             `;
         }).join('');

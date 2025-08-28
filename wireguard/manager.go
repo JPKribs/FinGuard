@@ -58,7 +58,7 @@ func (m *Manager) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	m.logger.Info("Stopping optimized WireGuard tunnel manager")
+	m.logger.Info("Stopping WireGuard tunnel manager")
 
 	if m.cancel != nil {
 		m.cancel()

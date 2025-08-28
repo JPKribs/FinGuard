@@ -25,7 +25,7 @@ class ServicesManager {
 
     static renderServicesList(services) {
         const servicesList = document.getElementById('servicesList');
-        
+
         if (services.length === 0) {
             servicesList.innerHTML = '<p style="color: var(--color-text-secondary); text-align: center; padding: 2rem;">No services configured</p>';
             return;
@@ -33,47 +33,119 @@ class ServicesManager {
 
         servicesList.innerHTML = services.map(service => {
             const capabilities = [];
-            if (service.websocket) capabilities.push('✓ WebSocket');
-            if (service.default) capabilities.push('✓ Default');
-            if (service.publish_mdns) capabilities.push('✓ mDNS');
-            
+            if (service.websocket) capabilities.push('WebSocket');
+            if (service.default) capabilities.push('Default');
+            if (service.publish_mdns) capabilities.push('mDNS');
+
+            const serviceIP = ServicesManager.extractIPFromURL(service.upstream);
+
+            const infoRows = [
+                { label: 'Upstream', value: service.upstream },
+                ...(service.tunnel ? [{ label: 'Tunnel', value: service.tunnel }] : []),
+                { label: 'WebSocket', value: service.websocket ? '✓' : '✗' },
+                { label: 'Default', value: service.default ? '✓' : '✗' },
+                { label: 'mDNS', value: service.publish_mdns ? '✓' : '✗' }
+            ];
+
             return `
-                <div class="list-item">
-                    <div class="service-info">
+                <div class="list-item" style="display: flex; position: relative;">
+
+                    <!-- Left column -->
+                    <div style="flex: 1; display: flex; flex-direction: column;">
                         <strong>${window.Utils.escapeHtml(service.name)}.local</strong>
-                        <small>${window.Utils.escapeHtml(service.upstream)}</small>
-                        ${service.tunnel ? `<small>Tunnel: ${window.Utils.escapeHtml(service.tunnel)}</small>` : ''}
-                        ${capabilities.length > 0 ? `<br><small>${capabilities.join(' | ')}</small>` : ''}
+                        ${infoRows.map(row => `
+                            <div style="display: flex; justify-content: space-between;">
+                                <small style="color: var(--color-text-secondary);">${row.label}:</small>
+                                <small style="color: var(--color-accent); font-weight: bold; font-family: monospace; display: block;">
+                                    ${window.Utils.escapeHtml(String(row.value))}
+                                </small>
+                            </div>
+                        `).join('')}
                     </div>
-                    <div class="actions">
+
+                    <!-- Right column -->
+                    <div style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; margin-left: 1rem; padding-left: 1rem; border-left: 1px solid var(--color-border); align-self: stretch;">
                         <span class="status ${service.status === 'running' ? 'running' : 'stopped'}">${service.status}</span>
-                        <button class="btn-danger" onclick="window.ServicesManager.deleteService('${window.Utils.escapeHtml(service.name)}')">Delete</button>
+                        <button class="btn-danger" onclick="window.ServicesManager.deleteService('${window.Utils.escapeHtml(service.name)}')">Delete</button>                   
                     </div>
                 </div>
             `;
         }).join('');
     }
 
+    static extractIPFromURL(url) {
+        try {
+            const urlObj = new URL(url);
+            const hostname = urlObj.hostname;
+            
+            // Check if hostname is already an IP address
+            const ipRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/;
+            if (ipRegex.test(hostname)) {
+                return hostname;
+            }
+            
+            return hostname;
+        } catch (e) {
+            return null;
+        }
+    }
+
     static updateTunnelsDropdown(tunnels) {
         const tunnelSelect = document.getElementById('serviceTunnel');
         tunnelSelect.innerHTML = '<option value="">None</option>' + 
-            tunnels.map(tunnel => `<option value="${window.Utils.escapeHtml(tunnel.name)}">${window.Utils.escapeHtml(tunnel.name)}</option>`).join('');
+            tunnels.map(tunnel => 
+                `<option value="${window.Utils.escapeHtml(tunnel.name)}" title="Service IP will be added as route to this tunnel">
+                    ${window.Utils.escapeHtml(tunnel.name)}
+                </option>`
+            ).join('');
     }
 
     static async deleteService(name) {
-        if (!confirm(`Delete service "${name}"?`)) return;
+        if (!confirm(`Delete service "${name}"?\n\nThis will also remove any associated routes from tunnels.`)) return;
         
         try {
             await window.APIClient.deleteService(name);
-            window.Utils.showAlert(`Service "${name}" deleted successfully`);
+            window.Utils.showAlert(`Service "${name}" deleted successfully (routes removed)`, 'success');
             ServicesManager.loadServices();
+            
+            // Reload tunnels to show updated routes
+            if (window.TunnelsManager) {
+                window.TunnelsManager.loadTunnels();
+            }
         } catch (error) {
             console.error('Failed to delete service:', error);
+            window.Utils.showAlert(`Failed to delete service "${name}": ${error.message}`, 'error');
         }
     }
 
     static initializeForm() {
-        document.getElementById('serviceForm').addEventListener('submit', async (e) => {
+        const form = document.getElementById('serviceForm');
+        if (!form) {
+            console.error('Service form not found');
+            return;
+        }
+
+        // Add help text for tunnel selection
+        const tunnelSelect = document.getElementById('serviceTunnel');
+        if (tunnelSelect) {
+            tunnelSelect.addEventListener('change', function() {
+                const helpText = document.getElementById('tunnelHelpText') || 
+                    ServicesManager.createTunnelHelpText();
+                
+                if (this.value) {
+                    helpText.innerHTML = `
+                        <small style="color: var(--color-secondary);">
+                            Service IP will be automatically added as a /32 route to tunnel "${this.value}"
+                        </small>
+                    `;
+                    helpText.classList.remove('hidden');
+                } else {
+                    helpText.classList.add('hidden');
+                }
+            });
+        }
+
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
             const service = {
@@ -94,16 +166,68 @@ class ServicesManager {
                 window.Utils.showAlert('Service name can only contain letters, numbers, and hyphens', 'error');
                 return;
             }
+
+            // Validate upstream URL
+            try {
+                new URL(service.upstream);
+            } catch (e) {
+                window.Utils.showAlert('Please enter a valid upstream URL (e.g., http://192.168.1.100:8080)', 'error');
+                return;
+            }
             
             try {
+                // Show loading state
+                const submitButton = form.querySelector('button[type="submit"]');
+                const originalText = submitButton.textContent;
+                submitButton.textContent = 'Adding Service...';
+                submitButton.disabled = true;
+
                 await window.APIClient.addService(service);
-                window.Utils.showAlert(`Service "${service.name}" added successfully`);
-                document.getElementById('serviceForm').reset();
+                
+                const successMessage = service.tunnel ? 
+                    `Service "${service.name}" added successfully with route to tunnel "${service.tunnel}"! 🎉` :
+                    `Service "${service.name}" added successfully! 🎉`;
+                
+                window.Utils.showAlert(successMessage, 'success');
+                form.reset();
+                
+                // Hide tunnel help text
+                const helpText = document.getElementById('tunnelHelpText');
+                if (helpText) {
+                    helpText.classList.add('hidden');
+                }
+                
                 ServicesManager.loadServices();
+                
+                // Reload tunnels to show updated routes if a tunnel was selected
+                if (service.tunnel && window.TunnelsManager) {
+                    window.TunnelsManager.loadTunnels();
+                }
+
+                // Restore button
+                submitButton.textContent = originalText;
+                submitButton.disabled = false;
+                
             } catch (error) {
                 console.error('Failed to add service:', error);
+                window.Utils.showAlert(`Failed to add service: ${error.message}`, 'error');
+                
+                // Restore button
+                const submitButton = form.querySelector('button[type="submit"]');
+                submitButton.textContent = 'Add Service';
+                submitButton.disabled = false;
             }
         });
+    }
+
+    static createTunnelHelpText() {
+        const tunnelGroup = document.getElementById('serviceTunnel').closest('.form-group');
+        const helpText = document.createElement('div');
+        helpText.id = 'tunnelHelpText';
+        helpText.className = 'hidden';
+        helpText.style.marginTop = '0.5rem';
+        tunnelGroup.appendChild(helpText);
+        return helpText;
     }
 }
 

@@ -244,6 +244,25 @@ func (c *Config) AddTunnel(tunnel TunnelConfig) error {
 	return c.SaveWireGuard()
 }
 
+// MARK: UpdateTunnel
+
+// Updates an existing WireGuard tunnel configuration and persists it to file.
+func (c *Config) UpdateTunnel(tunnel TunnelConfig) error {
+	if err := c.validateTunnelConfig(tunnel); err != nil {
+		return err
+	}
+
+	// Find and update the tunnel
+	for i, existing := range c.WireGuard.Tunnels {
+		if strings.EqualFold(existing.Name, tunnel.Name) {
+			c.WireGuard.Tunnels[i] = tunnel
+			return c.SaveWireGuard()
+		}
+	}
+
+	return fmt.Errorf("tunnel %s not found", tunnel.Name)
+}
+
 // MARK: RemoveTunnel
 
 // Removes a WireGuard tunnel configuration by name and persists the change.
