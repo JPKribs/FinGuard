@@ -54,7 +54,7 @@ func (l *Logger) addToMemory(level, msg string, context map[string]interface{}) 
 	if len(l.logs) >= maxLogs {
 		l.logs = l.logs[1:]
 	}
-	l.logs = append(l.logs, entry)
+	l.logs = append([]LogEntry{entry}, l.logs...)
 
 	if l.OnLog != nil {
 		l.OnLog(level, msg)

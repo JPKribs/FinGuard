@@ -1,0 +1,17 @@
+server:
+  http_addr: "0.0.0.0:10000"
+  proxy_addr: "0.0.0.0:80"
+  admin_token: "REPLACE_ME_WITH_SECURE_TOKEN"
+
+log:
+  level: "info"
+
+# External config files (will be created automatically)
+services_file: "/etc/finguard/services.yaml"
+wireguard_file: "/etc/finguard/wireguard.yaml"
+
+# Enable mDNS service discovery
+discovery:
+  enable: true
+  mdns:
+    enabled: true
