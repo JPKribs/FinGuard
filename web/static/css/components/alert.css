@@ -33,6 +33,18 @@
     border-left: 4px solid var(--color-danger-darker);
 }
 
+.alert.info {
+    background: linear-gradient(135deg, #3b82f6, #2563eb);
+    color: var(--color-text-primary);
+    border-left: 4px solid #1d4ed8;
+}
+
+.alert.warning {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #000;
+    border-left: 4px solid #b45309;
+}
+
 .alert::before {
     content: '✓';
     font-weight: bold;
@@ -41,4 +53,12 @@
 
 .alert.error::before {
     content: '✗';
+}
+
+.alert.info::before {
+    content: 'ℹ';
+}
+
+.alert.warning::before {
+    content: '⚠';
 }

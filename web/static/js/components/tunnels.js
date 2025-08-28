@@ -17,57 +17,50 @@ class TunnelsManager {
         }
     }
 
-    // Enhanced renderTunnelsList for tunnels.js
-static renderTunnelsList(tunnels) {
-    const tunnelsList = document.getElementById('tunnelsList');
-    
-    if (tunnels.length === 0) {
-        tunnelsList.innerHTML = '<p style="color: var(--color-text-secondary); text-align: center; padding: 2rem;">No tunnels configured</p>';
-        return;
-    }
-    
-    tunnelsList.innerHTML = tunnels.map(tunnel => {
-        const details = [];
+    static renderTunnelsList(tunnels) {
+        const tunnelsList = document.getElementById('tunnelsList');
         
-        // Add interface info if available
-        if (tunnel.interface) {
-            details.push(`Interface: ${tunnel.interface}`);
+        if (tunnels.length === 0) {
+            tunnelsList.innerHTML = '<p style="color: var(--color-text-secondary); text-align: center; padding: 2rem;">No tunnels configured</p>';
+            return;
         }
         
-        // Add peer count
-        details.push(`Peers: ${tunnel.peers || 0}`);
-        
-        // Add MTU
-        details.push(`MTU: ${tunnel.mtu || 'N/A'}`);
-        
-        // Add addresses if available (this would need backend support)
-        // details.push(`Addresses: ${tunnel.addresses ? tunnel.addresses.join(', ') : 'None'}`);
-        
-        return `
-            <div class="list-item">
-                <div>
-                    <strong>${window.Utils.escapeHtml(tunnel.name)}</strong><br>
-                    <small>${details.join(' | ')}</small>
+        tunnelsList.innerHTML = tunnels.map(tunnel => {
+            const details = [];
+            
+            if (tunnel.interface) {
+                details.push(`Interface: ${tunnel.interface}`);
+            }
+            
+            details.push(`Peers: ${tunnel.peers || 0}`);
+            details.push(`MTU: ${tunnel.mtu || 'N/A'}`);
+            
+            return `
+                <div class="list-item">
+                    <div>
+                        <strong>${window.Utils.escapeHtml(tunnel.name)}</strong><br>
+                        <small>${details.join(' | ')}</small>
+                    </div>
+                    <div class="actions">
+                        <span class="status ${tunnel.state === 'running' ? 'running' : 'stopped'}">${tunnel.state}</span>
+                        <button class="btn-danger" onclick="window.TunnelsManager.deleteTunnel('${window.Utils.escapeHtml(tunnel.name)}')">Delete</button>
+                    </div>
                 </div>
-                <div class="actions">
-                    <span class="status ${tunnel.state === 'running' ? 'running' : 'stopped'}">${tunnel.state}</span>
-                    <button class="btn-danger" onclick="window.TunnelsManager.deleteTunnel('${window.Utils.escapeHtml(tunnel.name)}')">Delete</button>
-                </div>
-            </div>
-        `;
-    }).join('');
-}
+            `;
+        }).join('');
+    }
 
     static async deleteTunnel(name) {
         if (!confirm(`Delete tunnel "${name}"? This will also remove any services using this tunnel.`)) return;
         
         try {
             await window.APIClient.deleteTunnel(name);
-            window.Utils.showAlert(`Tunnel "${name}" deleted successfully`);
+            window.Utils.showAlert(`Tunnel "${name}" deleted successfully`, 'success');
             TunnelsManager.loadTunnels();
             window.ServicesManager.loadServices();
         } catch (error) {
             console.error('Failed to delete tunnel:', error);
+            window.Utils.showAlert(`Failed to delete tunnel "${name}": ${error.message}`, 'error');
         }
     }
 
@@ -115,13 +108,81 @@ static renderTunnelsList(tunnels) {
         }
     }
 
+    static scrollToTop() {
+        // Smooth scroll to top of page
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+        
+        // Also scroll the container to top if it exists
+        const container = document.querySelector('.container');
+        if (container) {
+            container.scrollTop = 0;
+        }
+    }
+
+    static clearForm() {
+        // Reset the main form
+        const form = document.getElementById('tunnelForm');
+        if (form) {
+            form.reset();
+        }
+        
+        // Reset MTU to default value
+        const mtuField = document.getElementById('tunnelMTU');
+        if (mtuField) {
+            mtuField.value = '1420';
+        }
+        
+        // Clear all peer configurations except the first one
+        const peerSection = document.getElementById('peerSection');
+        if (peerSection) {
+            // Remove all peer configs except the first
+            const peerConfigs = peerSection.querySelectorAll('.peer-config');
+            for (let i = 1; i < peerConfigs.length; i++) {
+                peerConfigs[i].remove();
+            }
+            
+            // Reset the first peer config
+            const firstPeer = peerSection.querySelector('.peer-config[data-peer-index="0"]');
+            if (firstPeer) {
+                firstPeer.querySelector('.peer-name').value = '';
+                firstPeer.querySelector('.peer-public-key').value = '';
+                firstPeer.querySelector('.peer-endpoint').value = '';
+                firstPeer.querySelector('.peer-allowed-ips').value = '';
+                firstPeer.querySelector('.peer-keepalive').value = '25';
+                firstPeer.querySelector('.peer-preshared').value = '';
+            }
+        }
+        
+        // Reset peer index counter
+        window.FinGuardConfig.peerIndex = 1;
+        
+        // Focus on first field
+        const firstField = document.getElementById('tunnelName');
+        if (firstField) {
+            firstField.focus();
+        }
+    }
+
     static initializeForm() {
-        document.getElementById('tunnelForm').addEventListener('submit', async (e) => {
+        const form = document.getElementById('tunnelForm');
+        if (!form) {
+            console.error('Tunnel form not found');
+            return;
+        }
+
+        form.addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            // Scroll to top immediately to show any loading states
+            TunnelsManager.scrollToTop();
             
             const peers = [];
             const peerConfigs = document.querySelectorAll('.peer-config');
             
+            // Validate and collect peer data
             for (let peerConfig of peerConfigs) {
                 const publicKey = peerConfig.querySelector('.peer-public-key').value.trim();
                 const endpoint = peerConfig.querySelector('.peer-endpoint').value.trim();
@@ -142,31 +203,51 @@ static renderTunnelsList(tunnels) {
                 });
             }
             
-            // Parse routes from form input
-            const routesInput = document.getElementById('tunnelRoutes').value.trim();
-            const routes = routesInput ? routesInput.split(',').map(route => route.trim()).filter(route => route) : [];
+            // Parse routes from form input (if you add this field)
+            const routesInput = document.getElementById('tunnelRoutes');
+            const routes = routesInput && routesInput.value.trim() ? 
+                routesInput.value.trim().split(',').map(route => route.trim()).filter(route => route) : [];
             
             const tunnel = {
                 name: document.getElementById('tunnelName').value.trim(),
-                listen_port: parseInt(document.getElementById('tunnelListenPort').value) || 0,
+                listen_port: parseInt(document.getElementById('tunnelListenPort')?.value) || 0,
                 private_key: document.getElementById('tunnelPrivateKey').value.trim(),
                 mtu: parseInt(document.getElementById('tunnelMTU').value) || 1420,
                 addresses: [document.getElementById('tunnelAddress').value.trim()].filter(addr => addr),
-                routes: routes, // Add routes to tunnel creation
+                routes: routes,
                 peers: peers
             };
             
+            // Validate tunnel data
             if (!TunnelsManager.validateTunnel(tunnel, peers)) {
                 return;
             }
             
             try {
+                // Show loading state
+                window.Utils.showAlert('Creating tunnel...', 'info');
+                
+                // Create the tunnel
                 await window.APIClient.addTunnel(tunnel);
-                window.Utils.showAlert(`Tunnel "${tunnel.name}" created successfully`);
-                TunnelsManager.resetForm();
+                
+                // Success feedback
+                window.Utils.showAlert(`Tunnel "${tunnel.name}" created successfully! 🎉`, 'success');
+                
+                // Clear the form
+                TunnelsManager.clearForm();
+                
+                // Reload tunnel list
                 TunnelsManager.loadTunnels();
+                
+                // Scroll to top to show success message
+                TunnelsManager.scrollToTop();
+                
             } catch (error) {
                 console.error('Failed to create tunnel:', error);
+                window.Utils.showAlert(`Failed to create tunnel: ${error.message}`, 'error');
+                
+                // Scroll to top to show error message
+                TunnelsManager.scrollToTop();
             }
         });
     }
@@ -192,8 +273,8 @@ static renderTunnelsList(tunnels) {
             return false;
         }
         
-        if (!/^[a-zA-Z0-9-]+$/.test(tunnel.name)) {
-            window.Utils.showAlert('Tunnel name can only contain letters, numbers, and hyphens', 'error');
+        if (!/^[a-zA-Z0-9-_]+$/.test(tunnel.name)) {
+            window.Utils.showAlert('Tunnel name can only contain letters, numbers, hyphens, and underscores', 'error');
             return false;
         }
         
@@ -202,42 +283,56 @@ static renderTunnelsList(tunnels) {
             return false;
         }
 
+        // Validate addresses
+        for (const addr of tunnel.addresses) {
+            if (!TunnelsManager.isValidCIDR(addr)) {
+                window.Utils.showAlert(`Invalid address format: ${addr}. Use CIDR notation (e.g., 10.0.0.1/24)`, 'error');
+                return false;
+            }
+        }
+
+        // Validate peer allowed IPs
+        for (const peer of peers) {
+            for (const allowedIP of peer.allowed_ips) {
+                if (!TunnelsManager.isValidCIDR(allowedIP)) {
+                    window.Utils.showAlert(`Invalid allowed IP format for peer ${peer.name}: ${allowedIP}`, 'error');
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    static isValidCIDR(cidr) {
+        // Basic CIDR validation
+        const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/;
+        if (!cidrRegex.test(cidr)) {
+            return false;
+        }
+        
+        const [ip, prefix] = cidr.split('/');
+        const octets = ip.split('.');
+        
+        // Validate IP octets
+        for (const octet of octets) {
+            const num = parseInt(octet);
+            if (num < 0 || num > 255) {
+                return false;
+            }
+        }
+        
+        // Validate prefix
+        const prefixNum = parseInt(prefix);
+        if (prefixNum < 0 || prefixNum > 32) {
+            return false;
+        }
+        
         return true;
     }
 
     static resetForm() {
-        document.getElementById('tunnelForm').reset();
-        document.getElementById('tunnelMTU').value = '1420';
-        
-        document.getElementById('peerSection').innerHTML = `
-            <div class="peer-config" data-peer-index="0">
-                <div class="form-group">
-                    <label>Peer Name</label>
-                    <input type="text" class="peer-name" placeholder="Server">
-                </div>
-                <div class="form-group">
-                    <label>Public Key</label>
-                    <textarea class="peer-public-key" placeholder="WGqWDWQ3aQLK6tD7dlKud4PCK515UpopGgAGc2f7FS4=" rows="2" required></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Endpoint</label>
-                    <input type="text" class="peer-endpoint" placeholder="kelp.ink:6806" required>
-                </div>
-                <div class="form-group">
-                    <label>Allowed IPs (comma-separated)</label>
-                    <input type="text" class="peer-allowed-ips" placeholder="10.20.1.0/24" required>
-                </div>
-                <div class="form-group">
-                    <label>Persistent Keepalive (seconds)</label>
-                    <input type="number" class="peer-keepalive" placeholder="25" value="25">
-                </div>
-                <div class="form-group">
-                    <label>Preshared Key (optional)</label>
-                    <textarea class="peer-preshared" placeholder="Optional preshared key" rows="2"></textarea>
-                </div>
-            </div>
-        `;
-        window.FinGuardConfig.peerIndex = 1;
+        TunnelsManager.clearForm();
     }
 }
 
