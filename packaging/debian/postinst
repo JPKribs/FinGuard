@@ -1,111 +1,154 @@
 #!/bin/bash
 set -e
 
-# MARK: Create finguard user and group
-if ! getent group finguard > /dev/null 2>&1; then
-    echo "Creating finguard group..."
-    addgroup --system --quiet finguard
-fi
-
-if ! getent passwd finguard > /dev/null 2>&1; then
-    echo "Creating finguard user..."
-    adduser --system --quiet \
-        --home /var/lib/finguard \
-        --no-create-home \
-        --shell /usr/sbin/nologin \
-        --group finguard \
-        --gecos "FinGuard System User" \
-        finguard
-fi
-
-# MARK: Add finguard user to necessary groups for network and avahi access
-usermod -a -G netdev finguard 2>/dev/null || true
-usermod -a -G avahi finguard 2>/dev/null || true
-
-# MARK: Create necessary directories
-install -d -o finguard -g finguard -m 0755 /var/lib/finguard
-install -d -o finguard -g finguard -m 0755 /var/log/finguard
-install -d -o finguard -g finguard -m 0755 /run/finguard
-install -d -o root -g root -m 0755 /etc/finguard
-
-# MARK: Set proper permissions on config files
-if [ -f /etc/finguard/config.yaml ]; then
-    chown root:finguard /etc/finguard/config.yaml
-    chmod 640 /etc/finguard/config.yaml
-fi
-
-if [ -f /etc/finguard/services.yaml ]; then
-    chown finguard:finguard /etc/finguard/services.yaml
-    chmod 644 /etc/finguard/services.yaml
-fi
-
-if [ -f /etc/finguard/wireguard.yaml ]; then
-    chown finguard:finguard /etc/finguard/wireguard.yaml
-    chmod 600 /etc/finguard/wireguard.yaml  # More restrictive for WireGuard keys
-fi
-
-# MARK: Set capabilities on the binary for TUN device creation
-if [ -f /usr/local/bin/finguard ]; then
-    echo "Setting network capabilities on FinGuard binary..."
-    setcap cap_net_admin,cap_net_raw+ep /usr/local/bin/finguard || {
-        echo "Warning: Failed to set capabilities. You may need to run as root."
-        echo "Manual command: sudo setcap cap_net_admin,cap_net_raw+ep /usr/local/bin/finguard"
-    }
-fi
-
-# MARK: Enable and start systemd service
-if [ -x /bin/systemctl ]; then
-    echo "Enabling FinGuard systemd service..."
-    systemctl daemon-reload
-    systemctl enable finguard.service
-    
-    # Only start if config exists and contains a valid admin token
-    if [ -f /etc/finguard/config.yaml ]; then
-        if grep -q "admin_token.*REPLACE_ME" /etc/finguard/config.yaml 2>/dev/null; then
-            echo ""
-            echo "WARNING: Please update the admin_token in /etc/finguard/config.yaml before starting"
-            echo "Then run: sudo systemctl start finguard"
-        else
-            echo "Starting FinGuard service..."
-            systemctl start finguard.service || {
-                echo "Failed to start FinGuard. Check logs with: journalctl -u finguard"
-            }
+# MARK: Debian postinst script for FinGuard
+case "$1" in
+    configure)
+        # MARK: Create finguard user and group with proper Debian handling
+        if ! getent group finguard > /dev/null 2>&1; then
+            echo "Creating finguard group..."
+            if command -v addgroup >/dev/null 2>&1; then
+                addgroup --system --quiet finguard
+            else
+                groupadd --system finguard
+            fi
         fi
-    else
-        echo "No configuration file found. Please create /etc/finguard/config.yaml"
-    fi
-fi
 
-# MARK: Create logrotate configuration
-cat > /etc/logrotate.d/finguard << 'EOF'
-/var/log/finguard/*.log {
-    daily
-    missingok
-    rotate 30
-    compress
-    delaycompress
-    copytruncate
-    notifempty
-    su finguard finguard
-}
-EOF
+        if ! getent passwd finguard > /dev/null 2>&1; then
+            echo "Creating finguard user..."
+            if command -v adduser >/dev/null 2>&1; then
+                adduser --system --quiet \
+                    --home /var/lib/finguard \
+                    --no-create-home \
+                    --shell /usr/sbin/nologin \
+                    --ingroup finguard \
+                    --gecos "FinGuard System User" \
+                    finguard
+            else
+                useradd --system \
+                    --home-dir /var/lib/finguard \
+                    --no-create-home \
+                    --shell /usr/sbin/nologin \
+                    --gid finguard \
+                    --comment "FinGuard System User" \
+                    finguard
+            fi
+        fi
 
-echo ""
-echo "FinGuard installation completed!"
-echo ""
-echo "Configuration files:"
-echo "  - Main config: /etc/finguard/config.yaml"
-echo "  - Services:    /etc/finguard/services.yaml"
-echo "  - WireGuard:   /etc/finguard/wireguard.yaml"
-echo ""
-echo "Service management:"
-echo "  - Status:  sudo systemctl status finguard"
-echo "  - Start:   sudo systemctl start finguard"
-echo "  - Stop:    sudo systemctl stop finguard"
-echo "  - Restart: sudo systemctl restart finguard"
-echo "  - Logs:    journalctl -u finguard -f"
-echo ""
-echo "Web interface will be available at: http://localhost:10000"
-echo ""
+        # MARK: Add finguard user to necessary groups
+        if getent group netdev >/dev/null 2>&1; then
+            usermod -a -G netdev finguard 2>/dev/null || true
+        fi
+        
+        if getent group avahi >/dev/null 2>&1; then
+            usermod -a -G avahi finguard 2>/dev/null || true
+        fi
+
+        # MARK: Create necessary directories with proper ownership
+        install -d -o finguard -g finguard -m 0755 /var/lib/finguard
+        install -d -o finguard -g finguard -m 0755 /var/log/finguard
+        
+        if [ ! -d /run/finguard ]; then
+            install -d -o finguard -g finguard -m 0755 /run/finguard
+        fi
+        
+        install -d -o root -g root -m 0755 /etc/finguard
+
+        # MARK: Set proper permissions on config files
+        if [ -f /etc/finguard/config.yaml ]; then
+            chown root:finguard /etc/finguard/config.yaml
+            chmod 640 /etc/finguard/config.yaml
+        fi
+
+        if [ -f /etc/finguard/services.yaml ]; then
+            chown finguard:finguard /etc/finguard/services.yaml
+            chmod 644 /etc/finguard/services.yaml
+        fi
+
+        if [ -f /etc/finguard/wireguard.yaml ]; then
+            chown finguard:finguard /etc/finguard/wireguard.yaml
+            chmod 600 /etc/finguard/wireguard.yaml
+        fi
+
+        if [ -f /etc/finguard/update.yaml ]; then
+            chown finguard:finguard /etc/finguard/update.yaml
+            chmod 644 /etc/finguard/update.yaml
+        fi
+
+        # MARK: Set capabilities on the binary for TUN device creation
+        if [ -f /usr/local/bin/finguard ]; then
+            echo "Setting network capabilities on FinGuard binary..."
+            if command -v setcap >/dev/null 2>&1; then
+                setcap cap_net_admin,cap_net_raw+ep /usr/local/bin/finguard || {
+                    echo "Warning: Failed to set capabilities. You may need to run as root."
+                    echo "Manual command: sudo setcap cap_net_admin,cap_net_raw+ep /usr/local/bin/finguard"
+                }
+            else
+                echo "Warning: setcap not found. Install libcap2-bin package for proper capabilities."
+                echo "Without capabilities, FinGuard must run as root for TUN device access."
+            fi
+        fi
+
+        # MARK: Enable systemd service
+        if [ -x /bin/systemctl ] || [ -x /usr/bin/systemctl ]; then
+            echo "Enabling FinGuard systemd service..."
+            systemctl daemon-reload
+            systemctl enable finguard.service
+            
+            # MARK: Check if config is ready and start service
+            if [ -f /etc/finguard/config.yaml ]; then
+                if grep -q "admin_token.*REPLACE_ME" /etc/finguard/config.yaml 2>/dev/null; then
+                    echo ""
+                    echo "*** CONFIGURATION REQUIRED ***"
+                    echo "Please update the admin_token in /etc/finguard/config.yaml before starting"
+                    echo "Then run: sudo systemctl start finguard"
+                    echo ""
+                else
+                    echo "Starting FinGuard service..."
+                    systemctl start finguard.service || {
+                        echo "Failed to start FinGuard. Check logs with: journalctl -u finguard"
+                        echo "Common issues:"
+                        echo "  - Check config syntax: /etc/finguard/config.yaml"
+                        echo "  - Verify network capabilities are set"
+                        echo "  - Ensure no port conflicts (default: 10000)"
+                    }
+                fi
+            else
+                echo "Warning: No configuration file found at /etc/finguard/config.yaml"
+            fi
+        else
+            echo "Warning: systemctl not found. Manual service management required."
+        fi
+
+        # MARK: Display post-installation information
+        echo ""
+        echo "==================================="
+        echo "FinGuard installation completed!"
+        echo "==================================="
+        echo ""
+        echo "Configuration files:"
+        echo "  - Main config: /etc/finguard/config.yaml"
+        echo "  - Services:    /etc/finguard/services.yaml"
+        echo "  - WireGuard:   /etc/finguard/wireguard.yaml"
+        echo ""
+        echo "Service management:"
+        echo "  - Start:   sudo systemctl start finguard"
+        echo "  - Stop:    sudo systemctl stop finguard"
+        echo "  - Status:  sudo systemctl status finguard"
+        echo "  - Logs:    journalctl -u finguard -f"
+        echo ""
+        echo "Web interface will be available at:"
+        echo "  http://localhost:10000"
+        echo ""
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument '$1'" >&2
+        exit 1
+        ;;
+esac
 
 exit 0
