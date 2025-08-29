@@ -2,75 +2,48 @@
 
 <img src="branding/FinGuard.png" alt="FinGuard Logo" width="200"/>
 
-**A high-performance userspace WireGuard proxy with web management and mDNS service discovery**
+**UserSpace WireGuard Service to Proxy Specific Traffic to Services**
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat-square&logo=go)](https://golang.org/)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
-[![Build Status](https://img.shields.io/badge/Build-Passing-success?style=flat-square)](https://github.com/JPKribs/FinGuard)
 
-[Features](#features) • [Quick Start](#quick-start) • [Web UI](#web-management-interface) • [Configuration](#configuration) • [Architecture](#architecture)
+[Purpose](#purpose) • [Quick Start](#quick-start) • [Configuration](#configuration)
 
 </div>
 
-## Features
+## Purpose
 
-**Advanced HTTP Proxy**
-- Subdomain-based routing (`jellyfin.local` → backend services)
-- WebSocket support for real-time applications
-- Connection pooling and health monitoring
-- Enhanced error handling and logging
+This tool allows a local machine or SBC to act as a bridge to services behind WireGuard. This enables services to be be accessible in remote locations, without needing to put the entire network behind WireGuard or install WireGuard on every network device. Using Avahi, services are broadcast using friendly `service.local` syntax for ease of use. 
 
-**Userspace WireGuard**
-- Full WireGuard implementation without kernel modules
-- Cross-platform TUN devices (macOS, Linux, Windows)
-- Dynamic tunnel management via web interface
-- Automatic route table updates
-- Peer connection monitoring with reconnection logic
-
-**Web Management Interface** 
-- Modern dark theme with glassmorphism design
-- Real-time service and tunnel management
-- Mobile responsive design
-- Live system monitoring and structured logs
-- Token-based authentication
-
-**mDNS Service Discovery**
-- Automatic service advertising via Bonjour/Avahi
-- TXT record metadata for service capabilities
-- Zero-config networking between services
-- Cross-platform discovery support
-
-**Enterprise Features**
-- Structured JSON logging with contextual data
-- Health endpoints for Kubernetes integration
-- Graceful shutdown and configuration reload
-- Built-in metrics and monitoring
+This project was originally created with Jellyfin in mind.
 
 ## Quick Start
 
 ### Prerequisites
 - Go 1.24+ (for building from source)
 - sudo privileges (for TUN device creation)
-- WireGuard tools (optional, for key generation)
 
-### Installation
+### Systemd Installation (Debian)
 
 ```bash
 # Clone the repository
 git clone https://github.com/JPKribs/FinGuard.git
 cd FinGuard
 
-# Build the binary
-make build
+# Run the build script
+./packaging/debian/build-deb.sh
 
-# Start with default configuration
-sudo ./bin/finguard --config config.yaml
+# Install the built file
+sudo dpkg -i *deb file produced in build*
+
+# Start the service
+sudo systemctl start finguard
 ```
 
 ### First Run
 
 1. Open the web interface: `http://localhost:10000`
-2. Enter your admin token from `config.yaml`
+2. Enter your admin token from `/etc/finguard/config.yaml`
 3. Add services through the Services tab
 4. Configure WireGuard tunnels through the Tunnels tab
 
@@ -78,58 +51,42 @@ sudo ./bin/finguard --config config.yaml
 
 ### File Structure
 ```
-FinGuard/
-├── config.yaml          # Main server configuration
-├── services.yaml        # HTTP service definitions (auto-generated)
-├── wireguard.yaml       # WireGuard tunnel configs (auto-generated)
-├── web/                 # Web management interface
-│   ├── index.html
-│   └── static/
-└── utilities/           # Utility packages
+- Main config: /etc/finguard/config.yaml
+- Services:    /etc/finguard/services.yaml
+- WireGuard:   /etc/finguard/wireguard.yaml
+- Update:      /etc/finguard/update.yaml
 ```
 
 ### Main Configuration (`config.yaml`)
 ```yaml
 server:
-  http_addr: "0.0.0.0:10000"    # Management interface port
-  proxy_addr: "0.0.0.0:80"      # Proxy server port
-  admin_token: "your-secure-token-here"  # Change this!
+  http_addr: "0.0.0.0:10000"
+  proxy_addr: "0.0.0.0:80"
+  admin_token: "your-secure-token-here"
 
 log:
-  level: "info"                 # debug, info, warn, error
+  level: "info"
 
+# External config files
 services_file: "services.yaml"
 wireguard_file: "wireguard.yaml"
+update_file: "update.yaml"
 
+# Enables Avahi & mDNS
 discovery:
   enable: true
   mdns:
-    enabled: true              # Enable mDNS/Bonjour
+    enabled: true
 ```
 
 ## Usage Examples
 
-### Adding Services via Web Interface
-Services can be added through the web interface at `http://localhost:10000`. Each service creates a subdomain route:
+### Adding Tunnels via Web Interface
+Tunnels can be added through the web interface at `http://localhost:10000`. Each tunnel requires at least one peer. 
 
-- `jellyfin.local` → `http://192.168.1.100:8096`
-- `homeassistant.local` → `http://192.168.1.50:8123`
-- Default service catches unmatched requests
+<img width="360" height="713" alt="Screenshot 2025-08-29 at 10 24 42" src="https://github.com/user-attachments/assets/622905c8-3c7b-47f3-b824-a6a12a92a55e" />
 
-### Adding Services via API
-```bash
-curl -X POST http://localhost:10000/api/v1/services \
-  -H "Authorization: Bearer your-token" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "myapp",
-    "upstream": "http://192.168.1.100:8080",
-    "websocket": true,
-    "publish_mdns": true
-  }'
-```
-
-### Creating WireGuard Tunnels
+### Adding Tunnels via API
 ```bash
 # Generate keys
 wg genkey > private.key
@@ -154,124 +111,27 @@ curl -X POST http://localhost:10000/api/v1/tunnels \
   }'
 ```
 
-### Health Monitoring
+### Adding Services via Web Interface
+Services can be added through the web interface at `http://localhost:10000`. Each service creates a "subdomain" route in Avahi:
+
+- `jellyfin.local` → `http://192.168.1.100:8096`
+- `homeassistant.local` → `http://192.168.1.50:8123`
+- Services marked as default will be used for any unmatched requests
+- A Tunnel must be selected for traffic to route over the tunnel
+
+<img width="795" height="652" alt="Screenshot 2025-08-29 at 10 25 22" src="https://github.com/user-attachments/assets/8a89666e-c66a-4bfa-b869-9d950c65ff82" />
+
+### Adding Services via API
 ```bash
-# System health
-curl http://localhost:10000/healthz
-curl http://localhost:10000/readyz
-
-# Detailed status
-curl -H "Authorization: Bearer your-token" \
-     http://localhost:10000/api/v1/status
-```
-
-## Build System
-
-### Available Make Targets
-```bash
-make build          # Build the binary
-make run            # Build and run with config.yaml
-make test           # Run unit tests
-make test-race      # Run tests with race detection
-make clean          # Clean build artifacts
-make fmt            # Format Go code
-make vet            # Run go vet
-make tidy           # Tidy go modules
-make deps           # Download dependencies
-make all            # Run fmt, vet, test, and build
-```
-
-### Manual Build
-```bash
-# Standard build
-go build -o bin/finguard ./
-
-# Or using the main package path if structured differently
-go build -o bin/finguard .
-```
-
-## Architecture
-
-### Core Components
-- **Web Interface**: Management UI and REST API
-- **HTTP Proxy**: Reverse proxy with subdomain routing
-- **WireGuard Manager**: Tunnel lifecycle and monitoring
-- **Config Manager**: File parsing, validation, hot reload
-- **mDNS Discovery**: Service advertising and discovery
-
-### Package Structure
-```
-├── main.go                  # Application entry point
-├── api/v1/                 # REST API handlers
-├── config/                 # Configuration management
-├── proxy/                  # HTTP reverse proxy
-├── wireguard/             # WireGuard tunnel management
-├── discovery/             # mDNS service discovery
-├── internal/              # Shared utilities (logging, health)
-├── utilities/             # Common utilities (time, etc.)
-└── web/                   # Static web assets
-```
-
-## Logging
-
-FinGuard uses structured JSON logging with dual output:
-- **Console**: JSON format for production use
-- **Web Interface**: Formatted logs with context data via `/api/v1/logs`
-
-Log entries include:
-- Timestamp, level, message
-- Structured context (method, host, status, duration, etc.)
-- Pagination and filtering support
-- In-memory storage (last 500 entries)
-
-## Security Considerations
-
-**Required Privileges**
-- TUN device creation requires `CAP_NET_ADMIN` or sudo
-- Port binding <1024 requires elevated privileges
-
-**Best Practices**
-- Change default admin token in `config.yaml`
-- Use reverse proxy (nginx/caddy) for HTTPS termination
-- Secure WireGuard private keys (`chmod 600`)
-- Regular security updates
-
-## Troubleshooting
-
-**TUN Device Issues**
-```bash
-# Grant capabilities
-sudo setcap cap_net_admin+ep ./bin/finguard
-
-# Or run with sudo
-sudo ./bin/finguard --config config.yaml
-```
-
-**Service Connectivity**
-```bash
-# Check service status
-curl -H "Authorization: Bearer token" \
-     http://localhost:10000/api/v1/services
-
-# Test upstream directly
-curl http://upstream-ip:port
-```
-
-**Debug Logging**
-```bash
-# Enable debug logs
-echo 'log:\n  level: "debug"' >> config.yaml
-./bin/finguard --config config.yaml
-```
-
-## Signal Handling
-
-```bash
-# Reload configuration (SIGHUP)
-kill -HUP $(pgrep finguard)
-
-# Graceful shutdown (SIGTERM/SIGINT)
-kill -TERM $(pgrep finguard)
+curl -X POST http://localhost:10000/api/v1/services \
+  -H "Authorization: Bearer your-token" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "myapp",
+    "upstream": "http://192.168.1.100:8080",
+    "websocket": true,
+    "publish_mdns": true
+  }'
 ```
 
 ## License
