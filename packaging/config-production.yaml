@@ -9,16 +9,10 @@ log:
 # External config files (will be created automatically)
 services_file: "/etc/finguard/services.yaml"
 wireguard_file: "/etc/finguard/wireguard.yaml"
+update_file: "/etc/finguard/update.yaml"
 
 # Enable mDNS service discovery
 discovery:
   enable: true
   mdns:
     enabled: true
-  
-# Auto-update configuration
-update:
-  enabled: false           # Set to true to enable auto-updates
-  schedule: "0 3 * * *"    # Daily at 3 AM (cron format)
-  auto_apply: false        # Set to true to automatically apply updates
-  backup_dir: "./backups"  # Directory to store backups
