@@ -1,6 +1,6 @@
 module github.com/JPKribs/FinGuard
 
-go 1.24.2
+go 1.24
 
 require (
 	github.com/godbus/dbus/v5 v5.0.4

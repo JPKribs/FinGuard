@@ -75,17 +75,23 @@ case "$1" in
             chmod 644 /etc/finguard/update.yaml
         fi
 
-        # MARK: Set capabilities on the binary for TUN device creation
+        # MARK: Set capabilities on the binary for TUN device creation and port 80 binding
         if [ -f /usr/local/bin/finguard ]; then
             echo "Setting network capabilities on FinGuard binary..."
             if command -v setcap >/dev/null 2>&1; then
-                setcap cap_net_admin,cap_net_raw+ep /usr/local/bin/finguard || {
+                # Set capabilities for TUN device creation and binding to privileged ports
+                setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard || {
                     echo "Warning: Failed to set capabilities. You may need to run as root."
-                    echo "Manual command: sudo setcap cap_net_admin,cap_net_raw+ep /usr/local/bin/finguard"
+                    echo "Manual command: sudo setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard"
                 }
+                
+                # Verify capabilities were set correctly
+                if getcap /usr/local/bin/finguard >/dev/null 2>&1; then
+                    echo "Capabilities set successfully: $(getcap /usr/local/bin/finguard)"
+                fi
             else
                 echo "Warning: setcap not found. Install libcap2-bin package for proper capabilities."
-                echo "Without capabilities, FinGuard must run as root for TUN device access."
+                echo "Without capabilities, FinGuard must run as root for TUN device access and port 80 binding."
             fi
         fi
 
