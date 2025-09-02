@@ -11,6 +11,7 @@ import (
 const maxLogs = 500
 
 // MARK: NewLogger
+// Initializes a new Logger with specified log level and in-memory log buffer
 func NewLogger(level string) *Logger {
 	var logLevel slog.Level
 	switch strings.ToLower(level) {
@@ -40,6 +41,7 @@ func NewLogger(level string) *Logger {
 }
 
 // MARK: addToMemory
+// Adds a log entry to the in-memory buffer
 func (l *Logger) addToMemory(level, msg string, context map[string]interface{}) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -62,6 +64,7 @@ func (l *Logger) addToMemory(level, msg string, context map[string]interface{}) 
 }
 
 // MARK: convertArgsToContext
+// Converts variadic key-value pairs into a context map
 func convertArgsToContext(args []any) map[string]interface{} {
 	if len(args) == 0 {
 		return nil
@@ -83,6 +86,7 @@ func convertArgsToContext(args []any) map[string]interface{} {
 }
 
 // MARK: GetLogs
+// Returns in-memory logs, optionally filtered by level
 func (l *Logger) GetLogs(level string) []LogEntry {
 	l.mu.Lock()
 	defer l.mu.Unlock()
@@ -101,6 +105,7 @@ func (l *Logger) GetLogs(level string) []LogEntry {
 }
 
 // MARK: Debug
+// Logs a debug-level message
 func (l *Logger) Debug(msg string, args ...any) {
 	context := convertArgsToContext(args)
 	l.addToMemory("DEBUG", msg, context)
@@ -108,6 +113,7 @@ func (l *Logger) Debug(msg string, args ...any) {
 }
 
 // MARK: Info
+// Logs an info-level message
 func (l *Logger) Info(msg string, args ...any) {
 	context := convertArgsToContext(args)
 	l.addToMemory("INFO", msg, context)
@@ -115,6 +121,7 @@ func (l *Logger) Info(msg string, args ...any) {
 }
 
 // MARK: Warn
+// Logs a warning-level message
 func (l *Logger) Warn(msg string, args ...any) {
 	context := convertArgsToContext(args)
 	l.addToMemory("WARN", msg, context)
@@ -122,6 +129,7 @@ func (l *Logger) Warn(msg string, args ...any) {
 }
 
 // MARK: Error
+// Logs an error-level message
 func (l *Logger) Error(msg string, args ...any) {
 	context := convertArgsToContext(args)
 	l.addToMemory("ERROR", msg, context)

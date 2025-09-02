@@ -37,7 +37,7 @@ func main() {
 	flag.Parse()
 
 	if *version {
-		fmt.Printf("FinGuard-Go v%s\n", Version)
+		fmt.Printf("FinGuard v%s\n", Version)
 		os.Exit(0)
 	}
 

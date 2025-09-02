@@ -27,8 +27,7 @@ const (
 )
 
 // MARK: Load
-
-// Loads and validates configuration from the specified YAML file.
+// Loads configuration from YAML file, applies defaults, validates, and loads external configs.
 func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -54,6 +53,7 @@ func Load(path string) (*Config, error) {
 }
 
 // MARK: setDefaults
+// Applies default values to server, update, services, and WireGuard tunnel settings.
 func (c *Config) setDefaults() {
 	if c.Server.HTTPAddr == "" {
 		c.Server.HTTPAddr = DefaultHTTPAddr
@@ -74,7 +74,6 @@ func (c *Config) setDefaults() {
 		c.UpdateFile = UpdateFileName
 	}
 
-	// Set update defaults
 	if c.Update.Schedule == "" {
 		c.Update.Schedule = DefaultUpdateSchedule
 	}
@@ -82,7 +81,6 @@ func (c *Config) setDefaults() {
 		c.Update.BackupDir = "./backups"
 	}
 
-	// Existing setDefaults code for tunnels...
 	for i := range c.WireGuard.Tunnels {
 		tunnel := &c.WireGuard.Tunnels[i]
 		if tunnel.MTU == 0 {
@@ -110,6 +108,7 @@ func (c *Config) setDefaults() {
 }
 
 // MARK: loadExternalConfigs
+// Loads services, WireGuard, and update configuration files from disk.
 func (c *Config) loadExternalConfigs() error {
 	if err := c.loadServicesFile(); err != nil {
 		return fmt.Errorf("loading services file: %w", err)
@@ -124,8 +123,7 @@ func (c *Config) loadExternalConfigs() error {
 }
 
 // MARK: loadServicesFile
-
-// Loads service configurations from external YAML file or creates empty file.
+// Loads or creates the services.yaml configuration file.
 func (c *Config) loadServicesFile() error {
 	if _, err := os.Stat(c.ServicesFile); os.IsNotExist(err) {
 		return c.createEmptyFile(c.ServicesFile, struct {
@@ -151,8 +149,7 @@ func (c *Config) loadServicesFile() error {
 }
 
 // MARK: loadWireGuardFile
-
-// Loads WireGuard configurations from external YAML file or creates empty file.
+// Loads or creates the wireguard.yaml configuration file.
 func (c *Config) loadWireGuardFile() error {
 	if _, err := os.Stat(c.WireGuardFile); os.IsNotExist(err) {
 		return c.createEmptyFile(c.WireGuardFile, WireGuardConfig{})
@@ -171,6 +168,7 @@ func (c *Config) loadWireGuardFile() error {
 }
 
 // MARK: loadUpdateFile
+// Loads or creates the update.yaml configuration file.
 func (c *Config) loadUpdateFile() error {
 	if _, err := os.Stat(c.UpdateFile); os.IsNotExist(err) {
 		return c.createEmptyFile(c.UpdateFile, UpdateConfig{
@@ -194,6 +192,7 @@ func (c *Config) loadUpdateFile() error {
 }
 
 // MARK: createEmptyFile
+// Helper to create an empty YAML file from a struct.
 func (c *Config) createEmptyFile(filename string, structure interface{}) error {
 	data, err := yaml.Marshal(structure)
 	if err != nil {
@@ -203,7 +202,6 @@ func (c *Config) createEmptyFile(filename string, structure interface{}) error {
 }
 
 // MARK: SaveServices
-
 // Persists current service configurations to external file.
 func (c *Config) SaveServices() error {
 	return c.saveToFile(c.ServicesFile, struct {
@@ -212,15 +210,13 @@ func (c *Config) SaveServices() error {
 }
 
 // MARK: SaveWireGuard
-
-// Persists current WireGuard configurations to external file.
+// Persists the current WireGuard configuration to file.
 func (c *Config) SaveWireGuard() error {
 	return c.saveToFile(c.WireGuardFile, c.WireGuard)
 }
 
 // MARK: saveToFile
-
-// Generic helper to marshal and save configuration structures to YAML files.
+// Generic helper for marshaling any struct to a YAML file.
 func (c *Config) saveToFile(filename string, data interface{}) error {
 	yamlData, err := yaml.Marshal(data)
 	if err != nil {
@@ -230,8 +226,7 @@ func (c *Config) saveToFile(filename string, data interface{}) error {
 }
 
 // MARK: AddService
-
-// Adds a new service configuration and persists it to file.
+// Adds a new service configuration and saves to file.
 func (c *Config) AddService(svc ServiceConfig) error {
 	if err := c.validateServiceConfig(svc); err != nil {
 		return err
@@ -248,8 +243,7 @@ func (c *Config) AddService(svc ServiceConfig) error {
 }
 
 // MARK: RemoveService
-
-// Removes a service configuration by name and persists the change.
+// Removes a service configuration by name and saves to file.
 func (c *Config) RemoveService(name string) error {
 	for i, svc := range c.Services {
 		if strings.EqualFold(svc.Name, name) {
@@ -261,8 +255,7 @@ func (c *Config) RemoveService(name string) error {
 }
 
 // MARK: AddTunnel
-
-// Adds a new WireGuard tunnel configuration and persists it to file.
+// Adds a new WireGuard tunnel configuration and persists it.
 func (c *Config) AddTunnel(tunnel TunnelConfig) error {
 	if err := c.validateTunnelConfig(tunnel); err != nil {
 		return err
@@ -279,8 +272,7 @@ func (c *Config) AddTunnel(tunnel TunnelConfig) error {
 }
 
 // MARK: UpdateTunnel
-
-// Updates an existing WireGuard tunnel configuration and persists it to file.
+// Updates an existing WireGuard tunnel configuration and persists it.
 func (c *Config) UpdateTunnel(tunnel TunnelConfig) error {
 	if err := c.validateTunnelConfig(tunnel); err != nil {
 		return err
@@ -298,8 +290,7 @@ func (c *Config) UpdateTunnel(tunnel TunnelConfig) error {
 }
 
 // MARK: RemoveTunnel
-
-// Removes a WireGuard tunnel configuration by name and persists the change.
+// Removes a WireGuard tunnel configuration by name and persists it.
 func (c *Config) RemoveTunnel(name string) error {
 	for i, tunnel := range c.WireGuard.Tunnels {
 		if strings.EqualFold(tunnel.Name, name) {
@@ -311,8 +302,7 @@ func (c *Config) RemoveTunnel(name string) error {
 }
 
 // MARK: validate
-
-// Performs comprehensive validation of the entire configuration.
+// Validates the entire configuration including server, tunnels, and services.
 func (c *Config) validate() error {
 	if c.Server.AdminToken == "" || c.Server.AdminToken == "REPLACE_ME" {
 		return fmt.Errorf("admin_token must be set to a secure value")
@@ -339,8 +329,7 @@ func (c *Config) validate() error {
 }
 
 // MARK: validateTunnelConfig
-
-// Validates a single tunnel configuration for correctness.
+// Validates a single WireGuard tunnel configuration.
 func (c *Config) validateTunnelConfig(tunnel TunnelConfig) error {
 	if tunnel.Name == "" {
 		return fmt.Errorf("tunnel name cannot be empty")
@@ -374,8 +363,7 @@ func (c *Config) validateTunnelConfig(tunnel TunnelConfig) error {
 }
 
 // MARK: validatePeerConfig
-
-// Validates a peer configuration within a tunnel.
+// Validates a single peer configuration within a tunnel.
 func (c *Config) validatePeerConfig(peer PeerConfig, tunnelName string) error {
 	if peer.Name == "" {
 		return fmt.Errorf("peer in tunnel %s missing name", tunnelName)
@@ -402,8 +390,7 @@ func (c *Config) validatePeerConfig(peer PeerConfig, tunnelName string) error {
 }
 
 // MARK: validateServiceConfig
-
-// Validates a service configuration for correctness.
+// Validates a single service configuration.
 func (c *Config) validateServiceConfig(svc ServiceConfig) error {
 	if svc.Name == "" {
 		return fmt.Errorf("service name cannot be empty")
@@ -420,8 +407,7 @@ func (c *Config) validateServiceConfig(svc ServiceConfig) error {
 }
 
 // MARK: validateEndpoint
-
-// Validates a WireGuard endpoint address format.
+// Validates a WireGuard peer endpoint address.
 func (c *Config) validateEndpoint(endpoint string) error {
 	parts := strings.Split(endpoint, ":")
 	if len(parts) != 2 {
@@ -437,8 +423,7 @@ func (c *Config) validateEndpoint(endpoint string) error {
 }
 
 // MARK: GetTunnel
-
-// Finds a tunnel configuration by name using case-insensitive matching.
+// Returns a WireGuard tunnel configuration by name.
 func (c *Config) GetTunnel(name string) *TunnelConfig {
 	for i := range c.WireGuard.Tunnels {
 		if strings.EqualFold(c.WireGuard.Tunnels[i].Name, name) {
@@ -449,8 +434,7 @@ func (c *Config) GetTunnel(name string) *TunnelConfig {
 }
 
 // MARK: GetServicesByTunnel
-
-// Returns all services that use the specified tunnel.
+// Returns all services associated with a given tunnel.
 func (c *Config) GetServicesByTunnel(tunnelName string) []ServiceConfig {
 	services := make([]ServiceConfig, 0)
 	for _, svc := range c.Services {
@@ -462,8 +446,7 @@ func (c *Config) GetServicesByTunnel(tunnelName string) []ServiceConfig {
 }
 
 // MARK: GetPortFromAddr
-
-// Extracts port number from address string, defaulting to 80 on error.
+// Extracts the port number from an address string, defaulting to 80.
 func GetPortFromAddr(addr string) int {
 	parts := strings.Split(addr, ":")
 	if len(parts) != 2 {
@@ -479,17 +462,18 @@ func GetPortFromAddr(addr string) int {
 }
 
 // MARK: SaveUpdate
+// Persists the update configuration to file.
 func (c *Config) SaveUpdate() error {
 	return c.saveToFile(c.UpdateFile, c.Update)
 }
 
 // MARK: UpdateUpdateConfig
+// Updates the update configuration and validates basic cron format.
 func (c *Config) UpdateUpdateConfig(cfg UpdateConfig) error {
 	if cfg.Schedule == "" {
 		return fmt.Errorf("schedule cannot be empty")
 	}
 
-	// Basic cron validation
 	fields := strings.Fields(cfg.Schedule)
 	if len(fields) != 5 {
 		return fmt.Errorf("invalid cron format, expected 5 fields")

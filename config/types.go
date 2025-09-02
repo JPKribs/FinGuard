@@ -1,19 +1,19 @@
 package config
 
-// MARK: config.go
-
+// MARK: Config
 type Config struct {
 	Server        ServerConfig    `yaml:"server"`
 	WireGuard     WireGuardConfig `yaml:"wireguard"`
 	Services      []ServiceConfig `yaml:"services"`
 	Discovery     DiscoveryConfig `yaml:"discovery"`
 	Log           LogConfig       `yaml:"log"`
-	Update        UpdateConfig    `yaml:"update"` // New field
+	Update        UpdateConfig    `yaml:"update"`
 	ServicesFile  string          `yaml:"services_file"`
 	WireGuardFile string          `yaml:"wireguard_file"`
-	UpdateFile    string          `yaml:"update_file"` // New field
+	UpdateFile    string          `yaml:"update_file"`
 }
 
+// MARK: UpdateConfig
 type UpdateConfig struct {
 	Enabled   bool   `yaml:"enabled"`
 	Schedule  string `yaml:"schedule"`
@@ -21,20 +21,24 @@ type UpdateConfig struct {
 	BackupDir string `yaml:"backup_dir"`
 }
 
+// MARK: ServerConfig
 type ServerConfig struct {
 	HTTPAddr   string `yaml:"http_addr"`
 	ProxyAddr  string `yaml:"proxy_addr"`
 	AdminToken string `yaml:"admin_token"`
 }
 
+// MARK: LogConfig
 type LogConfig struct {
 	Level string `yaml:"level"`
 }
 
+// MARK: WireGuardConfig
 type WireGuardConfig struct {
 	Tunnels []TunnelConfig `yaml:"tunnels"`
 }
 
+// MARK: TunnelConfig
 type TunnelConfig struct {
 	Name                   string       `yaml:"name"`
 	ListenPort             int          `yaml:"listen_port"`
@@ -48,6 +52,7 @@ type TunnelConfig struct {
 	ReconnectionRetries    int          `yaml:"reconnection_retries"`
 }
 
+// MARK: PeerConfig
 type PeerConfig struct {
 	Name                   string   `yaml:"name"`
 	PublicKey              string   `yaml:"public_key"`
@@ -58,6 +63,7 @@ type PeerConfig struct {
 	PersistentKeepaliveInt int      `yaml:"persistent_keepalive_interval"`
 }
 
+// MARK: ServiceConfig
 type ServiceConfig struct {
 	Name        string `yaml:"name" json:"name"`
 	Upstream    string `yaml:"upstream" json:"upstream"`
@@ -67,11 +73,13 @@ type ServiceConfig struct {
 	Tunnel      string `yaml:"tunnel" json:"tunnel"`
 }
 
+// MARK: DiscoveryConfig
 type DiscoveryConfig struct {
 	Enable bool       `yaml:"enable"`
 	MDNS   MDNSConfig `yaml:"mdns"`
 }
 
+// MARK: MDNSConfig
 type MDNSConfig struct {
 	Enabled bool `yaml:"enabled"`
 }

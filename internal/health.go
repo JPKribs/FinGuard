@@ -7,16 +7,16 @@ import (
 	"time"
 )
 
-// MARK: NewHealthChecker
+const version = "1.0.3"
 
-// Creates a new health checker with alive status set to true by default.
+// MARK: NewHealthChecker
+// Creates a new health checker with alive status set to true by default
 func NewHealthChecker() *HealthChecker {
 	return &HealthChecker{alive: 1}
 }
 
 // MARK: SetReady
-
-// Updates the readiness status of the service.
+// Updates the readiness status of the service
 func (hc *HealthChecker) SetReady(ready bool) {
 	value := int64(0)
 	if ready {
@@ -26,8 +26,7 @@ func (hc *HealthChecker) SetReady(ready bool) {
 }
 
 // MARK: SetAlive
-
-// Updates the liveness status of the service.
+// Updates the liveness status of the service
 func (hc *HealthChecker) SetAlive(alive bool) {
 	value := int64(0)
 	if alive {
@@ -37,12 +36,11 @@ func (hc *HealthChecker) SetAlive(alive bool) {
 }
 
 // MARK: LivenessHandler
-
-// HTTP handler for Kubernetes-style liveness probes.
+// HTTP handler for Kubernetes-style liveness probes
 func (hc *HealthChecker) LivenessHandler(w http.ResponseWriter, r *http.Request) {
 	status := HealthStatus{
 		Timestamp: time.Now(),
-		Version:   "0.1.0",
+		Version:   version,
 	}
 
 	if atomic.LoadInt64(&hc.alive) == 1 {
@@ -58,12 +56,11 @@ func (hc *HealthChecker) LivenessHandler(w http.ResponseWriter, r *http.Request)
 }
 
 // MARK: ReadinessHandler
-
-// HTTP handler for Kubernetes-style readiness probes.
+// HTTP handler for Kubernetes-style readiness probes
 func (hc *HealthChecker) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 	status := HealthStatus{
 		Timestamp: time.Now(),
-		Version:   "0.1.0",
+		Version:   version,
 	}
 
 	if atomic.LoadInt64(&hc.ready) == 1 {

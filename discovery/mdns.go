@@ -11,25 +11,21 @@ import (
 	"github.com/JPKribs/FinGuard/config"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/godbus/dbus/v5"
-	"github.com/grandcat/zeroconf"
 	"github.com/holoplot/go-avahi"
 )
 
-//Mark: NewDiscovery
-
-// Creates a new mDNS service discovery manager.
+// MARK: NewDiscovery
+// Creates a new mDNS service discovery manager using Avahi only.
 func NewDiscovery(logger *internal.Logger) *Discovery {
 	return &Discovery{
 		logger:      logger,
 		entryGroups: make(map[string]*avahi.EntryGroup),
-		servers:     make(map[string]*zeroconf.Server),
 		stopChan:    make(chan struct{}),
 	}
 }
 
-//Mark: Start
-
-// Initializes the mDNS publisher and determines the local IP address.
+// MARK: Start
+// Initializes the Avahi publisher and determines the local IP address.
 func (d *Discovery) Start(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -44,9 +40,10 @@ func (d *Discovery) Start(ctx context.Context) error {
 	}
 	d.localIP = localIP
 
-	d.useAvahi = d.tryAvahi()
-	if !d.useAvahi {
-		d.logger.Info("Avahi not available, using zeroconf fallback")
+	if !d.tryAvahi() {
+		d.logger.Warn("Avahi Unavailable: mDNS services will be disabled")
+		d.running = false
+		return nil
 	}
 
 	hostname, err := d.getHostname()
@@ -55,20 +52,15 @@ func (d *Discovery) Start(ctx context.Context) error {
 	}
 	d.hostName = hostname
 
-	d.logger.Info("Starting mDNS publisher",
-		"local_ip", localIP,
-		"hostname", hostname,
-		"backend", d.getBackendName())
+	d.logger.Info("Starting mDNS publisher", "local_ip", localIP, "hostname", hostname)
 	d.running = true
 
 	go d.monitorServices(ctx)
-
 	return nil
 }
 
-//Mark: tryAvahi
-
-// Attempts to initialize Avahi, returns true if successful.
+// MARK: tryAvahi
+// Attempts to initialize Avahi; returns true if successful.
 func (d *Discovery) tryAvahi() bool {
 	if runtime.GOOS != "linux" {
 		return false
@@ -92,19 +84,8 @@ func (d *Discovery) tryAvahi() bool {
 	return true
 }
 
-//Mark: getBackendName
-
-// Returns the name of the mDNS backend being used.
-func (d *Discovery) getBackendName() string {
-	if d.useAvahi {
-		return "avahi"
-	}
-	return "zeroconf"
-}
-
-//Mark: Stop
-
-// Shuts down all published services and stops the mDNS publisher.
+// MARK: Stop
+// Shuts down all published Avahi services.
 func (d *Discovery) Stop(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -114,41 +95,28 @@ func (d *Discovery) Stop(ctx context.Context) error {
 	}
 
 	d.logger.Info("Stopping mDNS publisher")
-
 	close(d.stopChan)
 
-	if d.useAvahi {
-		for name, entryGroup := range d.entryGroups {
-			if err := entryGroup.Reset(); err != nil {
-				d.logger.Error("Failed to reset entry group", "name", name, "error", err)
-			}
-			d.logger.Debug("Stopped publishing service", "name", name)
+	for name, entryGroup := range d.entryGroups {
+		if err := entryGroup.Reset(); err != nil {
+			d.logger.Error("Failed to reset entry group", "name", name, "error", err)
 		}
+		d.logger.Debug("Stopped publishing service", "name", name)
+	}
+	d.entryGroups = make(map[string]*avahi.EntryGroup)
 
-		if d.server != nil {
-			d.server.Close()
-		}
-
-		if d.conn != nil {
-			d.conn.Close()
-		}
-
-		d.entryGroups = make(map[string]*avahi.EntryGroup)
-	} else {
-		for name, server := range d.servers {
-			server.Shutdown()
-			d.logger.Debug("Stopped publishing service", "name", name)
-		}
-
-		d.servers = make(map[string]*zeroconf.Server)
+	if d.server != nil {
+		d.server.Close()
+	}
+	if d.conn != nil {
+		d.conn.Close()
 	}
 
 	d.running = false
 	return nil
 }
 
-//Mark: getLocalIP
-
+// MARK: getLocalIP
 // Finds the best available IPv4 address for mDNS advertising.
 func (d *Discovery) getLocalIP() (string, error) {
 	interfaces, err := net.Interfaces()
@@ -157,7 +125,6 @@ func (d *Discovery) getLocalIP() (string, error) {
 	}
 
 	var candidates []string
-
 	for _, iface := range interfaces {
 		if iface.Flags&net.FlagLoopback != 0 || iface.Flags&net.FlagUp == 0 {
 			continue
@@ -182,37 +149,30 @@ func (d *Discovery) getLocalIP() (string, error) {
 	if len(candidates) > 0 {
 		return candidates[0], nil
 	}
-
 	return "", fmt.Errorf("no suitable network interface found")
 }
 
-//Mark: getHostname
-
-// Determines the system hostname for mDNS registration.
+// MARK: getHostname
+// Determines the system hostname for Avahi registration.
 func (d *Discovery) getHostname() (string, error) {
-	if d.useAvahi && d.server != nil {
+	if d.server != nil {
 		hostname, err := d.server.GetHostName()
 		if err == nil && hostname != "" {
 			return hostname, nil
 		}
-
 		hostname, err = d.server.GetHostNameFqdn()
 		if err == nil && hostname != "" {
 			return strings.TrimSuffix(hostname, "."), nil
 		}
 	}
-
 	hostname, err := net.LookupAddr(d.localIP)
 	if err == nil && len(hostname) > 0 {
-		host := hostname[0]
-		return strings.TrimSuffix(host, "."), nil
+		return strings.TrimSuffix(hostname[0], "."), nil
 	}
-
 	return "finguard-host", nil
 }
 
-//Mark: isPrivateIP
-
+// MARK: isPrivateIP
 // Determines if an IP address is in a private network range.
 func (d *Discovery) isPrivateIP(ip net.IP) bool {
 	privateRanges := []string{
@@ -220,7 +180,6 @@ func (d *Discovery) isPrivateIP(ip net.IP) bool {
 		"172.16.0.0/12",
 		"192.168.0.0/16",
 	}
-
 	for _, cidr := range privateRanges {
 		_, block, _ := net.ParseCIDR(cidr)
 		if block.Contains(ip) {
@@ -230,14 +189,13 @@ func (d *Discovery) isPrivateIP(ip net.IP) bool {
 	return false
 }
 
-//Mark: PublishService
-
-// Advertises a service via mDNS with comprehensive metadata.
+// MARK: PublishService
+// Advertises a service via Avahi; skipped if Avahi unavailable.
 func (d *Discovery) PublishService(svc config.ServiceConfig, proxyPort int) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
-	if !svc.PublishMDNS || !d.running {
+	if !svc.PublishMDNS || !d.running || d.server == nil {
 		return nil
 	}
 
@@ -245,15 +203,10 @@ func (d *Discovery) PublishService(svc config.ServiceConfig, proxyPort int) erro
 	if serviceName == "" {
 		return fmt.Errorf("service name cannot be empty")
 	}
-
-	if d.useAvahi {
-		return d.publishServiceAvahi(serviceName, svc, proxyPort)
-	}
-	return d.publishServiceZeroconf(serviceName, svc, proxyPort)
+	return d.publishServiceAvahi(serviceName, svc, proxyPort)
 }
 
-//Mark: publishServiceAvahi
-
+// MARK: publishServiceAvahi
 // Publishes service using Avahi backend.
 func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceConfig, proxyPort int) error {
 	txtRecords := d.buildTXTRecords(svc)
@@ -292,57 +245,18 @@ func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceCo
 	}
 
 	d.entryGroups[serviceName] = entryGroup
-	d.logger.Info("Published mDNS service via Avahi",
-		"name", serviceName,
-		"port", proxyPort,
-		"host", d.hostName,
-		"txt_records", len(txtRecords))
-
+	d.logger.Info("Published mDNS service via Avahi", "name", serviceName, "port", proxyPort, "host", d.hostName, "txt_records", len(txtRecords))
 	return nil
 }
 
-//Mark: publishServiceZeroconf
-
-// Publishes service using zeroconf backend.
-func (d *Discovery) publishServiceZeroconf(serviceName string, svc config.ServiceConfig, proxyPort int) error {
-	txtRecords := d.buildTXTRecords(svc)
-
-	if existingServer, exists := d.servers[serviceName]; exists {
-		existingServer.Shutdown()
-	}
-
-	server, err := zeroconf.Register(
-		serviceName,
-		"_http._tcp",
-		"local.",
-		proxyPort,
-		txtRecords,
-		nil,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to publish service %s: %w", serviceName, err)
-	}
-
-	d.servers[serviceName] = server
-	d.logger.Info("Published mDNS service via zeroconf",
-		"name", serviceName,
-		"port", proxyPort,
-		"ip", d.localIP,
-		"txt_records", len(txtRecords))
-
-	return nil
-}
-
-//Mark: buildTXTRecords
-
-// Creates TXT records for mDNS service advertisement.
+// MARK: buildTXTRecords
+// Creates TXT records for Avahi service advertisement.
 func (d *Discovery) buildTXTRecords(svc config.ServiceConfig) []string {
 	records := []string{
 		fmt.Sprintf("service=%s", svc.Name),
 		fmt.Sprintf("upstream=%s", svc.Upstream),
 		"path=/",
 	}
-
 	if svc.Websocket {
 		records = append(records, "websocket=true")
 	}
@@ -352,12 +266,10 @@ func (d *Discovery) buildTXTRecords(svc config.ServiceConfig) []string {
 	if svc.Tunnel != "" {
 		records = append(records, fmt.Sprintf("tunnel=%s", svc.Tunnel))
 	}
-
 	return records
 }
 
-//Mark: convertTXTRecords
-
+// MARK: convertTXTRecords
 // Converts string slice to byte slice slice for Avahi API.
 func (d *Discovery) convertTXTRecords(records []string) [][]byte {
 	result := make([][]byte, len(records))
@@ -367,65 +279,44 @@ func (d *Discovery) convertTXTRecords(records []string) [][]byte {
 	return result
 }
 
-//Mark: UnpublishService
-
-// Removes a service from mDNS advertisement.
+// MARK: UnpublishService
+// Removes a service from Avahi advertisement.
 func (d *Discovery) UnpublishService(serviceName string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	serviceName = strings.ToLower(serviceName)
-
-	if d.useAvahi {
-		if entryGroup, exists := d.entryGroups[serviceName]; exists {
-			if err := entryGroup.Reset(); err != nil {
-				d.logger.Error("Failed to reset entry group", "name", serviceName, "error", err)
-			}
-			delete(d.entryGroups, serviceName)
-			d.logger.Info("Unpublished mDNS service", "name", serviceName)
+	if entryGroup, exists := d.entryGroups[serviceName]; exists {
+		if err := entryGroup.Reset(); err != nil {
+			d.logger.Error("Failed to reset entry group", "name", serviceName, "error", err)
 		}
-	} else {
-		if server, exists := d.servers[serviceName]; exists {
-			server.Shutdown()
-			delete(d.servers, serviceName)
-			d.logger.Info("Unpublished mDNS service", "name", serviceName)
-		}
+		delete(d.entryGroups, serviceName)
+		d.logger.Info("Unpublished mDNS service", "name", serviceName)
 	}
 }
 
-//Mark: ListServices
-
-// Returns a list of currently published service names.
+// MARK: ListServices
+// Returns a list of currently published Avahi service names.
 func (d *Discovery) ListServices() []string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 
-	if d.useAvahi {
-		services := make([]string, 0, len(d.entryGroups))
-		for name := range d.entryGroups {
-			services = append(services, name)
-		}
-		return services
-	} else {
-		services := make([]string, 0, len(d.servers))
-		for name := range d.servers {
-			services = append(services, name)
-		}
-		return services
+	services := make([]string, 0, len(d.entryGroups))
+	for name := range d.entryGroups {
+		services = append(services, name)
 	}
+	return services
 }
 
-//Mark: IsReady
-
-// Reports whether the mDNS publisher is running and ready to advertise services.
+// MARK: IsReady
+// Reports whether the Avahi publisher is running.
 func (d *Discovery) IsReady() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.running
 }
 
-//Mark: monitorServices
-
+// MARK: monitorServices
 // Monitors service health and performs periodic maintenance.
 func (d *Discovery) monitorServices(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
@@ -443,8 +334,7 @@ func (d *Discovery) monitorServices(ctx context.Context) {
 	}
 }
 
-//Mark: healthCheck
-
+// MARK: healthCheck
 // Performs health check on all published services.
 func (d *Discovery) healthCheck() {
 	d.mu.RLock()
@@ -454,16 +344,8 @@ func (d *Discovery) healthCheck() {
 		return
 	}
 
-	var serviceCount int
-	if d.useAvahi {
-		serviceCount = len(d.entryGroups)
-	} else {
-		serviceCount = len(d.servers)
-	}
-
+	serviceCount := len(d.entryGroups)
 	if serviceCount > 0 {
-		d.logger.Debug("mDNS services active",
-			"count", serviceCount,
-			"backend", d.getBackendName())
+		d.logger.Debug("mDNS services active", "count", serviceCount)
 	}
 }
