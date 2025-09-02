@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"sync/atomic"
 	"time"
-)
 
-const version = "1.0.3"
+	"github.com/JPKribs/FinGuard/version"
+)
 
 // MARK: NewHealthChecker
 // Creates a new health checker with alive status set to true by default
@@ -40,7 +40,7 @@ func (hc *HealthChecker) SetAlive(alive bool) {
 func (hc *HealthChecker) LivenessHandler(w http.ResponseWriter, r *http.Request) {
 	status := HealthStatus{
 		Timestamp: time.Now(),
-		Version:   version,
+		Version:   version.AsString(),
 	}
 
 	if atomic.LoadInt64(&hc.alive) == 1 {
@@ -60,7 +60,7 @@ func (hc *HealthChecker) LivenessHandler(w http.ResponseWriter, r *http.Request)
 func (hc *HealthChecker) ReadinessHandler(w http.ResponseWriter, r *http.Request) {
 	status := HealthStatus{
 		Timestamp: time.Now(),
-		Version:   version,
+		Version:   version.AsString(),
 	}
 
 	if atomic.LoadInt64(&hc.ready) == 1 {

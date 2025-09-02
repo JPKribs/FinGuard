@@ -4,15 +4,15 @@ import (
 	"net/http"
 
 	"github.com/JPKribs/FinGuard/config"
-	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
+	"github.com/JPKribs/FinGuard/mdns"
 	"github.com/JPKribs/FinGuard/proxy"
 	"github.com/JPKribs/FinGuard/updater"
 	"github.com/JPKribs/FinGuard/wireguard"
 )
 
 // MARK: NewAPIServer
-func NewAPIServer(cfg *config.Config, proxyServer *proxy.Server, tunnelManager wireguard.TunnelManager, discoveryManager *discovery.Discovery, logger *internal.Logger, updateManager *updater.UpdateManager) *APIServer {
+func NewAPIServer(cfg *config.Config, proxyServer *proxy.Server, tunnelManager wireguard.TunnelManager, discoveryManager *mdns.Discovery, logger *internal.Logger, updateManager *updater.UpdateManager) *APIServer {
 	return &APIServer{
 		cfg:              cfg,
 		proxyServer:      proxyServer,

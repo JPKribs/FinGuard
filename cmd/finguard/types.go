@@ -6,8 +6,8 @@ import (
 	"sync"
 
 	"github.com/JPKribs/FinGuard/config"
-	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
+	"github.com/JPKribs/FinGuard/mdns"
 	"github.com/JPKribs/FinGuard/proxy"
 	"github.com/JPKribs/FinGuard/updater"
 	"github.com/JPKribs/FinGuard/wireguard"
@@ -20,7 +20,7 @@ type Application struct {
 	healthCheck      *internal.HealthChecker
 	tunnelManager    wireguard.TunnelManager
 	proxyServer      *proxy.Server
-	discoveryManager *discovery.Discovery
+	discoveryManager *mdns.Discovery
 	updateManager    *updater.UpdateManager
 	server           *http.Server
 	context          context.Context

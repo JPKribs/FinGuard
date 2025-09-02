@@ -67,6 +67,7 @@ type PeerConfig struct {
 type ServiceConfig struct {
 	Name        string `yaml:"name" json:"name"`
 	Upstream    string `yaml:"upstream" json:"upstream"`
+	Jellyfin    bool   `yaml:"jellyfin" json:"jellyfin"`
 	Websocket   bool   `yaml:"websocket" json:"websocket"`
 	PublishMDNS bool   `yaml:"publish_mdns" json:"publish_mdns"`
 	Default     bool   `yaml:"default" json:"default"`

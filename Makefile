@@ -2,11 +2,10 @@
 
 BINARY_NAME=finguard
 BUILD_DIR=bin
-VERSION=1.0.3
 
 build:
 	mkdir -p $(BUILD_DIR)
-	CGO_ENABLED=0 go build -ldflags "-X main.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/finguard
+	CGO_ENABLED=0 go build -ldflags "-X github.com/JPKribs/FinGuard/version.Version=$(VERSION)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/finguard
 
 test:
 	go test -v ./...
