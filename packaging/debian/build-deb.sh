@@ -15,7 +15,7 @@ esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.0.2"
+VERSION="1.0.3"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
 echo "Version: $VERSION"
