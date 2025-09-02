@@ -66,7 +66,7 @@ func (t *Tunnel) Start(ctx context.Context) error {
 		return fmt.Errorf("tunnel %s already running", t.name)
 	}
 
-	t.logger.Info("Starting optimized tunnel", "name", t.name)
+	t.logger.Info("Starting  tunnel", "name", t.name)
 
 	ctx, cancel := context.WithTimeout(ctx, deviceStartTimeout)
 	defer cancel()
@@ -100,7 +100,7 @@ func (t *Tunnel) Start(ctx context.Context) error {
 	}
 
 	atomic.StoreInt64(&t.running, 1)
-	t.logger.Info("Optimized tunnel started", "name", t.name, "interface", t.tunDev.Name())
+	t.logger.Info("Tunnel started", "name", t.name, "interface", t.tunDev.Name())
 
 	t.startMonitoring(ctx)
 	return nil
@@ -113,7 +113,7 @@ func (t *Tunnel) Stop(ctx context.Context) error {
 		return nil
 	}
 
-	t.logger.Info("Stopping optimized tunnel", "name", t.name)
+	t.logger.Info("Stopping tunnel", "name", t.name)
 
 	t.stopMonitoringRoutine()
 
@@ -146,7 +146,7 @@ func (t *Tunnel) Stop(ctx context.Context) error {
 	case <-done:
 	}
 
-	t.logger.Info("Optimized tunnel stopped", "name", t.name)
+	t.logger.Info("Tunnel stopped", "name", t.name)
 	return nil
 }
 
@@ -272,7 +272,7 @@ func (t *Tunnel) cleanupRoutes() {
 }
 
 // MARK: createWireGuardDevice
-// Creates the WireGuard device with optimized TUN wrapper
+// Creates the WireGuard device with TUN wrapper
 func (t *Tunnel) createWireGuardDevice() error {
 	tunWrapper := &TUNWrapper{
 		iface:      t.tunDev.File(),
@@ -355,7 +355,7 @@ func (t *Tunnel) monitorConnections(ctx context.Context) {
 	lastHandshakes := make(map[string]time.Time)
 	resolvedEndpoints := make(map[string]string)
 
-	t.logger.Info("Starting optimized connection monitor",
+	t.logger.Info("Starting connection monitor",
 		"tunnel", t.name,
 		"interval", monitorInterval,
 		"stale_timeout", staleTimeout)

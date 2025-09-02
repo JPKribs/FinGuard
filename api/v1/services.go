@@ -1,9 +1,12 @@
 package v1
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/JPKribs/FinGuard/config"
@@ -40,7 +43,6 @@ func (a *APIServer) handleServiceByName(w http.ResponseWriter, r *http.Request) 
 }
 
 // MARK: handleListServices
-// Lists all configured services with their current status
 func (a *APIServer) handleListServices(w http.ResponseWriter, r *http.Request) {
 	services := a.proxyServer.ListServices()
 	statusList := make([]ServiceStatusResponse, 0, len(services))
@@ -67,7 +69,6 @@ func (a *APIServer) handleListServices(w http.ResponseWriter, r *http.Request) {
 }
 
 // MARK: handleAddService
-// Adds a new service configuration
 func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 	var req ServiceCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -88,6 +89,13 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 	if err := a.validateServiceConfig(serviceConfig); err != nil {
 		a.respondWithError(w, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	if serviceConfig.Tunnel != "" {
+		if err := a.handleServiceTunnelRoute(&serviceConfig); err != nil {
+			a.respondWithError(w, http.StatusInternalServerError, "Failed to manage tunnel route: "+err.Error())
+			return
+		}
 	}
 
 	if err := a.cfg.AddService(serviceConfig); err != nil {
@@ -118,6 +126,15 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 
 // MARK: handleDeleteService
 func (a *APIServer) handleDeleteService(w http.ResponseWriter, r *http.Request, serviceName string) {
+	services := a.proxyServer.ListServices()
+	var serviceToDelete *config.ServiceConfig
+	for i := range services {
+		if strings.EqualFold(services[i].Name, serviceName) {
+			serviceToDelete = &services[i]
+			break
+		}
+	}
+
 	if err := a.proxyServer.RemoveService(serviceName); err != nil {
 		a.respondWithError(w, http.StatusNotFound, "Service not found")
 		return
@@ -125,6 +142,17 @@ func (a *APIServer) handleDeleteService(w http.ResponseWriter, r *http.Request, 
 
 	if err := a.cfg.RemoveService(serviceName); err != nil {
 		a.logger.Warn("Failed to remove service from config", "service", serviceName, "error", err)
+	}
+
+	if serviceToDelete != nil && serviceToDelete.Tunnel != "" {
+		if err := a.removeServiceTunnelRoute(serviceToDelete); err != nil {
+			a.logger.Error("Failed to remove tunnel route for deleted service",
+				"service", serviceName, "tunnel", serviceToDelete.Tunnel, "error", err)
+		}
+	}
+
+	if a.discoveryManager != nil {
+		a.discoveryManager.UnpublishService(serviceName)
 	}
 
 	a.respondWithSuccess(w, "Service deleted", nil)
@@ -146,6 +174,153 @@ func (a *APIServer) handleGetService(w http.ResponseWriter, r *http.Request, ser
 	}
 
 	a.respondWithSuccess(w, "Service retrieved", response)
+}
+
+// MARK: handleServiceTunnelRoute
+func (a *APIServer) handleServiceTunnelRoute(serviceConfig *config.ServiceConfig) error {
+	serviceIP, err := a.extractIPFromUpstream(serviceConfig.Upstream)
+	if err != nil {
+		return fmt.Errorf("failed to extract IP from upstream %s: %w", serviceConfig.Upstream, err)
+	}
+
+	tunnelConfig, err := a.findTunnelByName(serviceConfig.Tunnel)
+	if err != nil {
+		return fmt.Errorf("tunnel %s not found: %w", serviceConfig.Tunnel, err)
+	}
+
+	hostRoute := serviceIP + "/32"
+	if !a.routeExists(tunnelConfig.Routes, hostRoute) {
+		tunnelConfig.Routes = append(tunnelConfig.Routes, hostRoute)
+		if err := a.cfg.UpdateTunnel(*tunnelConfig); err != nil {
+			return fmt.Errorf("failed to update tunnel configuration: %w", err)
+		}
+		if err := a.restartTunnelForRouteChanges(serviceConfig.Tunnel); err != nil {
+			a.logger.Error("Failed to restart tunnel after route addition",
+				"tunnel", serviceConfig.Tunnel, "route", hostRoute, "error", err)
+			return fmt.Errorf("failed to restart tunnel %s: %w", serviceConfig.Tunnel, err)
+		}
+		a.logger.Info("Added service route to tunnel",
+			"service", serviceConfig.Name,
+			"tunnel", serviceConfig.Tunnel,
+			"route", hostRoute)
+	}
+
+	return nil
+}
+
+// MARK: removeServiceTunnelRoute
+func (a *APIServer) removeServiceTunnelRoute(serviceConfig *config.ServiceConfig) error {
+	serviceIP, err := a.extractIPFromUpstream(serviceConfig.Upstream)
+	if err != nil {
+		return fmt.Errorf("failed to extract IP from upstream: %w", err)
+	}
+
+	tunnelConfig, err := a.findTunnelByName(serviceConfig.Tunnel)
+	if err != nil {
+		return fmt.Errorf("tunnel not found: %w", err)
+	}
+
+	hostRoute := serviceIP + "/32"
+	originalCount := len(tunnelConfig.Routes)
+	newRoutes := make([]string, 0, originalCount)
+
+	for _, r := range tunnelConfig.Routes {
+		if r != hostRoute {
+			newRoutes = append(newRoutes, r)
+		}
+	}
+
+	if len(newRoutes) != originalCount {
+		tunnelConfig.Routes = newRoutes
+		if err := a.cfg.UpdateTunnel(*tunnelConfig); err != nil {
+			return fmt.Errorf("failed to update tunnel configuration: %w", err)
+		}
+		if err := a.restartTunnelForRouteChanges(serviceConfig.Tunnel); err != nil {
+			a.logger.Error("Failed to restart tunnel after route removal",
+				"tunnel", serviceConfig.Tunnel, "route", hostRoute, "error", err)
+			return fmt.Errorf("failed to restart tunnel: %w", err)
+		}
+		a.logger.Info("Removed service route from tunnel",
+			"service", serviceConfig.Name,
+			"tunnel", serviceConfig.Tunnel,
+			"route", hostRoute)
+	}
+
+	return nil
+}
+
+// MARK: extractIPFromUpstream
+func (a *APIServer) extractIPFromUpstream(upstream string) (string, error) {
+	parsedURL, err := url.Parse(upstream)
+	if err != nil {
+		return "", fmt.Errorf("invalid upstream URL: %w", err)
+	}
+
+	host := parsedURL.Hostname()
+	if host == "" {
+		return "", fmt.Errorf("no hostname found in upstream URL")
+	}
+
+	if net.ParseIP(host) != nil {
+		return host, nil
+	}
+
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve hostname %s: %w", host, err)
+	}
+	if len(ips) == 0 {
+		return "", fmt.Errorf("no IP addresses found for hostname %s", host)
+	}
+
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			return ip.String(), nil
+		}
+	}
+
+	return ips[0].String(), nil
+}
+
+// MARK: findTunnelByName
+func (a *APIServer) findTunnelByName(tunnelName string) (*config.TunnelConfig, error) {
+	for i := range a.cfg.WireGuard.Tunnels {
+		if strings.EqualFold(a.cfg.WireGuard.Tunnels[i].Name, tunnelName) {
+			return &a.cfg.WireGuard.Tunnels[i], nil
+		}
+	}
+	return nil, fmt.Errorf("tunnel %s not found", tunnelName)
+}
+
+// MARK: routeExists
+func (a *APIServer) routeExists(routes []string, target string) bool {
+	for _, r := range routes {
+		if r == target {
+			return true
+		}
+	}
+	return false
+}
+
+// MARK: restartTunnelForRouteChanges
+func (a *APIServer) restartTunnelForRouteChanges(tunnelName string) error {
+	ctx := context.Background()
+
+	if err := a.tunnelManager.DeleteTunnel(ctx, tunnelName); err != nil {
+		a.logger.Warn("Failed to stop tunnel for restart", "tunnel", tunnelName, "error", err)
+	}
+
+	tunnelConfig, err := a.findTunnelByName(tunnelName)
+	if err != nil {
+		return err
+	}
+
+	if err := a.tunnelManager.CreateTunnel(ctx, *tunnelConfig); err != nil {
+		return fmt.Errorf("failed to start tunnel %s: %w", tunnelName, err)
+	}
+
+	a.logger.Info("Tunnel restarted successfully", "tunnel", tunnelName)
+	return nil
 }
 
 // MARK: validateServiceConfig

@@ -166,7 +166,7 @@ class ServicesManager {
 
     // MARK: handleDeleteSuccess
     static handleDeleteSuccess(name) {
-        window.Utils.showAlert(`Service "${name}" deleted successfully (routes removed)`, 'success');
+        window.Utils.showAlert(`Service "${name}" successfully deleted`, 'success');
         this.loadServices();
         
         if (window.TunnelsManager) {
@@ -334,7 +334,7 @@ class ServicesManager {
     static async createService(service) {
         const form = document.getElementById('serviceForm');
         const submitButton = this.updateSubmitButton(form, service.tunnel);
-        
+
         try {
             await window.APIClient.addService(service);
             this.handleServiceCreationSuccess(service, form);

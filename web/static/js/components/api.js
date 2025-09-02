@@ -8,7 +8,9 @@ class APIClient {
         
         try {
             const response = await this.makeRequest(endpoint, options);
-            this.handleResponseErrors(response);
+            if (!response.ok) {
+                await this.handleResponseErrors(response);
+            }
             return await response.json();
         } catch (error) {
             this.handleApiError(error);
@@ -42,13 +44,18 @@ class APIClient {
             window.AuthManager.clearToken();
             throw new Error('Authentication failed - please re-enter your token');
         }
-        
-        if (!response.ok) {
-            const error = await response.json().catch(() => ({ 
-                error: `HTTP ${response.status}: ${response.statusText}` 
-            }));
-            throw new Error(error.error || `HTTP ${response.status}: ${response.statusText}`);
+
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+            const data = await response.clone().json();
+            if (data && data.error) {
+                errorMessage = data.error;
+            }
+        } catch (e) {
+            // ignore JSON parse error
         }
+
+        throw new Error(errorMessage);
     }
 
     // MARK: handleApiError

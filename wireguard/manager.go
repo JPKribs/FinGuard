@@ -43,7 +43,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("tunnel manager already running")
 	}
 
-	m.logger.Info("Starting optimized WireGuard tunnel manager")
+	m.logger.Info("Starting WireGuard tunnel manager")
 	atomic.StoreInt64(&m.running, 1)
 	m.lastError = nil
 	atomic.StoreInt32(&m.retryAttempts, 0)
@@ -151,7 +151,7 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 	m.tunnels[cfg.Name] = tunnel
 	m.mu.Unlock()
 
-	m.logger.Info("Created optimized tunnel", "name", cfg.Name)
+	m.logger.Info("Created  tunnel", "name", cfg.Name)
 	return nil
 }
 
