@@ -11,6 +11,7 @@ import (
 	"github.com/JPKribs/FinGuard/internal"
 )
 
+// MARK: ProxyService
 type ProxyService struct {
 	Config   config.ServiceConfig
 	Upstream *url.URL
@@ -19,11 +20,13 @@ type ProxyService struct {
 	mu       sync.RWMutex
 }
 
+// MARK: responseWriter
 type responseWriter struct {
 	http.ResponseWriter
 	statusCode int
 }
 
+// MARK: Server
 type Server struct {
 	logger   *internal.Logger
 	services map[string]*ProxyService
@@ -32,6 +35,7 @@ type Server struct {
 	mu       sync.RWMutex
 }
 
+// MARK: ServiceHealth
 type ServiceHealth struct {
 	Healthy     bool      `json:"healthy"`
 	LastCheck   time.Time `json:"last_check"`

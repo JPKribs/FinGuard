@@ -27,49 +27,8 @@ const (
 	UpdateTimeout              = 10 * time.Minute
 )
 
-// MARK: UpdateManager
-type UpdateManager struct {
-	cfg              *config.Config
-	logger           *internal.Logger
-	currentVersion   string
-	lastCheckTime    time.Time
-	updateInProgress int64
-	ctx              context.Context
-	cancel           context.CancelFunc
-	scheduler        *CronScheduler
-	backupDir        string
-	repoOwner        string
-	repoName         string
-}
-
-// MARK: UpdateInfo
-type UpdateInfo struct {
-	Available         bool      `json:"available"`
-	CurrentVersion    string    `json:"current_version"`
-	LatestVersion     string    `json:"latest_version"`
-	ReleaseNotes      string    `json:"release_notes"`
-	LastCheckTime     time.Time `json:"last_check_time"`
-	NextCheckTime     time.Time `json:"next_check_time"`
-	UpdateSchedule    string    `json:"update_schedule"`
-	AutoUpdateEnabled bool      `json:"auto_update_enabled"`
-}
-
-// MARK: GitHubRelease
-type GitHubRelease struct {
-	TagName     string `json:"tag_name"`
-	Name        string `json:"name"`
-	Body        string `json:"body"`
-	Draft       bool   `json:"draft"`
-	Prerelease  bool   `json:"prerelease"`
-	PublishedAt string `json:"published_at"`
-	Assets      []struct {
-		Name               string `json:"name"`
-		BrowserDownloadURL string `json:"browser_download_url"`
-		Size               int64  `json:"size"`
-	} `json:"assets"`
-}
-
 // MARK: NewUpdateManager
+// Initializes a new UpdateManager instance with configuration, logger, and current version
 func NewUpdateManager(cfg *config.Config, logger *internal.Logger, currentVersion string) *UpdateManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -92,6 +51,7 @@ func NewUpdateManager(cfg *config.Config, logger *internal.Logger, currentVersio
 }
 
 // MARK: Start
+// Starts the auto-update scheduler if enabled
 func (u *UpdateManager) Start() error {
 	if !u.cfg.Update.Enabled {
 		u.logger.Info("Auto-update is disabled")
@@ -120,6 +80,7 @@ func (u *UpdateManager) Start() error {
 }
 
 // MARK: Stop
+// Stops the auto-update scheduler
 func (u *UpdateManager) Stop() error {
 	u.cancel()
 	if u.scheduler != nil {
@@ -130,6 +91,7 @@ func (u *UpdateManager) Stop() error {
 }
 
 // MARK: CheckForUpdates
+// Checks GitHub for the latest release and returns update info
 func (u *UpdateManager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 	u.lastCheckTime = time.Now()
 
@@ -158,6 +120,7 @@ func (u *UpdateManager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error
 }
 
 // MARK: PerformUpdate
+// Downloads and installs the latest release if available
 func (u *UpdateManager) PerformUpdate(ctx context.Context) error {
 	if !atomic.CompareAndSwapInt64(&u.updateInProgress, 0, 1) {
 		return fmt.Errorf("update already in progress")
@@ -207,6 +170,7 @@ func (u *UpdateManager) PerformUpdate(ctx context.Context) error {
 }
 
 // MARK: GetUpdateStatus
+// Returns current update status and scheduling information
 func (u *UpdateManager) GetUpdateStatus() UpdateInfo {
 	nextCheck := time.Time{}
 	if u.scheduler != nil {
@@ -225,6 +189,7 @@ func (u *UpdateManager) GetUpdateStatus() UpdateInfo {
 }
 
 // MARK: UpdateSchedule
+// Updates the cron schedule for the auto-update system
 func (u *UpdateManager) UpdateSchedule(schedule string) error {
 	if u.scheduler == nil {
 		return fmt.Errorf("scheduler not initialized")
@@ -244,6 +209,7 @@ func (u *UpdateManager) UpdateSchedule(schedule string) error {
 }
 
 // MARK: fetchLatestRelease
+// Fetches the latest GitHub release information
 func (u *UpdateManager) fetchLatestRelease(ctx context.Context) (*GitHubRelease, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", GitHubReleasesAPI, nil)
 	if err != nil {
@@ -273,6 +239,7 @@ func (u *UpdateManager) fetchLatestRelease(ctx context.Context) (*GitHubRelease,
 }
 
 // MARK: isNewerVersion
+// Compares latest release tag with current version
 func (u *UpdateManager) isNewerVersion(latest, current string) bool {
 	latest = strings.TrimPrefix(latest, "v")
 	current = strings.TrimPrefix(current, "v")
@@ -281,6 +248,7 @@ func (u *UpdateManager) isNewerVersion(latest, current string) bool {
 }
 
 // MARK: compareVersions
+// Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
 func (u *UpdateManager) compareVersions(v1, v2 string) int {
 	v1Parts := strings.Split(v1, ".")
 	v2Parts := strings.Split(v2, ".")
@@ -317,6 +285,7 @@ func (u *UpdateManager) compareVersions(v1, v2 string) int {
 }
 
 // MARK: createBackup
+// Creates a backup of the currently running binary
 func (u *UpdateManager) createBackup() error {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -353,6 +322,7 @@ func (u *UpdateManager) createBackup() error {
 }
 
 // MARK: downloadAndExtractBinary
+// Downloads the binary from GitHub release and extracts if needed
 func (u *UpdateManager) downloadAndExtractBinary(ctx context.Context, release *GitHubRelease) (string, error) {
 	assetName := u.getBinaryAssetName()
 	var downloadURL string
@@ -414,6 +384,7 @@ func (u *UpdateManager) downloadAndExtractBinary(ctx context.Context, release *G
 }
 
 // MARK: extractTarGz
+// Extracts the tar.gz archive to a destination directory
 func (u *UpdateManager) extractTarGz(reader io.Reader, destDir string) (string, error) {
 	gzReader, err := gzip.NewReader(reader)
 	if err != nil {
@@ -469,6 +440,7 @@ func (u *UpdateManager) extractTarGz(reader io.Reader, destDir string) (string, 
 }
 
 // MARK: getBinaryAssetName
+// Determines the expected binary asset name based on OS and architecture
 func (u *UpdateManager) getBinaryAssetName() string {
 	arch := runtime.GOARCH
 	if arch == "amd64" {
@@ -484,6 +456,7 @@ func (u *UpdateManager) getBinaryAssetName() string {
 }
 
 // MARK: replaceBinary
+// Replaces the running binary with the new downloaded binary
 func (u *UpdateManager) replaceBinary(newBinaryPath string) error {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -519,6 +492,7 @@ func (u *UpdateManager) replaceBinary(newBinaryPath string) error {
 }
 
 // MARK: copyFile
+// Helper function to copy a file from src to dst
 func (u *UpdateManager) copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -545,6 +519,7 @@ func (u *UpdateManager) copyFile(src, dst string) error {
 }
 
 // MARK: restoreFromBackup
+// Restores the binary from the latest backup
 func (u *UpdateManager) restoreFromBackup() error {
 	backupFiles, err := filepath.Glob(filepath.Join(u.backupDir, "finguard_*.backup"))
 	if err != nil || len(backupFiles) == 0 {
@@ -567,6 +542,7 @@ func (u *UpdateManager) restoreFromBackup() error {
 }
 
 // MARK: restartApplication
+// Restarts the application process
 func (u *UpdateManager) restartApplication() {
 	u.logger.Info("Restarting application after update")
 
@@ -590,6 +566,7 @@ func (u *UpdateManager) restartApplication() {
 }
 
 // MARK: performScheduledUpdate
+// Called by the cron scheduler to check or apply updates
 func (u *UpdateManager) performScheduledUpdate() {
 	if !u.cfg.Update.AutoApply {
 		u.logger.Info("Scheduled update check (auto-apply disabled)")
@@ -606,6 +583,7 @@ func (u *UpdateManager) performScheduledUpdate() {
 }
 
 // MARK: buildUpdateInfo
+// Builds an UpdateInfo object to report update status
 func (u *UpdateManager) buildUpdateInfo(available bool, latestVersion, releaseNotes string) *UpdateInfo {
 	nextCheck := time.Time{}
 	if u.scheduler != nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/JPKribs/FinGuard/wireguard"
 )
 
+// MARK: Application
 type Application struct {
 	config           *config.Config
 	logger           *internal.Logger

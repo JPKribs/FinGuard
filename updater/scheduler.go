@@ -11,27 +11,8 @@ import (
 	"github.com/JPKribs/FinGuard/internal"
 )
 
-// MARK: CronScheduler
-type CronScheduler struct {
-	logger   *internal.Logger
-	schedule string
-	nextRun  time.Time
-	running  int64
-	ctx      context.Context
-	cancel   context.CancelFunc
-	taskFunc func()
-}
-
-// MARK: CronEntry
-type CronEntry struct {
-	Minute     []int
-	Hour       []int
-	DayOfMonth []int
-	Month      []int
-	DayOfWeek  []int
-}
-
 // MARK: NewCronScheduler
+// Creates a new CronScheduler instance with a logger
 func NewCronScheduler(logger *internal.Logger) *CronScheduler {
 	return &CronScheduler{
 		logger: logger,
@@ -39,6 +20,7 @@ func NewCronScheduler(logger *internal.Logger) *CronScheduler {
 }
 
 // MARK: Start
+// Starts the cron scheduler with the given schedule and task function
 func (c *CronScheduler) Start(schedule string, taskFunc func()) error {
 	if atomic.LoadInt64(&c.running) == 1 {
 		return fmt.Errorf("scheduler already running")
@@ -66,6 +48,7 @@ func (c *CronScheduler) Start(schedule string, taskFunc func()) error {
 }
 
 // MARK: Stop
+// Stops the currently running cron scheduler
 func (c *CronScheduler) Stop() {
 	if !atomic.CompareAndSwapInt64(&c.running, 1, 0) {
 		return
@@ -79,11 +62,13 @@ func (c *CronScheduler) Stop() {
 }
 
 // MARK: NextRun
+// Returns the next scheduled run time
 func (c *CronScheduler) NextRun() time.Time {
 	return c.nextRun
 }
 
 // MARK: UpdateSchedule
+// Updates the cron schedule; restarts scheduler if it was running
 func (c *CronScheduler) UpdateSchedule(schedule string) error {
 	wasRunning := atomic.LoadInt64(&c.running) == 1
 
@@ -100,6 +85,7 @@ func (c *CronScheduler) UpdateSchedule(schedule string) error {
 }
 
 // MARK: run
+// Internal loop to execute the scheduled task when the next run time is reached
 func (c *CronScheduler) run(entry *CronEntry) {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
@@ -131,6 +117,7 @@ func (c *CronScheduler) run(entry *CronEntry) {
 }
 
 // MARK: parseSchedule
+// Parses a cron schedule string into a CronEntry structure
 func (c *CronScheduler) parseSchedule(schedule string) (*CronEntry, error) {
 	fields := strings.Fields(schedule)
 	if len(fields) != 5 {
@@ -169,6 +156,7 @@ func (c *CronScheduler) parseSchedule(schedule string) (*CronEntry, error) {
 }
 
 // MARK: parseField
+// Parses individual cron fields, supporting ranges and step values
 func (c *CronScheduler) parseField(field string, min, max int) ([]int, error) {
 	if field == "*" {
 		result := make([]int, max-min+1)
@@ -244,6 +232,7 @@ func (c *CronScheduler) parseField(field string, min, max int) ([]int, error) {
 }
 
 // MARK: parseRange
+// Parses a range string (e.g. "1-5") into a slice of integers
 func (c *CronScheduler) parseRange(rangeStr string, min, max int) ([]int, error) {
 	parts := strings.Split(rangeStr, "-")
 	if len(parts) != 2 {
@@ -277,6 +266,7 @@ func (c *CronScheduler) parseRange(rangeStr string, min, max int) ([]int, error)
 }
 
 // MARK: calculateNextRun
+// Computes the next scheduled run time based on a CronEntry and reference time
 func (c *CronScheduler) calculateNextRun(entry *CronEntry, from time.Time) time.Time {
 	next := from.Add(1 * time.Minute).Truncate(time.Minute)
 
@@ -291,6 +281,7 @@ func (c *CronScheduler) calculateNextRun(entry *CronEntry, from time.Time) time.
 }
 
 // MARK: matches
+// Checks if a given time matches the cron entry
 func (c *CronScheduler) matches(entry *CronEntry, t time.Time) bool {
 	minute := t.Minute()
 	hour := t.Hour()
@@ -306,6 +297,7 @@ func (c *CronScheduler) matches(entry *CronEntry, t time.Time) bool {
 }
 
 // MARK: contains
+// Helper to check if a value exists in a slice
 func (c *CronScheduler) contains(slice []int, value int) bool {
 	for _, v := range slice {
 		if v == value {

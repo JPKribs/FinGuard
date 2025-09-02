@@ -429,7 +429,6 @@ func (app *Application) handleSignals() {
 }
 
 // MARK: handleReload
-
 // Reloads configuration and updates running services
 func (app *Application) handleReload() {
 	app.logger.Info("Received SIGHUP, reloading configuration")

@@ -15,7 +15,6 @@ import (
 )
 
 // MARK: NewServer
-
 // Creates a new proxy server instance with logger
 func NewServer(logger *internal.Logger) *Server {
 	return &Server{
@@ -25,7 +24,6 @@ func NewServer(logger *internal.Logger) *Server {
 }
 
 // MARK: Start
-
 // Starts the HTTP proxy server with routing and middleware
 func (s *Server) Start(ctx context.Context, addr string) error {
 	s.mu.Lock()
@@ -54,7 +52,6 @@ func (s *Server) Start(ctx context.Context, addr string) error {
 		}
 	}()
 
-	// Start health checking in background
 	go s.StartHealthChecking(ctx)
 
 	s.running = true
@@ -62,7 +59,6 @@ func (s *Server) Start(ctx context.Context, addr string) error {
 }
 
 // MARK: Stop
-
 // Gracefully shuts down the proxy server
 func (s *Server) Stop(ctx context.Context) error {
 	s.mu.Lock()
@@ -85,7 +81,6 @@ func (s *Server) Stop(ctx context.Context) error {
 }
 
 // MARK: AddService
-
 // Configures a new service with reverse proxy and custom transport
 func (s *Server) AddService(svc config.ServiceConfig) error {
 	s.mu.Lock()
@@ -102,7 +97,6 @@ func (s *Server) AddService(svc config.ServiceConfig) error {
 		return fmt.Errorf("parsing upstream URL %s: %w", svc.Upstream, err)
 	}
 
-	// Create custom transport for this service with better timeouts
 	transport := &http.Transport{
 		DialContext: (&net.Dialer{
 			Timeout:   5 * time.Second,
@@ -145,7 +139,6 @@ func (s *Server) AddService(svc config.ServiceConfig) error {
 }
 
 // MARK: handleProxyError
-
 // Enhanced error handler that categorizes and logs different proxy error types
 func (s *Server) handleProxyError(w http.ResponseWriter, r *http.Request, svc config.ServiceConfig, err error) {
 	var statusCode int
@@ -207,7 +200,6 @@ func (s *Server) handleProxyError(w http.ResponseWriter, r *http.Request, svc co
 }
 
 // MARK: StartHealthChecking
-
 // Starts periodic health checks for all upstream services
 func (s *Server) StartHealthChecking(ctx context.Context) {
 	ticker := time.NewTicker(30 * time.Second)
@@ -224,7 +216,6 @@ func (s *Server) StartHealthChecking(ctx context.Context) {
 }
 
 // MARK: checkAllServices
-
 // Initiates health checks for all registered services concurrently
 func (s *Server) checkAllServices() {
 	s.mu.RLock()
@@ -240,7 +231,6 @@ func (s *Server) checkAllServices() {
 }
 
 // MARK: checkServiceHealth
-
 // Performs health check on individual service and updates health status
 func (s *Server) checkServiceHealth(service *ProxyService) {
 	service.mu.Lock()
@@ -305,7 +295,6 @@ func (s *Server) checkServiceHealth(service *ProxyService) {
 }
 
 // MARK: RemoveService
-
 // Removes a configured service from the proxy
 func (s *Server) RemoveService(name string) error {
 	s.mu.Lock()
@@ -321,7 +310,6 @@ func (s *Server) RemoveService(name string) error {
 }
 
 // MARK: ListServices
-
 // Returns all configured service configurations
 func (s *Server) ListServices() []config.ServiceConfig {
 	s.mu.RLock()
@@ -335,7 +323,6 @@ func (s *Server) ListServices() []config.ServiceConfig {
 }
 
 // MARK: GetServiceStatus
-
 // Returns the proxy service instance for status checking
 func (s *Server) GetServiceStatus(name string) (*ProxyService, error) {
 	s.mu.RLock()
@@ -350,7 +337,6 @@ func (s *Server) GetServiceStatus(name string) (*ProxyService, error) {
 }
 
 // MARK: IsReady
-
 // Returns true if the proxy server is running
 func (s *Server) IsReady() bool {
 	s.mu.RLock()
@@ -359,7 +345,6 @@ func (s *Server) IsReady() bool {
 }
 
 // MARK: handleRequest
-
 // Routes incoming requests to appropriate service based on hostname
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	s.mu.RLock()
@@ -376,7 +361,6 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 }
 
 // MARK: findServiceByHost
-
 // Matches hostname to service using subdomain pattern matching
 func (s *Server) findServiceByHost(host string) *ProxyService {
 	host = s.stripPort(host)
@@ -396,7 +380,6 @@ func (s *Server) findServiceByHost(host string) *ProxyService {
 }
 
 // MARK: setProxyHeaders
-
 // Sets required headers for proxying including WebSocket support
 func (s *Server) setProxyHeaders(pr *httputil.ProxyRequest, svc config.ServiceConfig) {
 	pr.Out.Header.Set("X-Real-IP", s.getClientIP(pr.In))
@@ -410,7 +393,6 @@ func (s *Server) setProxyHeaders(pr *httputil.ProxyRequest, svc config.ServiceCo
 }
 
 // MARK: setWebSocketHeaders
-
 // Copies WebSocket upgrade headers for proper connection handling
 func (s *Server) setWebSocketHeaders(pr *httputil.ProxyRequest) {
 	headers := []string{"Upgrade", "Connection", "Sec-WebSocket-Key", "Sec-WebSocket-Version", "Sec-WebSocket-Protocol", "Sec-WebSocket-Extensions"}
@@ -423,7 +405,6 @@ func (s *Server) setWebSocketHeaders(pr *httputil.ProxyRequest) {
 }
 
 // MARK: setSecurityHeaders
-
 // Adds security headers to non-WebSocket responses
 func (s *Server) setSecurityHeaders(resp *http.Response) {
 	if resp.StatusCode != 101 {
@@ -434,14 +415,12 @@ func (s *Server) setSecurityHeaders(resp *http.Response) {
 }
 
 // MARK: withMinimalMiddleware
-
 // Applies logging and recovery middleware stack
 func (s *Server) withMinimalMiddleware(handler http.Handler) http.Handler {
 	return s.loggingMiddleware(s.recoveryMiddleware(handler))
 }
 
 // MARK: loggingMiddleware
-
 // Logs HTTP requests with timing and status information
 func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -465,7 +444,6 @@ func (s *Server) loggingMiddleware(next http.Handler) http.Handler {
 }
 
 // MARK: recoveryMiddleware
-
 // Recovers from panics and logs errors
 func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -480,7 +458,6 @@ func (s *Server) recoveryMiddleware(next http.Handler) http.Handler {
 }
 
 // MARK: WriteHeader
-
 // Captures HTTP status code for logging
 func (rw *responseWriter) WriteHeader(code int) {
 	rw.statusCode = code
@@ -488,7 +465,6 @@ func (rw *responseWriter) WriteHeader(code int) {
 }
 
 // MARK: Write
-
 // Writes response body and sets default status code
 func (rw *responseWriter) Write(b []byte) (int, error) {
 	if rw.statusCode == 0 {
@@ -498,7 +474,6 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 }
 
 // MARK: stripPort
-
 // Removes port from hostname if present
 func (s *Server) stripPort(host string) string {
 	if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
@@ -508,7 +483,6 @@ func (s *Server) stripPort(host string) string {
 }
 
 // MARK: getClientIP
-
 // Extracts real client IP from headers or connection
 func (s *Server) getClientIP(r *http.Request) string {
 	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
@@ -527,7 +501,6 @@ func (s *Server) getClientIP(r *http.Request) string {
 }
 
 // MARK: getScheme
-
 // Determines HTTP scheme from TLS status or headers
 func (s *Server) getScheme(r *http.Request) string {
 	if r.TLS != nil {
@@ -540,7 +513,6 @@ func (s *Server) getScheme(r *http.Request) string {
 }
 
 // MARK: isWebSocketUpgrade
-
 // Checks if request is WebSocket upgrade
 func (s *Server) isWebSocketUpgrade(r *http.Request) bool {
 	return strings.ToLower(r.Header.Get("Upgrade")) == "websocket"
