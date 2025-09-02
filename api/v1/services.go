@@ -40,6 +40,7 @@ func (a *APIServer) handleServiceByName(w http.ResponseWriter, r *http.Request) 
 }
 
 // MARK: handleListServices
+// Lists all configured services with their current status
 func (a *APIServer) handleListServices(w http.ResponseWriter, r *http.Request) {
 	services := a.proxyServer.ListServices()
 	statusList := make([]ServiceStatusResponse, 0, len(services))
@@ -55,6 +56,7 @@ func (a *APIServer) handleListServices(w http.ResponseWriter, r *http.Request) {
 			Upstream:    svc.Upstream,
 			Status:      status,
 			Tunnel:      svc.Tunnel,
+			Jellyfin:    svc.Jellyfin,
 			Websocket:   svc.Websocket,
 			Default:     svc.Default,
 			PublishMDNS: svc.PublishMDNS,
@@ -65,6 +67,7 @@ func (a *APIServer) handleListServices(w http.ResponseWriter, r *http.Request) {
 }
 
 // MARK: handleAddService
+// Adds a new service configuration
 func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 	var req ServiceCreateRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -76,6 +79,7 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 		Name:        req.Name,
 		Upstream:    req.Upstream,
 		Tunnel:      req.Tunnel,
+		Jellyfin:    req.Jellyfin,
 		Websocket:   req.Websocket,
 		Default:     req.Default,
 		PublishMDNS: req.PublishMDNS,
@@ -103,6 +107,7 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 		Upstream:    serviceConfig.Upstream,
 		Status:      "running",
 		Tunnel:      serviceConfig.Tunnel,
+		Jellyfin:    serviceConfig.Jellyfin,
 		Websocket:   serviceConfig.Websocket,
 		Default:     serviceConfig.Default,
 		PublishMDNS: serviceConfig.PublishMDNS,

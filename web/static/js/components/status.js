@@ -344,8 +344,14 @@ class StatusManager {
             this.statusRefreshInterval = null;
         }
     }
+
+    // MARK: initialize
+    static initialize() {
+        this.startStatusRefresh();
+        // Load status immediately
+        this.loadStatus();
+    }
 }
 
 // GLOBAL SCOPE EXPORT
-
 window.StatusManager = StatusManager;

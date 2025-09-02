@@ -72,45 +72,49 @@
         <section id="services" class="content">
             <div class="two-column">
                 <!-- Add Service Form -->
-                <div>
-                    <div class="card">
-                        <h3>Add Service</h3>
-                        <form id="serviceForm">
-                            <div class="form-group">
-                                <label for="serviceName">Service Name</label>
-                                <input type="text" id="serviceName" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="serviceUpstream">Service IP</label>
-                                <input type="url" id="serviceUpstream" placeholder="http://192.168.0.1:8096" required>
-                            </div>
-                            <div class="form-group">
-                                <label for="serviceWebsocket">
-                                    <input type="checkbox" id="serviceWebsocket" class="checkbox-inline">
-                                    WebSocket Support
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label for="serviceDefault">
-                                    <input type="checkbox" id="serviceDefault" class="checkbox-inline">
-                                    Default Service
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label for="serviceMDNS">
-                                    <input type="checkbox" id="serviceMDNS" class="checkbox-inline">
-                                    Publish via mDNS
-                                </label>
-                            </div>
-                            <div class="form-group">
-                                <label for="serviceTunnel">Tunnel</label>
-                                <select id="serviceTunnel">
-                                    <option value="">None</option>
-                                </select>
-                            </div>
-                            <button type="submit">Add Service</button>
-                        </form>
-                    </div>
+                <div class="card">
+                    <h3>Add Service</h3>
+                    <form id="serviceForm">
+                        <div class="form-group">
+                            <label for="serviceName">Service Name</label>
+                            <input type="text" id="serviceName" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceUpstream">Upstream URL</label>
+                            <input type="url" id="serviceUpstream" placeholder="http://192.168.0.1:8096" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceJellyfin">
+                                <input type="checkbox" id="serviceJellyfin" class="checkbox-inline">
+                                Jellyfin Server
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceWebsocket">
+                                <input type="checkbox" id="serviceWebsocket" class="checkbox-inline">
+                                WebSocket Support
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceDefault">
+                                <input type="checkbox" id="serviceDefault" class="checkbox-inline">
+                                Default Service
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceMDNS">
+                                <input type="checkbox" id="serviceMDNS" class="checkbox-inline">
+                                Publish via mDNS
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label for="serviceTunnel">Tunnel</label>
+                            <select id="serviceTunnel">
+                                <option value="">None</option>
+                            </select>
+                        </div>
+                        <button type="submit">Add Service</button>
+                    </form>
                 </div>
                 
                 <!-- Active Services List -->
@@ -246,7 +250,7 @@
                 <div class="form-group">
                     <label for="logLevelFilter">Filter by level:</label>
                     <select id="logLevelFilter">
-                        <option value="">All</option>
+                        <option value="">ALL</option>
                         <option value="info">INFO</option>
                         <option value="debug">DEBUG</option>
                         <option value="warn">WARN</option>

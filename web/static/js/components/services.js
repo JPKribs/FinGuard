@@ -91,6 +91,7 @@ class ServicesManager {
         }
 
         infoRows.push(
+            { label: 'Jellyfin', value: service.jellyfin ? '✓' : '✗' },
             { label: 'WebSocket', value: service.websocket ? '✓' : '✗' },
             { label: 'Default', value: service.default ? '✓' : '✗' },
             { label: 'mDNS', value: service.publish_mdns ? '✓' : '✗' }
@@ -181,16 +182,53 @@ class ServicesManager {
 
     // FORM MANAGEMENT
 
-    // MARK: initializeForm
-    static initializeForm() {
+    // MARK: initializeServiceForm
+    static initializeServiceForm() {
+        this.setupJellyfinLogic();
+        this.setupFormSubmission();
+        this.setupTunnelHelp();
+    }
+
+    // MARK: setupFormSubmission
+    static setupFormSubmission() {
         const form = document.getElementById('serviceForm');
         if (!form) {
             console.error('Service form not found');
             return;
         }
 
-        this.setupTunnelHelp();
-        this.setupFormSubmission(form);
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const service = this.collectServiceData();
+            
+            if (!this.validateServiceData(service)) {
+                return;
+            }
+            
+            try {
+                await this.createService(service);
+            } catch (error) {
+                this.handleServiceCreationError(error);
+            }
+        });
+    }
+
+    // MARK: setupJellyfinLogic
+    static setupJellyfinLogic() {
+        const jellyfinCheckbox = document.getElementById('serviceJellyfin');
+        const websocketCheckbox = document.getElementById('serviceWebsocket');
+        
+        if (jellyfinCheckbox && websocketCheckbox) {
+            jellyfinCheckbox.addEventListener('change', function() {
+                if (this.checked) {
+                    websocketCheckbox.checked = true;
+                    websocketCheckbox.disabled = true;
+                } else {
+                    websocketCheckbox.disabled = false;
+                }
+            });
+        }
     }
 
     // MARK: setupTunnelHelp
@@ -239,31 +277,14 @@ class ServicesManager {
         return helpText;
     }
 
-    // MARK: setupFormSubmission
-    static setupFormSubmission(form) {
-        form.addEventListener('submit', this.handleFormSubmit.bind(this));
-    }
-
-    // MARK: handleFormSubmit
-    static async handleFormSubmit(e) {
-        e.preventDefault();
-        
-        const service = this.collectServiceData();
-        
-        if (!this.validateServiceData(service)) return;
-        
-        try {
-            await this.createService(service);
-        } catch (error) {
-            this.handleServiceCreationError(error);
-        }
-    }
-
     // MARK: collectServiceData
     static collectServiceData() {
+        const jellyfinChecked = document.getElementById('serviceJellyfin').checked;
+        
         return {
             name: document.getElementById('serviceName').value.trim(),
             upstream: document.getElementById('serviceUpstream').value.trim(),
+            jellyfin: jellyfinChecked,
             websocket: document.getElementById('serviceWebsocket').checked,
             default: document.getElementById('serviceDefault').checked,
             publish_mdns: document.getElementById('serviceMDNS').checked,
@@ -361,6 +382,11 @@ class ServicesManager {
     static resetFormAfterSuccess(form) {
         form.reset();
         
+        const websocketCheckbox = document.getElementById('serviceWebsocket');
+        if (websocketCheckbox) {
+            websocketCheckbox.disabled = false;
+        }
+        
         const helpText = document.getElementById('tunnelHelpText');
         if (helpText) {
             helpText.classList.add('hidden');
@@ -395,8 +421,20 @@ class ServicesManager {
         
         window.Utils.showAlert(errorMessage, 'error');
     }
+
+    // MARK: initialize
+    static initialize() {
+        this.initializeServiceForm();
+        this.loadServices();
+    }
 }
 
-// GLOBAL SCOPE EXPORT
+// AUTO-INITIALIZE WHEN DOM IS READY
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.ServicesManager) {
+        window.ServicesManager.initialize();
+    }
+});
 
+// GLOBAL SCOPE EXPORT
 window.ServicesManager = ServicesManager;

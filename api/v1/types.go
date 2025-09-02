@@ -60,6 +60,7 @@ type ServiceCreateRequest struct {
 	Name        string `json:"name"`
 	Upstream    string `json:"upstream"`
 	Tunnel      string `json:"tunnel,omitempty"`
+	Jellyfin    bool   `json:"jellyfin"`
 	Websocket   bool   `json:"websocket"`
 	Default     bool   `json:"default"`
 	PublishMDNS bool   `json:"publish_mdns"`
@@ -71,6 +72,7 @@ type ServiceStatusResponse struct {
 	Upstream    string `json:"upstream"`
 	Status      string `json:"status"`
 	Tunnel      string `json:"tunnel,omitempty"`
+	Jellyfin    bool   `json:"jellyfin"`
 	Websocket   bool   `json:"websocket"`
 	Default     bool   `json:"default"`
 	PublishMDNS bool   `json:"publish_mdns"`
