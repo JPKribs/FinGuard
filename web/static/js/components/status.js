@@ -71,21 +71,56 @@ class StatusManager {
 
     // MARK: createIPAddressesItem
     static createIPAddressesItem(status) {
-        const interfacesHtml = this.generateInterfacesHtml(status.interfaces);
-        const systemIPsHtml = this.generateSystemIPsHtml(status.system_ip);
+        const ipv4Ifaces = status.interfaces.map(i => ({
+            addresses: i.addresses.filter(ip => ip.includes('.')),
+            is_up: i.is_up
+        })).filter(i => i.addresses.length > 0 || i.is_up === false);
+
+        const ipv6Ifaces = status.interfaces.map(i => ({
+            addresses: i.addresses.filter(ip => ip.includes(':')),
+            is_up: i.is_up
+        })).filter(i => i.addresses.length > 0 || i.is_up === false);
+
+        const ipv4UpCount = ipv4Ifaces.filter(i => i.is_up).length;
+        const ipv6UpCount = ipv6Ifaces.filter(i => i.is_up).length;
 
         return `
             <div class="list-item">
                 <div>
                     <strong>IPv4 Addresses</strong><br>
-                    <small>Primary network interface</small>
-                    ${interfacesHtml}
+                    <small>Active interfaces: ${ipv4UpCount}</small>
                 </div>
-                <span style="color: var(--color-accent); font-weight: bold; font-family: monospace; display: block; text-align: right;">
-                    ${systemIPsHtml}
-                </span>
+                ${this.generateIPsHtml(ipv4Ifaces)}
+            </div>
+            <div class="list-item">
+                <div>
+                    <strong>IPv6 Addresses</strong><br>
+                    <small>Active interfaces: ${ipv6UpCount}</small>
+                </div>
+                ${this.generateIPsHtml(ipv6Ifaces)}
             </div>
         `;
+    }
+
+    // MARK: generateIPsHtml
+    static generateIPsHtml(ifaces) {
+        if (!Array.isArray(ifaces) || ifaces.length === 0) {
+            return `<span style="color: var(--color-secondary); font-weight: bold; font-family: monospace; display: block; text-align: right;">-</span>`;
+        }
+
+        const allIPs = ifaces.flatMap(iface => {
+            if (!iface.addresses || iface.addresses.length === 0) return [];
+            return iface.addresses.map(ip => {
+                const color = iface.is_up ? 'var(--color-accent)' : 'var(--color-secondary)';
+                return `<div style="color: ${color}; font-weight: bold; font-family: monospace; text-align: right;">${ip}</div>`;
+            });
+        });
+
+        if (allIPs.length === 0) {
+            return `<div style="color: var(--color-secondary); font-weight: bold; font-family: monospace; text-align: right;">-</div>`;
+        }
+
+        return `<div style="display: flex; flex-direction: column;">${allIPs.join('')}</div>`;
     }
 
     // MARK: generateInterfacesHtml

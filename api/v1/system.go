@@ -53,10 +53,16 @@ func (a *APIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ipList, err := utilities.GetSystemIPv4s()
+	ipv4List, err := utilities.GetSystemIPv4s()
 	if err != nil {
-		a.logger.Warn("Failed to get system IP", "error", err)
-		ipList = []string{}
+		a.logger.Warn("Failed to get IPv4 addresses", "error", err)
+		ipv4List = []string{}
+	}
+
+	ipv6List, err := utilities.GetSystemIPv6s()
+	if err != nil {
+		a.logger.Warn("Failed to get IPv6 addresses", "error", err)
+		ipv6List = []string{}
 	}
 
 	interfaces, err := utilities.GetInterfaceDetails()
@@ -69,7 +75,8 @@ func (a *APIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 		"tunnels":    a.tunnelManager.IsReady(),
 		"services":   len(a.proxyServer.ListServices()),
 		"uptime":     time.Now().Format(time.RFC3339),
-		"system_ip":  ipList,
+		"ipv4":       ipv4List,
+		"ipv6":       ipv6List,
 		"interfaces": interfaces,
 	}
 
