@@ -19,10 +19,10 @@ class AuthManager {
         modal.innerHTML = `
             <div class="token-modal-content">
                 <h3>Admin Authentication</h3>
-                <p>Enter your admin token to access the FinGuard management interface:</p>
+                <p>Enter your Admin Token</p>
                 <form id="tokenForm">
                     <div class="form-group">
-                        <input type="password" id="tokenInput" placeholder="Enter admin token" required>
+                        <input type="password" id="tokenInput" placeholder="Admin token" required>
                         <div class="token-actions">
                             <button type="submit">Authenticate</button>
                             <button type="button" onclick="window.AuthManager.clearStoredToken()">Clear Stored Token</button>

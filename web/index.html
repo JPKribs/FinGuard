@@ -32,11 +32,11 @@
             <div class="card">
                 <h3>Updates</h3>
                 <div id="updateStatus"></div>
-                <div class="update-controls" style="margin-top: 1rem; display: none;" id="updateControls">
+                <div class="update-controls" id="updateControls" style="margin-top: 1rem;">
                     <button onclick="window.UpdateManager.checkForUpdate()" class="btn-secondary">
                         Check for Updates
                     </button>
-                    <button onclick="window.UpdateManager.applyUpdate()" class="btn-warning" id="applyUpdateBtn" style="display: none;">
+                    <button onclick="window.UpdateManager.applyUpdate()" class="btn-warning" id="applyUpdateBtn">
                         Apply Update
                     </button>
                     <button onclick="window.UpdateManager.showUpdateConfig()" class="btn-secondary">

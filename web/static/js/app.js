@@ -61,14 +61,12 @@ window.removePeer = function(index) {
 
 // Application initialization
 document.addEventListener('DOMContentLoaded', function() {
-    // Ensure no existing modals are present
     const existingModals = document.querySelectorAll('#tokenModal');
     existingModals.forEach(modal => modal.remove());
     
     if (window.FinGuardConfig && window.FinGuardConfig.ADMIN_TOKEN) {
         window.AuthManager.verifyToken(window.FinGuardConfig.ADMIN_TOKEN);
     } else {
-        // Small delay to ensure DOM is fully ready
         setTimeout(() => {
             window.AuthManager.showTokenModal();
         }, 100);

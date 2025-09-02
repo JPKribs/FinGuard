@@ -96,3 +96,17 @@ button:active {
         gap: 0.75rem;
     }
 }
+
+.update-controls {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    width: 100%;
+}
+
+@media (max-width: 768px) {
+    .update-controls {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+    }
+}
