@@ -11,6 +11,7 @@ import (
 )
 
 // MARK: handleSystemRestart
+// Handle the system's restart on a OS level.
 func (a *APIServer) handleSystemRestart(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -29,6 +30,7 @@ func (a *APIServer) handleSystemRestart(w http.ResponseWriter, r *http.Request) 
 }
 
 // MARK: handleSystemShutdown
+// Handle the system's shutdown on a OS level.
 func (a *APIServer) handleSystemShutdown(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -47,6 +49,7 @@ func (a *APIServer) handleSystemShutdown(w http.ResponseWriter, r *http.Request)
 }
 
 // MARK: handleStatus
+// Handle the system's statuses for each of the components.
 func (a *APIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -84,6 +87,7 @@ func (a *APIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // MARK: trySystemdRestart
+// Try to restart using Systemd (Debian).
 func (a *APIServer) trySystemdRestart() bool {
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		a.logger.Debug("systemctl not found, using fallback method")
@@ -101,6 +105,7 @@ func (a *APIServer) trySystemdRestart() bool {
 }
 
 // MARK: trySystemdStop
+// Try to stop using Systemd (Debian).
 func (a *APIServer) trySystemdStop() bool {
 	if _, err := exec.LookPath("systemctl"); err != nil {
 		a.logger.Debug("systemctl not found, using fallback method")
@@ -118,12 +123,14 @@ func (a *APIServer) trySystemdStop() bool {
 }
 
 // MARK: signalRestart
+// Signal that a restart is occurring.
 func (a *APIServer) signalRestart() {
 	internal.SetRestartFlag(true)
 	a.signalShutdown()
 }
 
 // MARK: signalShutdown
+// Signal that a shutdown is occurring.
 func (a *APIServer) signalShutdown() {
 	process, err := os.FindProcess(os.Getpid())
 	if err != nil {

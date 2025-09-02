@@ -7,6 +7,7 @@ import (
 )
 
 // MARK: respondWithSuccess
+// Handle API responses that are successful.
 func (a *APIServer) respondWithSuccess(w http.ResponseWriter, message string, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	response := APIResponse{
@@ -18,6 +19,7 @@ func (a *APIServer) respondWithSuccess(w http.ResponseWriter, message string, da
 }
 
 // MARK: respondWithError
+// Handle API responses that are errors.
 func (a *APIServer) respondWithError(w http.ResponseWriter, statusCode int, errorMessage string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(statusCode)
@@ -29,6 +31,7 @@ func (a *APIServer) respondWithError(w http.ResponseWriter, statusCode int, erro
 }
 
 // MARK: parsePaginationParams
+// Parse pagination parameters.
 func (a *APIServer) parsePaginationParams(r *http.Request) (int, int) {
 	limit := 100
 	offset := 0

@@ -12,6 +12,7 @@ import (
 )
 
 // MARK: NewAPIServer
+// Create a new instance of the API Server.
 func NewAPIServer(cfg *config.Config, proxyServer *proxy.Server, tunnelManager wireguard.TunnelManager, discoveryManager *mdns.Discovery, logger *internal.Logger, updateManager *updater.UpdateManager) *APIServer {
 	return &APIServer{
 		cfg:              cfg,
@@ -24,6 +25,7 @@ func NewAPIServer(cfg *config.Config, proxyServer *proxy.Server, tunnelManager w
 }
 
 // MARK: RegisterRoutes
+// Register all API Routes.
 func (a *APIServer) RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static/"))))
 	mux.HandleFunc("/", a.handleWebUI)
