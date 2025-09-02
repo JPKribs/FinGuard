@@ -5,6 +5,7 @@ import (
 )
 
 // MARK: handleWebUI
+// Return the user to the index.html file.
 func (a *APIServer) handleWebUI(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)

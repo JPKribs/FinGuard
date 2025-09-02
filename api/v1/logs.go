@@ -8,6 +8,7 @@ import (
 )
 
 // MARK: handleLogs
+// Get all logs in memory for the WebUI.
 func (a *APIServer) handleLogs(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
 		a.respondWithError(w, http.StatusMethodNotAllowed, "Method not allowed")
@@ -42,6 +43,7 @@ func (a *APIServer) handleLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 // MARK: convertLogEntries
+// Prepare the Log Entries for usage on the WebUI.
 func convertLogEntries(internalLogs []internal.LogEntry) []LogEntry {
 	logs := make([]LogEntry, len(internalLogs))
 	for i, log := range internalLogs {

@@ -6,6 +6,7 @@ import (
 )
 
 // MARK: authMiddleware
+// Authorize transactions using middleware and the admin token.
 func (a *APIServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		token := a.extractToken(r)
@@ -26,6 +27,7 @@ func (a *APIServer) authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 }
 
 // MARK: extractToken
+// Get the token from the configuration.
 func (a *APIServer) extractToken(r *http.Request) string {
 	if authHeader := r.Header.Get("Authorization"); authHeader != "" {
 		if strings.HasPrefix(authHeader, "Bearer ") {
