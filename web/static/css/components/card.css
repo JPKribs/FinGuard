@@ -1,4 +1,7 @@
-/* Card component */
+
+/* CARD COMPONENTS */
+
+/* Base card styles */
 .card {
     background: var(--color-bg-secondary);
     border: 1px solid var(--color-border);
@@ -9,12 +12,14 @@
     transition: all var(--animation-normal) ease;
 }
 
+/* Card hover effects */
 .card:hover {
     border-color: var(--color-border-hover);
     box-shadow: var(--shadow-card);
     transform: translateY(-2px);
 }
 
+/* Card headers */
 .card h3 {
     color: var(--color-accent);
     margin-bottom: 1rem;
@@ -24,6 +29,7 @@
     gap: 0.5rem;
 }
 
+/* Card header accent bar */
 .card h3::before {
     content: '';
     width: 4px;
@@ -31,6 +37,8 @@
     background: var(--gradient-card-glow);
     border-radius: 2px;
 }
+
+/* LIST COMPONENTS */
 
 /* List items within cards */
 .list-item {
@@ -45,23 +53,28 @@
     transition: all var(--animation-normal) ease;
 }
 
+/* List item hover effects */
 .list-item:hover {
     background: var(--color-bg-hover);
     border-color: var(--color-border-hover);
     transform: translateX(4px);
 }
 
+/* List item strong text */
 .list-item strong {
     color: var(--color-accent);
 }
 
+/* List item small text */
 .list-item small {
     color: var(--color-text-disabled);
     display: block;
     margin-top: 0.2rem;
 }
 
-/* Special peer config cards */
+/* PEER CONFIG COMPONENTS */
+
+/* Special peer configuration cards */
 .peer-config {
     background: var(--color-bg-tertiary);
     border: 1px solid var(--color-border);
@@ -71,6 +84,7 @@
     transition: all var(--animation-normal) ease;
 }
 
+/* Peer config hover effects */
 .peer-config:hover {
     border-color: var(--color-border-hover);
 }

@@ -1,22 +1,41 @@
-// Authentication Management
+
+// AUTHENTICATION MANAGEMENT
+
 class AuthManager {
+    // MARK: getConfig
     static getConfig() {
-        // Safety check for config availability
         if (!window.FinGuardConfig) {
             console.error('FinGuardConfig not available yet');
-            return { API_BASE: '/api/v1' }; // fallback
+            return { API_BASE: '/api/v1' };
         }
         return window.FinGuardConfig;
     }
 
+    // TOKEN MODAL MANAGEMENT
+
+    // MARK: showTokenModal
     static showTokenModal() {
-        // Remove any existing modal first
-        AuthManager.hideTokenModal();
+        this.hideTokenModal();
         
+        const modal = this.createTokenModal();
+        document.body.appendChild(modal);
+        
+        this.setupTokenForm();
+        this.focusTokenInput();
+    }
+
+    // MARK: createTokenModal
+    static createTokenModal() {
         const modal = document.createElement('div');
         modal.id = 'tokenModal';
         modal.className = 'token-modal';
-        modal.innerHTML = `
+        modal.innerHTML = this.getTokenModalHTML();
+        return modal;
+    }
+
+    // MARK: getTokenModalHTML
+    static getTokenModalHTML() {
+        return `
             <div class="token-modal-content">
                 <h3>Admin Authentication</h3>
                 <p>Enter your Admin Token</p>
@@ -32,102 +51,172 @@ class AuthManager {
                 <div id="tokenError" class="token-error hidden"></div>
             </div>
         `;
-        
-        document.body.appendChild(modal);
-        document.getElementById('tokenInput').focus();
-        
-        document.getElementById('tokenForm').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const token = document.getElementById('tokenInput').value.trim();
-            
-            if (!token) {
-                AuthManager.showTokenError('Please enter a token');
-                return;
-            }
-            
-            await AuthManager.verifyToken(token);
-        });
     }
 
+    // MARK: setupTokenForm
+    static setupTokenForm() {
+        const tokenForm = document.getElementById('tokenForm');
+        tokenForm.addEventListener('submit', this.handleTokenSubmit.bind(this));
+    }
+
+    // MARK: handleTokenSubmit
+    static async handleTokenSubmit(e) {
+        e.preventDefault();
+        const token = document.getElementById('tokenInput').value.trim();
+        
+        if (!token) {
+            this.showTokenError('Please enter a token');
+            return;
+        }
+        
+        await this.verifyToken(token);
+    }
+
+    // MARK: focusTokenInput
+    static focusTokenInput() {
+        const tokenInput = document.getElementById('tokenInput');
+        if (tokenInput) {
+            tokenInput.focus();
+        }
+    }
+
+    // MARK: hideTokenModal
     static hideTokenModal() {
-        // Remove all existing modals
         const existingModals = document.querySelectorAll('#tokenModal');
-        existingModals.forEach(modal => {
-            modal.remove();
-        });
+        existingModals.forEach(modal => modal.remove());
     }
 
+    // ERROR HANDLING
+
+    // MARK: showTokenError
     static showTokenError(message) {
         const errorDiv = document.getElementById('tokenError');
-        if (errorDiv) {
-            errorDiv.textContent = message;
-            errorDiv.classList.remove('hidden');
-            
-            setTimeout(() => {
-                errorDiv.classList.add('hidden');
-            }, 5000);
-        }
+        if (!errorDiv) return;
+        
+        errorDiv.textContent = message;
+        errorDiv.classList.remove('hidden');
+        
+        setTimeout(() => {
+            errorDiv.classList.add('hidden');
+        }, 5000);
     }
 
+    // TOKEN VERIFICATION
+
+    // MARK: verifyToken
     static async verifyToken(token) {
         try {
-            const config = AuthManager.getConfig();
-            const response = await fetch(`${config.API_BASE}/status`, {
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            });
+            const response = await this.makeAuthRequest(token);
             
             if (response.ok) {
-                if (window.FinGuardConfig) {
-                    window.FinGuardConfig.ADMIN_TOKEN = token;
-                }
-                AuthManager.hideTokenModal();
-                if (window.Utils) {
-                    window.Utils.showAlert('Authentication successful!', 'success');
-                }
-                if (window.App) {
-                    window.App.initializeApp();
-                }
+                this.handleSuccessfulAuth(token);
             } else {
-                const error = await response.json().catch(() => ({ error: 'Invalid token' }));
-                AuthManager.showTokenError(error.error || 'Authentication failed');
-                document.getElementById('tokenInput').value = '';
-                document.getElementById('tokenInput').focus();
+                await this.handleFailedAuth(response);
             }
         } catch (error) {
-            AuthManager.showTokenError('Network error: ' + error.message);
-            const tokenInput = document.getElementById('tokenInput');
-            if (tokenInput) {
-                tokenInput.focus();
-            }
+            this.handleNetworkError(error);
         }
     }
 
-    static clearToken() {
-        localStorage.removeItem('adminToken');
+    // MARK: makeAuthRequest
+    static async makeAuthRequest(token) {
+        const config = this.getConfig();
+        return await fetch(`${config.API_BASE}/status`, {
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            }
+        });
+    }
+
+    // MARK: handleSuccessfulAuth
+    static handleSuccessfulAuth(token) {
+        this.setAuthToken(token);
+        this.hideTokenModal();
+        this.showSuccessMessage();
+        this.initializeApp();
+    }
+
+    // MARK: handleFailedAuth
+    static async handleFailedAuth(response) {
+        const error = await response.json().catch(() => ({ error: 'Invalid token' }));
+        this.showTokenError(error.error || 'Authentication failed');
+        this.clearTokenInput();
+        this.focusTokenInput();
+    }
+
+    // MARK: handleNetworkError
+    static handleNetworkError(error) {
+        this.showTokenError('Network error: ' + error.message);
+        this.focusTokenInput();
+    }
+
+    // TOKEN MANAGEMENT
+
+    // MARK: setAuthToken
+    static setAuthToken(token) {
         if (window.FinGuardConfig) {
-            window.FinGuardConfig.ADMIN_TOKEN = null;
+            window.FinGuardConfig.ADMIN_TOKEN = token;
         }
-        AuthManager.hideTokenModal();
-        // Small delay to ensure cleanup is complete
+    }
+
+    // MARK: clearTokenInput
+    static clearTokenInput() {
+        const tokenInput = document.getElementById('tokenInput');
+        if (tokenInput) {
+            tokenInput.value = '';
+        }
+    }
+
+    // MARK: showSuccessMessage
+    static showSuccessMessage() {
+        if (window.Utils) {
+            window.Utils.showAlert('Authentication successful!', 'success');
+        }
+    }
+
+    // MARK: initializeApp
+    static initializeApp() {
+        if (window.App) {
+            window.App.initializeApp();
+        }
+    }
+
+    // MARK: clearToken
+    static clearToken() {
+        this.removeStoredToken();
+        this.resetAuthConfig();
+        this.hideTokenModal();
+        
         setTimeout(() => {
-            AuthManager.showTokenModal();
+            this.showTokenModal();
         }, 200);
     }
 
+    // MARK: clearStoredToken
     static clearStoredToken() {
+        this.removeStoredToken();
+        this.resetAuthConfig();
+        this.hideTokenModal();
+        
+        setTimeout(() => {
+            this.showTokenModal();
+        }, 100);
+    }
+
+    // MARK: removeStoredToken
+    static removeStoredToken() {
         localStorage.removeItem('adminToken');
+    }
+
+    // MARK: resetAuthConfig
+    static resetAuthConfig() {
         if (window.FinGuardConfig) {
             window.FinGuardConfig.ADMIN_TOKEN = null;
         }
-        AuthManager.hideTokenModal();
-        setTimeout(() => {
-            AuthManager.showTokenModal();
-        }, 100);
     }
 }
 
-// Export to global scope
+// GLOBAL SCOPE EXPORT
+
 window.AuthManager = AuthManager;

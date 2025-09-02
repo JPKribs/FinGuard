@@ -4,7 +4,10 @@ import (
 	"net"
 )
 
+// Public IP retrieval functions
+
 // MARK: GetSystemIPv4s
+// Retrieves all IPv4 addresses from system interfaces, prioritizing public then preferred private IPs
 func GetSystemIPv4s() ([]string, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -42,7 +45,6 @@ func GetSystemIPv4s() ([]string, error) {
 		}
 	}
 
-	// Combine lists: public first, then preferred private, then others
 	allIPs := append(publicIPs, preferredPrivateIPs...)
 	allIPs = append(allIPs, otherIPs...)
 
@@ -53,47 +55,10 @@ func GetSystemIPv4s() ([]string, error) {
 	return allIPs, nil
 }
 
-// MARK: isPublicIP
-func isPublicIP(ip net.IP) bool {
-	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-		return false
-	}
-
-	privateRanges := []string{
-		"10.0.0.0/8",
-		"172.16.0.0/12",
-		"192.168.0.0/16",
-		"169.254.0.0/16",
-	}
-
-	for _, cidr := range privateRanges {
-		_, block, _ := net.ParseCIDR(cidr)
-		if block.Contains(ip) {
-			return false
-		}
-	}
-
-	return true
-}
-
-// MARK: isPreferredPrivateIP
-func isPreferredPrivateIP(ip net.IP) bool {
-	preferredRanges := []string{
-		"192.168.0.0/16",
-		"10.0.0.0/8",
-	}
-
-	for _, cidr := range preferredRanges {
-		_, block, _ := net.ParseCIDR(cidr)
-		if block.Contains(ip) {
-			return true
-		}
-	}
-
-	return false
-}
+// Network interface information functions
 
 // MARK: GetInterfaceDetails
+// Retrieves detailed information about all non-loopback network interfaces
 func GetInterfaceDetails() ([]NetworkInterface, error) {
 	interfaces, err := net.Interfaces()
 	if err != nil {
@@ -132,4 +97,48 @@ func GetInterfaceDetails() ([]NetworkInterface, error) {
 	}
 
 	return details, nil
+}
+
+// IP classification helper functions
+
+// MARK: isPublicIP
+// Determines if an IP address is publicly routable
+func isPublicIP(ip net.IP) bool {
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return false
+	}
+
+	privateRanges := []string{
+		"10.0.0.0/8",
+		"172.16.0.0/12",
+		"192.168.0.0/16",
+		"169.254.0.0/16",
+	}
+
+	for _, cidr := range privateRanges {
+		_, block, _ := net.ParseCIDR(cidr)
+		if block.Contains(ip) {
+			return false
+		}
+	}
+
+	return true
+}
+
+// MARK: isPreferredPrivateIP
+// Checks if an IP is in a preferred private address range
+func isPreferredPrivateIP(ip net.IP) bool {
+	preferredRanges := []string{
+		"192.168.0.0/16",
+		"10.0.0.0/8",
+	}
+
+	for _, cidr := range preferredRanges {
+		_, block, _ := net.ParseCIDR(cidr)
+		if block.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
 }

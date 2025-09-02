@@ -1,16 +1,18 @@
-/* FinGuard Management Interface Styles */
 
-/* Import theme variables first */
+/* FINGUARD MANAGEMENT INTERFACE STYLES */
+
+/* THEME FOUNDATION */
 @import 'site/theme.css';
 
-/* Import global styles */
+/* GLOBAL BASE STYLES */
 @import 'site/global.css';
 
-/* Import typography */
+/* TYPOGRAPHY STYLES */
 @import 'site/typography.css';
 
-/* Import component styles */
+/* UI COMPONENTS */
 @import 'components/tab.css';
+@import 'components/form.css';
 @import 'components/card.css';
 @import 'components/button.css';
 @import 'components/status-badge.css';
@@ -19,4 +21,4 @@
 @import 'components/logo.css';
 @import 'components/logs.css';
 
-/* This file serves as the main entry point for all styles */
+/* Main stylesheet entry point - imports all component and base styles */

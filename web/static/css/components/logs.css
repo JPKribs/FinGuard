@@ -1,84 +1,100 @@
+
+/* LOG COMPONENTS */
+
+/* Log entry base styles */
 .log-entry {
-    border-left: 3px solid var(--color-border);
-    transition: all var(--animation-normal) ease;
+   border-left: 3px solid var(--color-border);
+   transition: all var(--animation-normal) ease;
 }
 
+/* Log entry hover effects */
 .log-entry:hover {
-    border-left-color: var(--color-accent);
-    background: var(--color-bg-hover);
+   border-left-color: var(--color-accent);
+   background: var(--color-bg-hover);
 }
 
+/* Log content container */
 .log-content {
-    width: 100%;
+   width: 100%;
 }
 
+/* Log header */
 .log-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 0.5rem;
+   display: flex;
+   justify-content: space-between;
+   align-items: center;
+   margin-bottom: 0.5rem;
 }
 
+/* Log message text */
 .log-message {
-    color: var(--color-text-primary);
-    font-weight: 500;
-    margin-bottom: 0.5rem;
-    font-size: 0.95rem;
+   color: var(--color-text-primary);
+   font-weight: 500;
+   margin-bottom: 0.5rem;
+   font-size: 0.95rem;
 }
 
+/* Log context container */
 .log-context {
-    color: var(--color-text-muted);
-    font-size: 0.85rem;
-    line-height: 1.4;
-    margin-top: 0.5rem;
-    padding: 0.75rem;
-    background: var(--color-bg-tertiary);
-    border-radius: 6px;
-    border: 1px solid var(--color-border);
+   color: var(--color-text-muted);
+   font-size: 0.85rem;
+   line-height: 1.4;
+   margin-top: 0.5rem;
+   padding: 0.75rem;
+   background: var(--color-bg-tertiary);
+   border-radius: 6px;
+   border: 1px solid var(--color-border);
 }
 
+/* Context item styling */
 .context-item {
-    display: inline-block;
-    margin-right: 1rem;
-    margin-bottom: 0.25rem;
+   display: inline-block;
+   margin-right: 1rem;
+   margin-bottom: 0.25rem;
 }
 
+/* Context item labels */
 .context-item strong {
-    color: var(--color-accent);
+   color: var(--color-accent);
 }
 
-/* Level-specific styling */
+/* LOG LEVEL VARIANTS */
+
+/* Debug level logs */
 .log-entry .status.debug {
-    background: linear-gradient(135deg, #6b7280, #4b5563);
-    color: var(--color-text-primary);
+   background: linear-gradient(135deg, #6b7280, #4b5563);
+   color: var(--color-text-primary);
 }
 
+/* Info level logs */
 .log-entry .status.info {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: white;
+   background: linear-gradient(135deg, #3b82f6, #2563eb);
+   color: white;
 }
 
+/* Warning level logs */
 .log-entry .status.warn {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: #000;
+   background: linear-gradient(135deg, #f59e0b, #d97706);
+   color: #000;
 }
 
+/* Error level logs */
 .log-entry .status.error {
-    background: var(--gradient-danger);
-    color: var(--color-text-primary);
+   background: var(--gradient-danger);
+   color: var(--color-text-primary);
 }
 
 /* Mobile responsive */
 @media (max-width: 768px) {
-    .log-header {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 0.5rem;
-    }
-    
-    .context-item {
-        display: block;
-        margin-bottom: 0.25rem;
-        margin-right: 0;
-    }
+   .log-header {
+       flex-direction: column;
+       align-items: flex-start;
+       gap: 0.5rem;
+   }
+   
+   .context-item {
+       display: block;
+       margin-bottom: 0.25rem;
+       margin-right: 0;
+   }
 }

@@ -27,7 +27,10 @@ const (
 	bufferPoolSize         = 256
 )
 
+// Tunnel creation and lifecycle functions
+
 // MARK: NewTunnel
+// Creates a new tunnel instance with configuration validation
 func NewTunnel(cfg config.TunnelConfig, logger *internal.Logger, resolver *AsyncResolver) (*Tunnel, error) {
 	if cfg.Name == "" {
 		return nil, fmt.Errorf("tunnel name cannot be empty")
@@ -54,6 +57,7 @@ func NewTunnel(cfg config.TunnelConfig, logger *internal.Logger, resolver *Async
 }
 
 // MARK: Start
+// Starts the tunnel by creating TUN device and WireGuard configuration
 func (t *Tunnel) Start(ctx context.Context) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -103,6 +107,7 @@ func (t *Tunnel) Start(ctx context.Context) error {
 }
 
 // MARK: Stop
+// Stops the tunnel and cleans up all resources
 func (t *Tunnel) Stop(ctx context.Context) error {
 	if !atomic.CompareAndSwapInt64(&t.running, 1, 0) {
 		return nil
@@ -115,26 +120,38 @@ func (t *Tunnel) Stop(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, deviceStartTimeout)
 	defer cancel()
 
-	t.mu.Lock()
-	defer t.mu.Unlock()
+	done := make(chan struct{})
+	go func() {
+		t.mu.Lock()
+		defer t.mu.Unlock()
 
-	if t.device != nil {
-		t.device.Close()
-		t.device = nil
+		if t.device != nil {
+			t.device.Close()
+			t.device = nil
+		}
+
+		if t.tunDev != nil {
+			t.cleanupRoutes()
+			t.tunDev.Close()
+			t.tunDev = nil
+		}
+
+		t.lastError = nil
+		close(done)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-done:
 	}
 
-	if t.tunDev != nil {
-		t.cleanupRoutes()
-		t.tunDev.Close()
-		t.tunDev = nil
-	}
-
-	t.lastError = nil
 	t.logger.Info("Optimized tunnel stopped", "name", t.name)
 	return nil
 }
 
 // MARK: Update
+// Updates tunnel configuration while preserving state
 func (t *Tunnel) Update(ctx context.Context, cfg config.TunnelConfig) error {
 	if cfg.Name != t.name {
 		return fmt.Errorf("cannot change tunnel name from %s to %s", t.name, cfg.Name)
@@ -160,6 +177,7 @@ func (t *Tunnel) Update(ctx context.Context, cfg config.TunnelConfig) error {
 }
 
 // MARK: Status
+// Returns current tunnel status information
 func (t *Tunnel) Status(ctx context.Context) TunnelStatus {
 	state := "stopped"
 	if atomic.LoadInt64(&t.running) == 1 {
@@ -186,7 +204,10 @@ func (t *Tunnel) Status(ctx context.Context) TunnelStatus {
 	return status
 }
 
+// Device setup and configuration functions
+
 // MARK: startTUNDevice
+// Creates and configures the TUN device
 func (t *Tunnel) startTUNDevice() error {
 	mtu := t.config.MTU
 	if mtu <= 0 {
@@ -203,6 +224,7 @@ func (t *Tunnel) startTUNDevice() error {
 }
 
 // MARK: addAddresses
+// Adds all configured IP addresses to the TUN device
 func (t *Tunnel) addAddresses() error {
 	if len(t.config.Addresses) == 0 {
 		return fmt.Errorf("no addresses configured for tunnel %s", t.name)
@@ -219,6 +241,7 @@ func (t *Tunnel) addAddresses() error {
 }
 
 // MARK: addRoutes
+// Adds all configured routes through the TUN device
 func (t *Tunnel) addRoutes() error {
 	var errors []string
 
@@ -239,6 +262,7 @@ func (t *Tunnel) addRoutes() error {
 }
 
 // MARK: cleanupRoutes
+// Removes all routes during cleanup
 func (t *Tunnel) cleanupRoutes() {
 	for _, route := range t.config.Routes {
 		if err := t.tunDev.RemoveRoute(route); err != nil {
@@ -248,8 +272,9 @@ func (t *Tunnel) cleanupRoutes() {
 }
 
 // MARK: createWireGuardDevice
+// Creates the WireGuard device with optimized TUN wrapper
 func (t *Tunnel) createWireGuardDevice() error {
-	tunWrapper := &OptimizedTUNWrapper{
+	tunWrapper := &TUNWrapper{
 		iface:      t.tunDev.File(),
 		mtu:        t.config.MTU,
 		name:       t.tunDev.Name(),
@@ -269,6 +294,7 @@ func (t *Tunnel) createWireGuardDevice() error {
 }
 
 // MARK: cleanupOnFailure
+// Cleans up resources when startup fails
 func (t *Tunnel) cleanupOnFailure() {
 	if t.device != nil {
 		t.device.Close()
@@ -281,7 +307,10 @@ func (t *Tunnel) cleanupOnFailure() {
 	}
 }
 
+// Connection monitoring functions
+
 // MARK: startMonitoring
+// Starts the connection monitoring routine
 func (t *Tunnel) startMonitoring(ctx context.Context) {
 	if atomic.LoadInt64(&t.monitoringActive) == 1 {
 		return
@@ -292,6 +321,7 @@ func (t *Tunnel) startMonitoring(ctx context.Context) {
 }
 
 // MARK: stopMonitoringRoutine
+// Stops the connection monitoring routine
 func (t *Tunnel) stopMonitoringRoutine() {
 	if !atomic.CompareAndSwapInt64(&t.monitoringActive, 1, 0) {
 		return
@@ -307,6 +337,7 @@ func (t *Tunnel) stopMonitoringRoutine() {
 }
 
 // MARK: monitorConnections
+// Main connection monitoring loop with peer health checks
 func (t *Tunnel) monitorConnections(ctx context.Context) {
 	monitorInterval := time.Duration(t.config.MonitorInterval) * time.Second
 	if monitorInterval <= 0 {
@@ -345,6 +376,7 @@ func (t *Tunnel) monitorConnections(ctx context.Context) {
 }
 
 // MARK: performConnectivityCheck
+// Performs connectivity check by querying WireGuard device status
 func (t *Tunnel) performConnectivityCheck(lastHandshakes map[string]time.Time, resolvedEndpoints map[string]string, staleTimeout time.Duration) {
 	if t.device == nil {
 		return
@@ -361,6 +393,7 @@ func (t *Tunnel) performConnectivityCheck(lastHandshakes map[string]time.Time, r
 }
 
 // MARK: processPeerStatus
+// Parses peer status and updates connection state
 func (t *Tunnel) processPeerStatus(status string, lastHandshakes map[string]time.Time, resolvedEndpoints map[string]string, staleTimeout time.Duration) {
 	lines := strings.Split(status, "\n")
 	var currentPeer, currentEndpoint string
@@ -382,6 +415,7 @@ func (t *Tunnel) processPeerStatus(status string, lastHandshakes map[string]time
 }
 
 // MARK: processHandshakeTime
+// Processes handshake timing information for peer health
 func (t *Tunnel) processHandshakeTime(line, currentPeer, currentEndpoint string, lastHandshakes map[string]time.Time, activePeers map[string]bool, resolvedEndpoints map[string]string) {
 	timestampStr := strings.TrimPrefix(line, "last_handshake_time_sec=")
 
@@ -401,6 +435,7 @@ func (t *Tunnel) processHandshakeTime(line, currentPeer, currentEndpoint string,
 }
 
 // MARK: checkStaleConnections
+// Checks for stale connections and triggers reconnection attempts
 func (t *Tunnel) checkStaleConnections(lastHandshakes map[string]time.Time, activePeers map[string]bool, resolvedEndpoints map[string]string, staleTimeout time.Duration) {
 	staleThreshold := time.Now().Add(-staleTimeout)
 
@@ -432,7 +467,10 @@ func (t *Tunnel) checkStaleConnections(lastHandshakes map[string]time.Time, acti
 	}
 }
 
+// Parsing and utility functions
+
 // MARK: parseTimestamp
+// Parses timestamp string to Unix timestamp with validation
 func (t *Tunnel) parseTimestamp(timestampStr string) int64 {
 	timestamp := int64(0)
 	for _, c := range []byte(timestampStr) {
@@ -450,7 +488,10 @@ func (t *Tunnel) parseTimestamp(timestampStr string) int64 {
 	return 0
 }
 
+// Peer recovery and reconnection functions
+
 // MARK: attemptPeerRecovery
+// Attempts to recover a peer that has never had a handshake
 func (t *Tunnel) attemptPeerRecovery(peerKey, currentEndpoint string, lastHandshakes map[string]time.Time, resolvedEndpoints map[string]string) {
 	if lastHandshake, exists := lastHandshakes[peerKey]; exists {
 		if time.Since(lastHandshake) < 2*time.Minute {
@@ -469,6 +510,7 @@ func (t *Tunnel) attemptPeerRecovery(peerKey, currentEndpoint string, lastHandsh
 }
 
 // MARK: checkEndpointResolution
+// Checks if peer endpoint has changed and updates if needed
 func (t *Tunnel) checkEndpointResolution(peer config.PeerConfig, currentEndpoint, peerKey string, resolvedEndpoints map[string]string) {
 	resultChan := t.resolver.ResolveAsync(peer.Endpoint, 5*time.Second)
 
@@ -496,6 +538,7 @@ func (t *Tunnel) checkEndpointResolution(peer config.PeerConfig, currentEndpoint
 }
 
 // MARK: attemptPeerReconnection
+// Attempts to reconnect a stale peer connection
 func (t *Tunnel) attemptPeerReconnection(peerKey string, resolvedEndpoints map[string]string) {
 	for _, peer := range t.config.Peers {
 		if peerPublicKeyHex, err := t.base64ToHex(peer.PublicKey); err == nil && peerPublicKeyHex == peerKey {
@@ -521,6 +564,7 @@ func (t *Tunnel) attemptPeerReconnection(peerKey string, resolvedEndpoints map[s
 }
 
 // MARK: updatePeerEndpoint
+// Updates a peer's endpoint configuration
 func (t *Tunnel) updatePeerEndpoint(peer config.PeerConfig, newEndpoint string, resolvedEndpoints map[string]string) {
 	peerKey := fmt.Sprintf("%s:%s", t.name, peer.Name)
 
@@ -549,7 +593,10 @@ func (t *Tunnel) updatePeerEndpoint(peer config.PeerConfig, newEndpoint string, 
 	}
 }
 
+// WireGuard configuration functions
+
 // MARK: applyConfiguration
+// Applies the complete WireGuard configuration to the device
 func (t *Tunnel) applyConfiguration() error {
 	if t.device == nil {
 		return fmt.Errorf("device not initialized")
@@ -586,6 +633,7 @@ func (t *Tunnel) applyConfiguration() error {
 }
 
 // MARK: buildPeerConfig
+// Builds WireGuard configuration string for a single peer
 func (t *Tunnel) buildPeerConfig(peer config.PeerConfig) (string, error) {
 	publicKeyHex, err := t.base64ToHex(peer.PublicKey)
 	if err != nil {
@@ -641,6 +689,7 @@ func (t *Tunnel) buildPeerConfig(peer config.PeerConfig) (string, error) {
 }
 
 // MARK: base64ToHex
+// Converts base64 encoded key to hexadecimal format for WireGuard
 func (t *Tunnel) base64ToHex(b64 string) (string, error) {
 	b64 = strings.TrimSpace(b64)
 	if len(b64) != 44 {

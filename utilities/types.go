@@ -1,5 +1,6 @@
 package utilities
 
+// MARK: NetworkInterface
 type NetworkInterface struct {
 	Name      string   `json:"name"`
 	Addresses []string `json:"addresses"`

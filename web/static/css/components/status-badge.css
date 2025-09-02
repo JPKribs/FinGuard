@@ -1,53 +1,63 @@
-/* Status badge component */
+
+/* STATUS COMPONENTS */
+
+/* Status badge base styles */
 .status {
-    padding: 0.3rem 0.8rem;
-    border-radius: 20px;
-    font-size: 0.8rem;
-    font-weight: bold;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.3rem;
+   padding: 0.3rem 0.8rem;
+   border-radius: 20px;
+   font-size: 0.8rem;
+   font-weight: bold;
+   text-transform: uppercase;
+   letter-spacing: 0.5px;
+   display: inline-flex;
+   align-items: center;
+   gap: 0.3rem;
 }
 
+/* Status indicator dot */
 .status::before {
-    content: '';
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: currentColor;
-    animation: pulse 2s infinite;
+   content: '';
+   width: 6px;
+   height: 6px;
+   border-radius: 50%;
+   background: currentColor;
+   animation: pulse 2s infinite;
 }
 
+/* Status pulse animation */
 @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.5; }
+   0%, 100% { opacity: 1; }
+   50% { opacity: 0.5; }
 }
 
+/* Running status variant */
 .status.running {
-    background: var(--gradient-success);
-    color: #000;
+   background: var(--gradient-success);
+   color: #000;
 }
 
+/* Stopped status variant */
 .status.stopped {
-    background: var(--gradient-danger);
-    color: var(--color-text-primary);
+   background: var(--gradient-danger);
+   color: var(--color-text-primary);
 }
 
-/* Loading spinner component */
+/* LOADING COMPONENTS */
+
+/* Loading spinner */
 .loading {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 2px solid var(--color-border);
-    border-radius: 50%;
-    border-top-color: var(--color-accent);
-    animation: spin 1s ease-in-out infinite;
+   display: inline-block;
+   width: 20px;
+   height: 20px;
+   border: 2px solid var(--color-border);
+   border-radius: 50%;
+   border-top-color: var(--color-accent);
+   animation: spin 1s ease-in-out infinite;
 }
 
+/* Loading spinner animation */
 @keyframes spin {
-    to { 
-        transform: rotate(360deg); 
-    }
+   to { 
+       transform: rotate(360deg); 
+   }
 }

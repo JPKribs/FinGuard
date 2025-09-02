@@ -1,0 +1,16 @@
+
+/* FORM COMPONENTS */
+
+/* Inline checkboxes */
+.checkbox-inline {
+    width: auto !important;
+    margin-right: 0.5rem;
+}
+
+/* Help text for forms */
+.help-text {
+    color: var(--color-text-muted);
+    display: block;
+    margin-top: 0.25rem;
+    font-size: 0.85rem;
+}

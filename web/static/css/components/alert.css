@@ -1,64 +1,78 @@
-/* Alert notification component */
+
+/* ALERT COMPONENTS */
+
+/* Base alert styles */
 .alert {
-    padding: 1rem;
-    border-radius: 8px;
-    margin-bottom: 1rem;
-    font-weight: 500;
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    animation: slideIn var(--animation-normal) ease-out;
+   padding: 1rem;
+   border-radius: 8px;
+   margin-bottom: 1rem;
+   font-weight: 500;
+   display: flex;
+   align-items: center;
+   gap: 0.5rem;
+   animation: slideIn var(--animation-normal) ease-out;
 }
 
+/* Alert animation */
 @keyframes slideIn {
-    from { 
-        opacity: 0; 
-        transform: translateY(-20px); 
-    }
-    to { 
-        opacity: 1; 
-        transform: translateY(0); 
-    }
+   from { 
+       opacity: 0; 
+       transform: translateY(-20px); 
+   }
+   to { 
+       opacity: 1; 
+       transform: translateY(0); 
+   }
 }
 
-.alert.success {
-    background: var(--gradient-success);
-    color: #000;
-    border-left: 4px solid var(--color-success-darker);
-}
-
-.alert.error {
-    background: var(--gradient-danger);
-    color: var(--color-text-primary);
-    border-left: 4px solid var(--color-danger-darker);
-}
-
-.alert.info {
-    background: linear-gradient(135deg, #3b82f6, #2563eb);
-    color: var(--color-text-primary);
-    border-left: 4px solid #1d4ed8;
-}
-
-.alert.warning {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: #000;
-    border-left: 4px solid #b45309;
-}
-
+/* Base alert icon */
 .alert::before {
-    content: '✓';
-    font-weight: bold;
-    font-size: 1.2rem;
+   content: '✓';
+   font-weight: bold;
+   font-size: 1.2rem;
 }
 
+/* ALERT VARIANTS */
+
+/* Success alerts - positive confirmations */
+.alert.success {
+   background: var(--gradient-success);
+   color: #000;
+   border-left: 4px solid var(--color-success-darker);
+}
+
+/* Error alerts - critical issues */
+.alert.error {
+   background: var(--gradient-danger);
+   color: var(--color-text-primary);
+   border-left: 4px solid var(--color-danger-darker);
+}
+
+/* Error alerts - prefix */
 .alert.error::before {
-    content: '✗';
+   content: '✗';
 }
 
+/* Info alerts - informational messages */
+.alert.info {
+   background: linear-gradient(135deg, #3b82f6, #2563eb);
+   color: var(--color-text-primary);
+   border-left: 4px solid #1d4ed8;
+}
+
+/* Info alerts - prefix */
 .alert.info::before {
-    content: 'ℹ';
+   content: 'ℹ';
 }
 
+/* Warning alerts - caution required */
+.alert.warning {
+   background: linear-gradient(135deg, #f59e0b, #d97706);
+   color: #000;
+   border-left: 4px solid #b45309;
+}
+
+/* Warning alerts - prefix */
 .alert.warning::before {
-    content: '⚠';
+   content: '⚠';
 }

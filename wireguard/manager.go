@@ -17,7 +17,10 @@ const (
 	healthCheckInterval = 15 * time.Second
 )
 
+// Manager lifecycle functions
+
 // MARK: NewManager
+// Creates a new tunnel manager with logger and resolver
 func NewManager(logger *internal.Logger) TunnelManager {
 	if logger == nil {
 		logger = &internal.Logger{}
@@ -31,6 +34,7 @@ func NewManager(logger *internal.Logger) TunnelManager {
 }
 
 // MARK: Start
+// Starts the tunnel manager and initializes health monitoring
 func (m *Manager) Start(ctx context.Context) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -53,6 +57,7 @@ func (m *Manager) Start(ctx context.Context) error {
 }
 
 // MARK: Stop
+// Stops the tunnel manager and all active tunnels
 func (m *Manager) Stop(ctx context.Context) error {
 	if !atomic.CompareAndSwapInt64(&m.running, 1, 0) {
 		return nil
@@ -95,7 +100,10 @@ func (m *Manager) Stop(ctx context.Context) error {
 	return nil
 }
 
+// Tunnel management functions
+
 // MARK: CreateTunnel
+// Creates a new tunnel with retry logic and starts it
 func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) error {
 	if atomic.LoadInt64(&m.running) == 0 {
 		return fmt.Errorf("tunnel manager not running")
@@ -148,6 +156,7 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 }
 
 // MARK: UpdateTunnel
+// Updates an existing tunnel configuration with rollback on failure
 func (m *Manager) UpdateTunnel(ctx context.Context, cfg config.TunnelConfig) error {
 	if atomic.LoadInt64(&m.running) == 0 {
 		return fmt.Errorf("tunnel manager not running")
@@ -178,6 +187,7 @@ func (m *Manager) UpdateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 }
 
 // MARK: DeleteTunnel
+// Deletes a tunnel and cleans up its resources
 func (m *Manager) DeleteTunnel(ctx context.Context, name string) error {
 	if atomic.LoadInt64(&m.running) == 0 {
 		return fmt.Errorf("tunnel manager not running")
@@ -203,7 +213,10 @@ func (m *Manager) DeleteTunnel(ctx context.Context, name string) error {
 	return nil
 }
 
+// Status and monitoring functions
+
 // MARK: Status
+// Returns the status of a specific tunnel
 func (m *Manager) Status(ctx context.Context, name string) (TunnelStatus, error) {
 	if name == "" {
 		return TunnelStatus{}, fmt.Errorf("tunnel name cannot be empty")
@@ -226,6 +239,7 @@ func (m *Manager) Status(ctx context.Context, name string) (TunnelStatus, error)
 }
 
 // MARK: ListTunnels
+// Returns status information for all tunnels
 func (m *Manager) ListTunnels(ctx context.Context) ([]TunnelStatus, error) {
 	m.mu.RLock()
 	tunnels := make([]*Tunnel, 0, len(m.tunnels))
@@ -247,11 +261,15 @@ func (m *Manager) ListTunnels(ctx context.Context) ([]TunnelStatus, error) {
 }
 
 // MARK: IsReady
+// Checks if the tunnel manager is ready to accept operations
 func (m *Manager) IsReady() bool {
 	return atomic.LoadInt64(&m.running) == 1 && atomic.LoadInt32(&m.retryAttempts) < maxRetryAttempts
 }
 
+// Recovery and health functions
+
 // MARK: Recover
+// Attempts to recover failed tunnels
 func (m *Manager) Recover(ctx context.Context) error {
 	if atomic.LoadInt64(&m.running) == 0 {
 		return fmt.Errorf("tunnel manager not running")
@@ -293,6 +311,7 @@ func (m *Manager) Recover(ctx context.Context) error {
 }
 
 // MARK: healthMonitor
+// Continuous health monitoring routine
 func (m *Manager) healthMonitor() {
 	defer m.wg.Done()
 
@@ -310,6 +329,7 @@ func (m *Manager) healthMonitor() {
 }
 
 // MARK: performHealthCheck
+// Performs health checks on all tunnels and triggers recovery if needed
 func (m *Manager) performHealthCheck() {
 	if atomic.LoadInt64(&m.running) == 0 {
 		return

@@ -1,112 +1,136 @@
-/* Button components */
+
+/* BUTTON COMPONENTS */
+
+/* Base button styles */
 button {
-    background: var(--gradient-primary);
-    color: #000;
-    border: none;
-    padding: 0.75rem 1.5rem;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 1rem;
-    transition: all var(--animation-normal) ease;
-    position: relative;
-    overflow: hidden;
+   background: var(--gradient-primary);
+   color: #000;
+   border: none;
+   padding: 0.75rem 1.5rem;
+   border-radius: 6px;
+   cursor: pointer;
+   font-weight: bold;
+   font-size: 1rem;
+   transition: all var(--animation-normal) ease;
+   position: relative;
+   overflow: hidden;
+   width: 100%;
+   box-sizing: border-box;
 }
 
+/* Base button padding */
 button::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: -100%;
-    width: 100%;
-    height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
-    transition: left var(--animation-slow);
+   content: '';
+   position: absolute;
+   top: 0;
+   left: -100%;
+   width: 100%;
+   height: 100%;
+   background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+   transition: left var(--animation-slow);
 }
 
+/* Base button hover pre-effect */
 button:hover::before {
-    left: 100%;
+   left: 100%;
 }
 
+/* Base button hover effect */
 button:hover {
-    background: var(--gradient-primary-hover);
-    transform: translateY(-1px);
-    box-shadow: var(--shadow-button);
+   background: var(--gradient-primary-hover);
+   transform: translateY(-1px);
+   box-shadow: var(--shadow-button);
 }
 
+/* Base button active transform */
 button:active {
-    transform: translateY(0);
+   transform: translateY(0);
 }
 
-/* Button variants */
+/* BUTTON VARIANTS */
+
+/* Danger buttons - destructive actions */
 .btn-danger {
-    background: var(--gradient-danger);
-    color: var(--color-text-secondary);
+   background: var(--gradient-danger);
+   color: var(--color-text-secondary);
 }
 
+/* Danger buttons - hover */
 .btn-danger:hover {
-    background: var(--gradient-danger-hover);
-    box-shadow: var(--shadow-danger);
+   background: var(--gradient-danger-hover);
+   box-shadow: var(--shadow-danger);
 }
 
+/* Warning buttons - caution required actions */
 .btn-warning {
-    background: linear-gradient(135deg, var(--color-warning), #d97706);
-    color: #000;
+   background: linear-gradient(135deg, var(--color-warning), #d97706);
+   color: #000;
 }
 
+/* Warning buttons - hover */
 .btn-warning:hover {
-    background: linear-gradient(135deg, #d97706, #b45309);
-    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+   background: linear-gradient(135deg, #d97706, #b45309);
+   box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
 
+/* Secondary buttons - standard actions */
 .btn-secondary {
-    background: linear-gradient(135deg, #6b7280, #4b5563);
-    color: var(--color-text-primary);
+   background: linear-gradient(135deg, #6b7280, #4b5563);
+   color: var(--color-text-primary);
 }
 
+/* Secondary buttons - hover */
 .btn-secondary:hover {
-    background: linear-gradient(135deg, #4b5563, #374151);
-    box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
+   background: linear-gradient(135deg, #4b5563, #374151);
+   box-shadow: 0 4px 12px rgba(107, 114, 128, 0.3);
 }
 
+/* Small buttons - compact actions */
 .btn-small {
-    padding: 0.4rem 0.8rem;
-    font-size: 0.8rem;
+   padding: 0.4rem 0.8rem;
+   font-size: 0.8rem;
 }
 
-/* Action buttons container */
+/* BUTTON CONTAINERS */
+
+/* General action buttons container */
 .actions {
-    display: flex;
-    gap: 0.5rem;
-    align-items: center;
+   display: flex;
+   gap: 0.5rem;
+   align-items: center;
 }
 
-/* System control buttons grid */
+/* System control buttons - restart, shutdown, sign out */
 .system-controls {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 1rem;
-    width: 100%;
+   display: grid;
+   grid-template-columns: 1fr 1fr 1fr;
+   gap: 1rem;
+   width: 100%;
 }
 
-/* Mobile responsive - stack buttons vertically on small screens */
-@media (max-width: 768px) {
-    .system-controls {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-    }
+/* System control buttons - width */
+.system-controls button {
+   width: 100%;
 }
 
+/* Update control buttons - check, apply, configure */
 .update-controls {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 1rem;
-    width: 100%;
+   display: grid;
+   grid-template-columns: 1fr 1fr 1fr;
+   gap: 1rem;
+   width: 100%;
 }
 
+/* Update control buttons - width */
+.update-controls button {
+   width: 100%;
+}
+
+/* Mobile responsive - stack all button grids vertically */
 @media (max-width: 768px) {
-    .update-controls {
-        grid-template-columns: 1fr;
-        gap: 0.75rem;
-    }
+   .system-controls,
+   .update-controls {
+       grid-template-columns: 1fr;
+       gap: 0.75rem;
+   }
 }

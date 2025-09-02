@@ -1,54 +1,80 @@
-// System Status Management
+
+// SYSTEM STATUS MANAGEMENT
+
 class StatusManager {
     static statusRefreshInterval = null;
 
+    // STATUS LOADING
+
+    // MARK: loadStatus
     static async loadStatus() {
         try {
             window.Utils.showLoading('systemStatus');
             
             const response = await window.APIClient.getStatus();
-            const status = response.data;
-            
-            StatusManager.renderSystemStatus(status);
-            
-            if (window.UpdateManager) {
-                window.UpdateManager.loadUpdateStatus();
-            }
-            
+            this.renderSystemStatus(response.data);
+            this.loadAdditionalStatus();
         } catch (error) {
-            console.error('Failed to load status:', error);
-            if (!error.message.includes('Authentication')) {
-                document.getElementById('systemStatus').innerHTML = '<p style="color: var(--color-danger);">Failed to load system status</p>';
-            }
+            this.handleStatusError(error);
         }
     }
+
+    // MARK: loadAdditionalStatus
+    static loadAdditionalStatus() {
+        if (window.UpdateManager) {
+            window.UpdateManager.loadUpdateStatus();
+        }
+    }
+
+    // MARK: handleStatusError
+    static handleStatusError(error) {
+        console.error('Failed to load status:', error);
+        
+        if (!error.message.includes('Authentication')) {
+            const systemStatus = document.getElementById('systemStatus');
+            systemStatus.innerHTML = '<p style="color: var(--color-danger);">Failed to load system status</p>';
+        }
+    }
+
+    // STATUS RENDERING
 
     // MARK: renderSystemStatus
     static renderSystemStatus(status) {
         const systemStatus = document.getElementById('systemStatus');
+        systemStatus.innerHTML = this.generateStatusHTML(status);
+    }
 
-        let interfacesHtml = '';
-        if (status.interfaces && status.interfaces.length > 0) {
-            const activeInterfaces = status.interfaces.filter(iface => iface.is_up);
-            interfacesHtml = `<small>Active interfaces: ${activeInterfaces.length}</small>`;
-        }
+    // MARK: generateStatusHTML
+    static generateStatusHTML(status) {
+        return [
+            this.createSystemHealthItem(status),
+            this.createIPAddressesItem(status),
+            this.createActiveServicesItem(status),
+            this.createProxyServerItem(status),
+            this.createTunnelManagerItem(status)
+        ].join('');
+    }
 
-        // Convert array of IPs into line breaks
-        let systemIPsHtml = 'unavailable';
-        if (Array.isArray(status.system_ip) && status.system_ip.length > 0) {
-            systemIPsHtml = status.system_ip.map(ip => `<div>${ip}</div>`).join('');
-        }
+    // MARK: createSystemHealthItem
+    static createSystemHealthItem(status) {
+        const isHealthy = status.proxy && status.tunnels;
+        const healthStatus = isHealthy ? 'Healthy' : 'Degraded';
+        const healthClass = isHealthy ? 'running' : 'stopped';
 
-        systemStatus.innerHTML = `
-            <div class="list-item">
-                <div>
-                    <strong>System Health</strong><br>
-                    <small>Overall system status</small>
-                </div>
-                <span class="status ${status.proxy && status.tunnels ? 'running' : 'stopped'}">
-                    ${status.proxy && status.tunnels ? 'Healthy' : 'Degraded'}
-                </span>
-            </div>
+        return this.createStatusItem(
+            'System Health',
+            'Overall system status',
+            healthStatus,
+            `status ${healthClass}`
+        );
+    }
+
+    // MARK: createIPAddressesItem
+    static createIPAddressesItem(status) {
+        const interfacesHtml = this.generateInterfacesHtml(status.interfaces);
+        const systemIPsHtml = this.generateSystemIPsHtml(status.system_ip);
+
+        return `
             <div class="list-item">
                 <div>
                     <strong>IPv4 Addresses</strong><br>
@@ -59,132 +85,232 @@ class StatusManager {
                     ${systemIPsHtml}
                 </span>
             </div>
+        `;
+    }
+
+    // MARK: generateInterfacesHtml
+    static generateInterfacesHtml(interfaces) {
+        if (!interfaces || interfaces.length === 0) return '';
+        
+        const activeInterfaces = interfaces.filter(iface => iface.is_up);
+        return `<small>Active interfaces: ${activeInterfaces.length}</small>`;
+    }
+
+    // MARK: generateSystemIPsHtml
+    static generateSystemIPsHtml(systemIPs) {
+        if (!Array.isArray(systemIPs) || systemIPs.length === 0) {
+            return 'unavailable';
+        }
+        
+        return systemIPs.map(ip => `<div>${ip}</div>`).join('');
+    }
+
+    // MARK: createActiveServicesItem
+    static createActiveServicesItem(status) {
+        const serviceCount = String(status.services).padStart(2, '0');
+        
+        return `
             <div class="list-item">
                 <div>
                     <strong>Active Services</strong><br>
                     <small>Currently configured services</small>
                 </div>
                 <span style="color: var(--color-accent); font-weight: bold; font-family: monospace; display: block; text-align: right;">
-                    ${String(status.services).padStart(2, '0')}
+                    ${serviceCount}
                 </span>
-            </div>
-            <div class="list-item">
-                <div>
-                    <strong>Proxy Server</strong><br>
-                    <small>Handles HTTP requests and routing</small>
-                </div>
-                <span class="status ${status.proxy ? 'running' : 'stopped'}">${status.proxy ? 'Running' : 'Stopped'}</span>
-            </div>
-            <div class="list-item">
-                <div>
-                    <strong>Tunnel Manager</strong><br>
-                    <small>Manages WireGuard connections</small>
-                </div>
-                <span class="status ${status.tunnels ? 'running' : 'stopped'}">${status.tunnels ? 'Running' : 'Stopped'}</span>
             </div>
         `;
     }
 
+    // MARK: createProxyServerItem
+    static createProxyServerItem(status) {
+        return this.createStatusItem(
+            'Proxy Server',
+            'Handles HTTP requests and routing',
+            status.proxy ? 'Running' : 'Stopped',
+            `status ${status.proxy ? 'running' : 'stopped'}`
+        );
+    }
+
+    // MARK: createTunnelManagerItem
+    static createTunnelManagerItem(status) {
+        return this.createStatusItem(
+            'Tunnel Manager',
+            'Manages WireGuard connections',
+            status.tunnels ? 'Running' : 'Stopped',
+            `status ${status.tunnels ? 'running' : 'stopped'}`
+        );
+    }
+
+    // MARK: createStatusItem
+    static createStatusItem(title, description, value, className) {
+        return `
+            <div class="list-item">
+                <div>
+                    <strong>${title}</strong><br>
+                    <small>${description}</small>
+                </div>
+                <span class="${className}">${value}</span>
+            </div>
+        `;
+    }
+
+    // SYSTEM CONTROL ACTIONS
+
     // MARK: restartSystem
     static async restartSystem() {
-        if (!confirm('Restart the FinGuard application?\n\nThis will temporarily disconnect all services and tunnels during the restart process.')) {
-            return;
-        }
+        if (!this.confirmRestart()) return;
 
         try {
-            window.Utils.showAlert('Initiating system restart...', 'info');
-            
-            await window.APIClient.restartSystem();
-            
-            window.Utils.showAlert('System restart initiated! The application will be back online shortly.', 'success');
-            
-            // Show reconnection message after a delay
-            setTimeout(() => {
-                window.Utils.showAlert('Application is restarting. Please refresh the page in a few seconds.', 'info');
-            }, 2000);
-            
+            await this.performRestart();
+            this.showRestartMessages();
         } catch (error) {
-            console.error('Failed to restart system:', error);
-            window.Utils.showAlert(`Failed to restart system: ${error.message}`, 'error');
+            this.handleSystemActionError(error, 'restart');
         }
+    }
+
+    // MARK: confirmRestart
+    static confirmRestart() {
+        return confirm('Restart the FinGuard application?\n\nThis will temporarily disconnect all services and tunnels during the restart process.');
+    }
+
+    // MARK: performRestart
+    static async performRestart() {
+        window.Utils.showAlert('Initiating system restart...', 'info');
+        await window.APIClient.restartSystem();
+    }
+
+    // MARK: showRestartMessages
+    static showRestartMessages() {
+        window.Utils.showAlert('System restart initiated! The application will be back online shortly.', 'success');
+        
+        setTimeout(() => {
+            window.Utils.showAlert('Application is restarting. Please refresh the page in a few seconds.', 'info');
+        }, 2000);
     }
 
     // MARK: shutdownSystem
     static async shutdownSystem() {
-        if (!confirm('Shutdown the FinGuard application?\n\nThis will stop all services and tunnels. You will need to manually restart the application.')) {
-            return;
-        }
+        if (!this.confirmShutdown()) return;
 
         try {
-            window.Utils.showAlert('Initiating system shutdown...', 'warning');
-            
-            await window.APIClient.shutdownSystem();
-            
-            window.Utils.showAlert('System shutdown initiated. The application will stop shortly.', 'success');
-            
-            // Show final message after a delay
-            setTimeout(() => {
-                window.Utils.showAlert('Application is shutting down. This page will become unavailable.', 'warning');
-            }, 2000);
-            
+            await this.performShutdown();
+            this.showShutdownMessages();
         } catch (error) {
-            console.error('Failed to shutdown system:', error);
-            window.Utils.showAlert(`Failed to shutdown system: ${error.message}`, 'error');
+            this.handleSystemActionError(error, 'shutdown');
         }
     }
 
+    // MARK: confirmShutdown
+    static confirmShutdown() {
+        return confirm('Shutdown the FinGuard application?\n\nThis will stop all services and tunnels. You will need to manually restart the application.');
+    }
+
+    // MARK: performShutdown
+    static async performShutdown() {
+        window.Utils.showAlert('Initiating system shutdown...', 'warning');
+        await window.APIClient.shutdownSystem();
+    }
+
+    // MARK: showShutdownMessages
+    static showShutdownMessages() {
+        window.Utils.showAlert('System shutdown initiated. The application will stop shortly.', 'success');
+        
+        setTimeout(() => {
+            window.Utils.showAlert('Application is shutting down. This page will become unavailable.', 'warning');
+        }, 2000);
+    }
+
+    // MARK: handleSystemActionError
+    static handleSystemActionError(error, action) {
+        console.error(`Failed to ${action} system:`, error);
+        window.Utils.showAlert(`Failed to ${action} system: ${error.message}`, 'error');
+    }
+
+    // AUTHENTICATION MANAGEMENT
+
     // MARK: signOut
     static signOut() {
-        if (!confirm('Sign out of FinGuard?\n\nYou will need to re-enter your admin token to access the interface.')) {
-            return;
-        }
+        if (!this.confirmSignOut()) return;
 
-        // Clear token from config and localStorage
+        this.clearAuthenticationData();
+        this.stopAllRefreshIntervals();
+        this.showSignOutMessage();
+        this.redirectToLogin();
+    }
+
+    // MARK: confirmSignOut
+    static confirmSignOut() {
+        return confirm('Sign out of FinGuard?\n\nYou will need to re-enter your admin token to access the interface.');
+    }
+
+    // MARK: clearAuthenticationData
+    static clearAuthenticationData() {
         localStorage.removeItem('adminToken');
         if (window.FinGuardConfig) {
             window.FinGuardConfig.ADMIN_TOKEN = null;
         }
-        
-        window.Utils.showAlert('Signed out successfully. Redirecting to login...', 'success');
-        
-        // Stop any active refresh intervals
-        StatusManager.stopStatusRefresh();
+    }
+
+    // MARK: stopAllRefreshIntervals
+    static stopAllRefreshIntervals() {
+        this.stopStatusRefresh();
         if (window.LogsManager) {
             window.LogsManager.stopLogsRefresh();
         }
-        
-        // Clear the page content and show auth modal after a brief delay
+    }
+
+    // MARK: showSignOutMessage
+    static showSignOutMessage() {
+        window.Utils.showAlert('Signed out successfully. Redirecting to login...', 'success');
+    }
+
+    // MARK: redirectToLogin
+    static redirectToLogin() {
         setTimeout(() => {
-            // Hide all content tabs
-            document.querySelectorAll('.content').forEach(content => {
-                content.classList.remove('active');
-            });
-            
-            // Show login modal
+            this.hideAllContent();
             window.AuthManager.showTokenModal();
         }, 1000);
     }
 
+    // MARK: hideAllContent
+    static hideAllContent() {
+        document.querySelectorAll('.content').forEach(content => {
+            content.classList.remove('active');
+        });
+    }
+
+    // AUTO-REFRESH MANAGEMENT
+
+    // MARK: startStatusRefresh
     static startStatusRefresh() {
-        if (StatusManager.statusRefreshInterval) {
-            clearInterval(StatusManager.statusRefreshInterval);
-        }
+        this.stopStatusRefresh();
         
-        StatusManager.statusRefreshInterval = setInterval(() => {
-            const statusTab = document.getElementById('status');
-            if (statusTab && statusTab.classList.contains('active') && window.FinGuardConfig.ADMIN_TOKEN) {
-                StatusManager.loadStatus();
-            }
+        this.statusRefreshInterval = setInterval(() => {
+            this.refreshStatusIfActive();
         }, 30000);
     }
 
+    // MARK: refreshStatusIfActive
+    static refreshStatusIfActive() {
+        const statusTab = document.getElementById('status');
+        const isActive = statusTab && statusTab.classList.contains('active');
+        const hasToken = window.FinGuardConfig.ADMIN_TOKEN;
+        
+        if (isActive && hasToken) {
+            this.loadStatus();
+        }
+    }
+
+    // MARK: stopStatusRefresh
     static stopStatusRefresh() {
-        if (StatusManager.statusRefreshInterval) {
-            clearInterval(StatusManager.statusRefreshInterval);
-            StatusManager.statusRefreshInterval = null;
+        if (this.statusRefreshInterval) {
+            clearInterval(this.statusRefreshInterval);
+            this.statusRefreshInterval = null;
         }
     }
 }
 
-// Export to global scope
+// GLOBAL SCOPE EXPORT
+
 window.StatusManager = StatusManager;

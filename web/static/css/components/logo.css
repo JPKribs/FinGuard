@@ -1,11 +1,15 @@
-/* Logo styling */
+
+/* LOGO COMPONENTS */
+
+/* Logo container */
 .logo-container {
-    display: flex;
-    justify-content: center;
+   display: flex;
+   justify-content: center;
 }
 
+/* Logo image */
 .logo-container img {
-    height: 300px;
-    width: auto;
-    filter: drop-shadow(0 0 20px var(--color-logo-shadow));
+   height: 300px;
+   width: auto;
+   filter: drop-shadow(0 0 20px var(--color-logo-shadow));
 }

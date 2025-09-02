@@ -8,31 +8,37 @@
     <link rel="icon" type="image/png" href="/static/resources/images/logo.png">
 </head>
 <body>
-    <div class="container">
-        <div class="logo-container">
+    <!-- Main Application Container -->
+    <main class="container">
+        <!-- Logo Header -->
+        <header class="logo-container">
             <img src="/static/resources/images/finguard.png" alt="FinGuard Logo">
-        </div>
+        </header>
 
-        <div class="tabs">
-            <button class="tab active" onclick="window.Utils.showTab('status')">System</button>
-            <button class="tab" onclick="window.Utils.showTab('services')">Services</button>
-            <button class="tab" onclick="window.Utils.showTab('tunnels')">Tunnels</button>
-            <button class="tab" onclick="window.Utils.showTab('logs')">Logs</button>
-        </div>
+        <!-- Navigation Tabs -->
+        <nav class="tabs">
+            <button class="tab active" onclick="window.Utils.showTab('status')" aria-selected="true">System</button>
+            <button class="tab" onclick="window.Utils.showTab('services')" aria-selected="false">Services</button>
+            <button class="tab" onclick="window.Utils.showTab('tunnels')" aria-selected="false">Tunnels</button>
+            <button class="tab" onclick="window.Utils.showTab('logs')" aria-selected="false">Logs</button>
+        </nav>
         
+        <!-- Alert Notifications -->
         <div id="alert" class="alert hidden"></div>
 
-        <!-- System Tab -->
-        <div id="status" class="content active">
+        <!-- System Status Tab -->
+        <section id="status" class="content active">
+            <!-- System Status Card -->
             <div class="card">
                 <h3>System Status</h3>
                 <div id="systemStatus"></div>
             </div>
 
+            <!-- Updates Card -->
             <div class="card">
                 <h3>Updates</h3>
                 <div id="updateStatus"></div>
-                <div class="update-controls" id="updateControls" style="margin-top: 1rem;">
+                <div class="update-controls" id="updateControls">
                     <button onclick="window.UpdateManager.checkForUpdate()" class="btn-secondary">
                         Check for Updates
                     </button>
@@ -45,6 +51,7 @@
                 </div>
             </div>
             
+            <!-- System Controls Card -->
             <div class="card">
                 <h3>System Controls</h3>
                 <div class="system-controls">
@@ -59,43 +66,44 @@
                     </button>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Services Tab -->
-        <div id="services" class="content">
+        <!-- Services Management Tab -->
+        <section id="services" class="content">
             <div class="two-column">
+                <!-- Add Service Form -->
                 <div>
                     <div class="card">
                         <h3>Add Service</h3>
                         <form id="serviceForm">
                             <div class="form-group">
-                                <label>Service Name</label>
+                                <label for="serviceName">Service Name</label>
                                 <input type="text" id="serviceName" required>
                             </div>
                             <div class="form-group">
-                                <label>Service IP</label>
+                                <label for="serviceUpstream">Service IP</label>
                                 <input type="url" id="serviceUpstream" placeholder="http://192.168.0.1:8096" required>
                             </div>
                             <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="serviceWebsocket" style="width: auto; margin-right: 0.5rem;">
+                                <label for="serviceWebsocket">
+                                    <input type="checkbox" id="serviceWebsocket" class="checkbox-inline">
                                     WebSocket Support
                                 </label>
                             </div>
                             <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="serviceDefault" style="width: auto; margin-right: 0.5rem;">
+                                <label for="serviceDefault">
+                                    <input type="checkbox" id="serviceDefault" class="checkbox-inline">
                                     Default Service
                                 </label>
                             </div>
                             <div class="form-group">
-                                <label>
-                                    <input type="checkbox" id="serviceMDNS" style="width: auto; margin-right: 0.5rem;">
+                                <label for="serviceMDNS">
+                                    <input type="checkbox" id="serviceMDNS" class="checkbox-inline">
                                     Publish via mDNS
                                 </label>
                             </div>
                             <div class="form-group">
-                                <label>Tunnel</label>
+                                <label for="serviceTunnel">Tunnel</label>
                                 <select id="serviceTunnel">
                                     <option value="">None</option>
                                 </select>
@@ -105,6 +113,7 @@
                     </div>
                 </div>
                 
+                <!-- Active Services List -->
                 <div>
                     <div class="card">
                         <h3>Active Services</h3>
@@ -112,94 +121,104 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
         
-        <!-- Tunnels Tab -->
-        <div id="tunnels" class="content">
+        <!-- Tunnels Management Tab -->
+        <section id="tunnels" class="content">
             <div class="two-column">
+                <!-- Create Tunnel Form -->
                 <div>
                     <div class="card">
                         <h3>Create Tunnel</h3>
                         <form id="tunnelForm">
+                            <!-- Basic Tunnel Configuration -->
                             <div class="form-group">
-                                <label>Tunnel Name</label>
+                                <label for="tunnelName">Tunnel Name</label>
                                 <input type="text" id="tunnelName" required>
                             </div>
                             
+                            <!-- Interface Configuration Section -->
                             <h4>Interface Configuration</h4>
                             <div class="form-group">
-                                <label>Private Key</label>
+                                <label for="tunnelPrivateKey">Private Key</label>
                                 <textarea id="tunnelPrivateKey" rows="2" required></textarea>
                             </div>
                             <div class="form-group">
-                                <label>Address (CIDR)</label>
+                                <label for="tunnelAddress">Address (CIDR)</label>
                                 <input type="text" id="tunnelAddress" required>
                             </div>
                             <div class="form-group">
-                                <label>Listen Port (optional)</label>
+                                <label for="tunnelListenPort">Listen Port (optional)</label>
                                 <input type="number" id="tunnelListenPort" placeholder="0 (auto)" min="0" max="65535">
                             </div>
                             <div class="form-group">
-                                <label>MTU</label>
+                                <label for="tunnelMTU">MTU</label>
                                 <input type="number" id="tunnelMTU" placeholder="1420" value="1420" min="576" max="65536">
                             </div>
 
+                            <!-- Advanced Settings Section -->
                             <h4>Advanced Settings</h4>
                             <div class="form-group">
-                                <label>Monitor Interval (seconds)</label>
+                                <label for="tunnelMonitorInterval">Monitor Interval (seconds)</label>
                                 <input type="number" id="tunnelMonitorInterval" placeholder="30" value="30" min="10" max="3600">
-                                <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                                <small class="help-text">
                                     How often to check peer connection health
                                 </small>
                             </div>
                             <div class="form-group">
-                                <label>Stale Connection Timeout (seconds)</label>
+                                <label for="tunnelStaleTimeout">Stale Connection Timeout (seconds)</label>
                                 <input type="number" id="tunnelStaleTimeout" placeholder="300" value="300" min="60" max="7200">
-                                <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                                <small class="help-text">
                                     When to consider a peer connection stale
                                 </small>
                             </div>
                             <div class="form-group">
-                                <label>Reconnection Retries</label>
+                                <label for="tunnelReconnectRetries">Reconnection Retries</label>
                                 <input type="number" id="tunnelReconnectRetries" placeholder="3" value="3" min="1" max="10">
-                                <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                                <small class="help-text">
                                     Maximum reconnection attempts for failed peers
                                 </small>
                             </div>
                             
-                            <h4>Peer Configuration</h4>
-                            <div id="peerSection">
-                                <div class="peer-config" data-peer-index="0">
-                                    <div class="form-group">
-                                        <label>Peer Name</label>
-                                        <input type="text" class="peer-name">
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Public Key</label>
-                                        <textarea class="peer-public-key" rows="2" required></textarea>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Endpoint</label>
-                                        <input type="text" class="peer-endpoint" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Allowed IPs</label>
-                                        <input type="text" class="peer-allowed-ips" placeholder="10.20.0.0/24,10.20.1.0/24" required>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Persistent Keepalive (seconds)</label>
-                                        <input type="number" class="peer-keepalive" placeholder="25" value="25" min="0" max="65535">
-                                        <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
-                                            Set to 0 to disable keepalive
-                                        </small>
-                                    </div>
-                                    <div class="form-group">
-                                        <label>Preshared Key (optional)</label>
-                                        <textarea class="peer-preshared" placeholder="Optional preshared key" rows="2"></textarea>
+                            <!-- Peer Configuration Section -->
+                            <fieldset>
+                                <legend>
+                                    <h4>Peer Configuration</h4>
+                                </legend>
+                                <div id="peerSection">
+                                    <div class="peer-config" data-peer-index="0">
+                                        <div class="form-group">
+                                            <label>Peer Name</label>
+                                            <input type="text" class="peer-name">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Public Key</label>
+                                            <textarea class="peer-public-key" rows="2" required></textarea>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Endpoint</label>
+                                            <input type="text" class="peer-endpoint" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Allowed IPs</label>
+                                            <input type="text" class="peer-allowed-ips" placeholder="10.20.0.0/24,10.20.1.0/24" required>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Persistent Keepalive (seconds)</label>
+                                            <input type="number" class="peer-keepalive" placeholder="25" value="25" min="0" max="65535">
+                                            <small class="help-text">
+                                                Set to 0 to disable keepalive
+                                            </small>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Preshared Key (optional)</label>
+                                            <textarea class="peer-preshared" placeholder="Optional preshared key" rows="2"></textarea>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                            </fieldset>
                             
+                            <!-- Form Actions -->
                             <div class="form-actions">
                                 <button type="button" onclick="addPeer()">Add Another Peer</button>
                                 <button type="submit">Create Tunnel</button>
@@ -207,6 +226,8 @@
                         </form>
                     </div>
                 </div>
+
+                <!-- Active Tunnels List -->
                 <div>
                     <div class="card">
                         <h3>Active Tunnels</h3>
@@ -214,15 +235,16 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </section>
 
-        <!-- Logs Tab -->
-        <div id="logs" class="content">
+        <!-- Logs Viewer Tab -->
+        <section id="logs" class="content">
             <div class="card">
                 <h3>Logs</h3>
 
+                <!-- Log Filter Controls -->
                 <div class="form-group">
-                    <label>Filter by level:</label>
+                    <label for="logLevelFilter">Filter by level:</label>
                     <select id="logLevelFilter">
                         <option value="">All</option>
                         <option value="info">INFO</option>
@@ -232,41 +254,42 @@
                     </select>
                 </div>
 
+                <!-- Logs Display -->
                 <div id="logsList"></div>
                 <div id="logsPagination" class="logs-pagination"></div>
             </div>
-        </div>
-    </div>
+        </section>
+    </main>
 
-        <!-- Update configuration modal -->
+    <!-- Update Configuration Modal -->
     <div id="updateConfigModal" class="token-modal" style="display: none;">
         <div class="token-modal-content">
             <h3>Auto-Update Configuration</h3>
             <form id="updateConfigForm">
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="updateEnabled" style="width: auto; margin-right: 0.5rem;">
+                    <label for="updateEnabled">
+                        <input type="checkbox" id="updateEnabled" class="checkbox-inline">
                         Enable Auto-Updates
                     </label>
                 </div>
                 <div class="form-group">
-                    <label>Update Schedule (Cron Format)</label>
+                    <label for="updateSchedule">Update Schedule (Cron Format)</label>
                     <input type="text" id="updateSchedule" placeholder="0 3 * * *" required>
-                    <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                    <small class="help-text">
                         Format: minute hour day month weekday (e.g., "0 3 * * *" = daily at 3 AM)
                     </small>
                 </div>
                 <div class="form-group">
-                    <label>
-                        <input type="checkbox" id="autoApply" style="width: auto; margin-right: 0.5rem;">
+                    <label for="autoApply">
+                        <input type="checkbox" id="autoApply" class="checkbox-inline">
                         Automatically Apply Updates
                     </label>
-                    <small style="color: var(--color-text-muted); display: block; margin-top: 0.25rem;">
+                    <small class="help-text">
                         If disabled, updates will only be checked but not applied automatically
                     </small>
                 </div>
                 <div class="form-group">
-                    <label>Backup Directory</label>
+                    <label for="backupDir">Backup Directory</label>
                     <input type="text" id="backupDir" placeholder="./backups" required>
                 </div>
                 <div class="token-actions">
@@ -277,7 +300,7 @@
         </div>
     </div>
 
-    <!-- Load JavaScript modules -->
+    <!-- JavaScript Modules -->
     <script src="/static/js/components/config.js"></script>
     <script src="/static/js/components/utils.js"></script>
     <script src="/static/js/components/auth.js"></script>

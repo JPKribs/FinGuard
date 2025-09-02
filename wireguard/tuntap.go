@@ -19,11 +19,13 @@ const (
 	tunRetryDelay    = 2 * time.Second
 )
 
-// MARK: CreateTUN
+// TUN device creation and basic configuration
 
+// MARK: CreateTUN
+// Creates and configures a TUN device with the specified name and MTU
 func CreateTUN(name string, mtu int) (*TUNDevice, error) {
 	if mtu <= 0 || mtu > 65536 {
-		mtu = 1420 // Safe default
+		mtu = 1420
 	}
 
 	config := water.Config{
@@ -65,9 +67,10 @@ func CreateTUN(name string, mtu int) (*TUNDevice, error) {
 	return device, nil
 }
 
-// MARK: configure
+// Platform-specific configuration functions
 
-// Configures the TUN device with platform-specific settings and error recovery.
+// MARK: configure
+// Configures the TUN device with platform-specific settings and error recovery
 func (t *TUNDevice) configure() error {
 	var err error
 	for attempt := 1; attempt <= maxConfigRetries; attempt++ {
@@ -91,8 +94,7 @@ func (t *TUNDevice) configure() error {
 }
 
 // MARK: configureDarwin
-
-// Configures TUN device on macOS using ifconfig with command validation.
+// Configures TUN device on macOS using ifconfig with command validation
 func (t *TUNDevice) configureDarwin() error {
 	if t.name == "" {
 		return fmt.Errorf("interface name is empty")
@@ -114,8 +116,7 @@ func (t *TUNDevice) configureDarwin() error {
 }
 
 // MARK: configureLinux
-
-// Configures TUN device on Linux using netlink with proper error handling.
+// Configures TUN device on Linux using netlink with proper error handling
 func (t *TUNDevice) configureLinux() error {
 	if t.name == "" {
 		return fmt.Errorf("interface name is empty")
@@ -138,8 +139,7 @@ func (t *TUNDevice) configureLinux() error {
 }
 
 // MARK: verifyConfiguration
-
-// Verifies that the TUN device was configured correctly.
+// Verifies that the TUN device was configured correctly
 func (t *TUNDevice) verifyConfiguration() error {
 	if runtime.GOOS == "linux" {
 		link, err := netlink.LinkByName(t.name)
@@ -160,9 +160,10 @@ func (t *TUNDevice) verifyConfiguration() error {
 	return nil
 }
 
-// MARK: AddAddress
+// Address management functions
 
-// Adds an IP address to the TUN interface with validation and retry logic.
+// MARK: AddAddress
+// Adds an IP address to the TUN interface with validation and retry logic
 func (t *TUNDevice) AddAddress(cidr string) error {
 	if cidr == "" {
 		return fmt.Errorf("CIDR cannot be empty")
@@ -194,8 +195,7 @@ func (t *TUNDevice) AddAddress(cidr string) error {
 }
 
 // MARK: addAddressDarwin
-
-// Adds IP address on macOS with proper subnet handling.
+// Adds IP address on macOS with proper subnet handling
 func (t *TUNDevice) addAddressDarwin(cidr string) error {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -220,8 +220,7 @@ func (t *TUNDevice) addAddressDarwin(cidr string) error {
 }
 
 // MARK: addAddressLinux
-
-// Adds IP address on Linux using netlink with duplicate address checking.
+// Adds IP address on Linux using netlink with duplicate address checking
 func (t *TUNDevice) addAddressLinux(cidr string) error {
 	ip, ipnet, err := net.ParseCIDR(cidr)
 	if err != nil {
@@ -250,9 +249,10 @@ func (t *TUNDevice) addAddressLinux(cidr string) error {
 	return nil
 }
 
-// MARK: AddRoute
+// Route management functions
 
-// Adds a route through this TUN interface with platform-specific handling.
+// MARK: AddRoute
+// Adds a route through this TUN interface with platform-specific handling
 func (t *TUNDevice) AddRoute(destination string) error {
 	if destination == "" {
 		return fmt.Errorf("destination cannot be empty")
@@ -288,8 +288,7 @@ func (t *TUNDevice) AddRoute(destination string) error {
 }
 
 // MARK: addRouteDarwin
-
-// Adds route on macOS with proper error handling and validation.
+// Adds route on macOS with proper error handling and validation
 func (t *TUNDevice) addRouteDarwin(destination string) error {
 	cmd := exec.Command("route", "add", "-net", destination, "-interface", t.name)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -303,8 +302,7 @@ func (t *TUNDevice) addRouteDarwin(destination string) error {
 }
 
 // MARK: addRouteLinux
-
-// Adds route on Linux using netlink with duplicate route handling.
+// Adds route on Linux using netlink with duplicate route handling
 func (t *TUNDevice) addRouteLinux(destination string) error {
 	_, destNet, err := net.ParseCIDR(destination)
 	if err != nil {
@@ -332,8 +330,7 @@ func (t *TUNDevice) addRouteLinux(destination string) error {
 }
 
 // MARK: RemoveRoute
-
-// Removes a route from this TUN interface for cleanup operations.
+// Removes a route from this TUN interface for cleanup operations
 func (t *TUNDevice) RemoveRoute(destination string) error {
 	if destination == "" {
 		return fmt.Errorf("destination cannot be empty")
@@ -346,8 +343,7 @@ func (t *TUNDevice) RemoveRoute(destination string) error {
 }
 
 // MARK: removeRouteDarwin
-
-// Removes route on macOS with error suppression for non-existent routes.
+// Removes route on macOS with error suppression for non-existent routes
 func (t *TUNDevice) removeRouteDarwin(destination string) error {
 	cmd := exec.Command("route", "delete", "-net", destination, "-interface", t.name)
 	if output, err := cmd.CombinedOutput(); err != nil {
@@ -361,8 +357,7 @@ func (t *TUNDevice) removeRouteDarwin(destination string) error {
 }
 
 // MARK: removeRouteLinux
-
-// Removes route on Linux using netlink with graceful error handling.
+// Removes route on Linux using netlink with graceful error handling
 func (t *TUNDevice) removeRouteLinux(destination string) error {
 	_, destNet, err := net.ParseCIDR(destination)
 	if err != nil {
@@ -389,9 +384,10 @@ func (t *TUNDevice) removeRouteLinux(destination string) error {
 	return nil
 }
 
-// MARK: Name
+// Device property accessor functions
 
-// Returns the actual interface name assigned by the system.
+// MARK: Name
+// Returns the actual interface name assigned by the system
 func (t *TUNDevice) Name() string {
 	if t == nil {
 		return ""
@@ -400,8 +396,7 @@ func (t *TUNDevice) Name() string {
 }
 
 // MARK: MTU
-
-// Returns the configured MTU size for this interface.
+// Returns the configured MTU size for this interface
 func (t *TUNDevice) MTU() int {
 	if t == nil {
 		return 0
@@ -410,8 +405,7 @@ func (t *TUNDevice) MTU() int {
 }
 
 // MARK: File
-
-// Returns the underlying water interface for direct access.
+// Returns the underlying water interface for direct access
 func (t *TUNDevice) File() *water.Interface {
 	if t == nil {
 		return nil
@@ -420,8 +414,7 @@ func (t *TUNDevice) File() *water.Interface {
 }
 
 // MARK: Close
-
-// Safely closes the TUN device and cleans up resources.
+// Safely closes the TUN device and cleans up resources
 func (t *TUNDevice) Close() error {
 	if t == nil || t.iface == nil {
 		return nil
