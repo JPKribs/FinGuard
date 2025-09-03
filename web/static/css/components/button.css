@@ -106,6 +106,7 @@ button:active {
    grid-template-columns: 1fr 1fr 1fr;
    gap: 1rem;
    width: 100%;
+   padding-top: 1rem;
 }
 
 /* System control buttons - width */
@@ -119,6 +120,7 @@ button:active {
    grid-template-columns: 1fr 1fr 1fr;
    gap: 1rem;
    width: 100%;
+   padding-top: 1rem;
 }
 
 /* Update control buttons - width */
@@ -126,10 +128,25 @@ button:active {
    width: 100%;
 }
 
+/* Form control buttons - check, apply, configure */
+.form-controls {
+   display: grid;
+   grid-template-columns: 1fr 1fr;
+   gap: 1rem;
+   width: 100%;
+   padding-top: 1rem;
+}
+
+/* Form control buttons - width */
+.form-controls button {
+   width: 100%;
+}
+
 /* Mobile responsive - stack all button grids vertically */
 @media (max-width: 768px) {
    .system-controls,
-   .update-controls {
+   .update-controls,
+   .form-controls {
        grid-template-columns: 1fr;
        gap: 0.75rem;
    }

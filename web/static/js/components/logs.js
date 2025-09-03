@@ -169,10 +169,10 @@ class LogsManager {
         const nextDisabled = this.currentPage + 1 >= totalPages ? 'disabled' : '';
         
         return `
-            <div class="pagination-controls">
+            <div class="form-controls">
                 <button ${prevDisabled} onclick="window.LogsManager.loadLogs(${this.currentPage - 1}, '${this.currentLevel}')">Previous</button>
-                <span>Page ${this.currentPage + 1} of ${totalPages} (${this.totalLogs} logs)</span>
                 <button ${nextDisabled} onclick="window.LogsManager.loadLogs(${this.currentPage + 1}, '${this.currentLevel}')">Next</button>
+                <span>Page ${this.currentPage + 1} of ${totalPages} (${this.totalLogs} logs)</span>
             </div>
         `;
     }
