@@ -5,7 +5,7 @@
   <name replace-wildcards="yes">%h FinGuard</name>
   <service>
     <type>_http._tcp</type>
-    <port>10000</port>
+    <port>80</port>
     <txt-record>path=/</txt-record>
   </service>
 </service-group>
