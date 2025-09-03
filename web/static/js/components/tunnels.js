@@ -207,7 +207,12 @@ class TunnelsManager {
     // MARK: generatePeerHTML
     static generatePeerHTML(index) {
         return `
-            <h5>Peer ${index + 1} <button type="button" class="btn-danger btn-small" style="width: auto; min-width: 60px;" onclick="window.TunnelsManager.removePeer(${index})">Remove</button></h5>
+            <h5 style="padding-bottom: 10px;">
+                Peer ${index + 1}
+                <button type="button" class="btn-danger btn-small" style="width: auto; min-width: 60px;" onclick="window.TunnelsManager.removePeer(${index})">
+                    Remove
+                </button>
+            </h5>
             <div class="form-group">
                 <label>Peer Name</label>
                 <input type="text" class="peer-name" placeholder="Enter peer name">
