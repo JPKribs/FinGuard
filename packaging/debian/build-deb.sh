@@ -16,9 +16,11 @@ esac
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
 VERSION="1.1.0"
+GO_VERSION="1.24.2"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
 echo "Version: $VERSION"
+echo "Go version: $GO_VERSION"
 
 BUILD_DIR="$PROJECT_ROOT/build/debian"
 DEB_DIR="$BUILD_DIR/${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
@@ -32,15 +34,51 @@ mkdir -p "$DEB_DIR/usr/local/bin"
 mkdir -p "$DEB_DIR/etc/finguard"
 mkdir -p "$DEB_DIR/usr/local/share/finguard/web"
 mkdir -p "$DEB_DIR/etc/systemd/system"
+mkdir -p "$DEB_DIR/etc/avahi"
 mkdir -p "$DEB_DIR/var/lib/finguard"
 mkdir -p "$DEB_DIR/var/log/finguard"
 mkdir -p "$DEB_DIR/DEBIAN"
 
+# MARK: Install Go if not present or wrong version
+echo "Checking Go installation..."
+if ! command -v go &> /dev/null || [[ "$(go version | cut -d' ' -f3)" != "go$GO_VERSION" ]]; then
+    echo "Installing Go $GO_VERSION for $DEB_ARCH..."
+    
+    # Map Debian architecture to Go architecture
+    case "$DEB_ARCH" in
+        amd64) GO_TAR_ARCH="amd64" ;;
+        arm64) GO_TAR_ARCH="arm64" ;;
+        armhf) GO_TAR_ARCH="armv6l" ;;
+        i386) GO_TAR_ARCH="386" ;;
+        *) echo "Unsupported Go architecture for $DEB_ARCH" >&2; exit 1 ;;
+    esac
+    
+    GO_TAR="go${GO_VERSION}.linux-${GO_TAR_ARCH}.tar.gz"
+    GO_URL="https://golang.org/dl/${GO_TAR}"
+    
+    echo "Downloading Go from: $GO_URL"
+    if ! wget --timeout=30 -q "$GO_URL" -O "/tmp/${GO_TAR}"; then
+        echo "Failed to download Go. Check internet connection and Go version availability."
+        exit 1
+    fi
+    
+    echo "Installing Go to /usr/local/go..."
+    sudo rm -rf /usr/local/go
+    sudo tar -C /usr/local -xzf "/tmp/${GO_TAR}"
+    rm "/tmp/${GO_TAR}"
+    
+    export PATH="/usr/local/go/bin:$PATH"
+    echo "Go installed: $(go version)"
+else
+    echo "Go already installed: $(go version)"
+fi
+
 echo "Building FinGuard binary with version $VERSION for $GO_ARCH..."
 cd "$PROJECT_ROOT"
 mkdir -p bin
+export PATH="/usr/local/go/bin:$PATH"
 if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -o "bin/finguard" ./cmd/finguard; then
-    echo "Build failed. Make sure you have Go installed and the project compiles."
+    echo "Build failed. Check Go installation and project compilation."
     exit 1
 fi
 
@@ -55,12 +93,28 @@ if [ -d "$PROJECT_ROOT/web" ]; then
     find "$DEB_DIR/usr/local/share/finguard/web" -type d -exec chmod 755 {} \;
 fi
 
-echo "Copying configuration files..."
-if [ -f "$PROJECT_ROOT/packaging/config-production.yaml" ]; then
-    cp "$PROJECT_ROOT/packaging/config-production.yaml" "$DEB_DIR/etc/finguard/config.yaml"
-    chmod 640 "$DEB_DIR/etc/finguard/config.yaml"
-fi
+echo "Creating production configuration..."
+cat > "$DEB_DIR/etc/finguard/config.yaml" << 'EOF'
+server:
+  http_addr: "0.0.0.0:10000"
+  proxy_addr: "0.0.0.0:80"
+  admin_token: "REPLACE_ME_WITH_SECURE_TOKEN"
 
+log:
+  level: "info"
+
+services_file: "/etc/finguard/services.yaml"
+wireguard_file: "/etc/finguard/wireguard.yaml"
+update_file: "/etc/finguard/update.yaml"
+
+discovery:
+  enable: true
+  mdns:
+    enabled: true
+EOF
+chmod 640 "$DEB_DIR/etc/finguard/config.yaml"
+
+echo "Creating default config files..."
 echo "services: []" > "$DEB_DIR/etc/finguard/services.yaml"
 echo "tunnels: []" > "$DEB_DIR/etc/finguard/wireguard.yaml"
 cat > "$DEB_DIR/etc/finguard/update.yaml" << 'EOF'
@@ -75,73 +129,46 @@ chmod 600 "$DEB_DIR/etc/finguard/wireguard.yaml"
 chmod 644 "$DEB_DIR/etc/finguard/update.yaml"
 
 echo "Copying systemd service..."
-cat > "$DEB_DIR/etc/systemd/system/finguard.service" << 'EOF'
-[Unit]
-Description=FinGuard - WireGuard Proxy with Web Management
-Documentation=https://github.com/JPKribs/FinGuard
-After=network-online.target avahi-daemon.service
-Wants=network-online.target
-RequiresMountsFor=/var/lib/finguard
+if [ -f "$SCRIPT_DIR/finguard.service" ]; then
+    cp "$SCRIPT_DIR/finguard.service" "$DEB_DIR/etc/systemd/system/"
+else
+    echo "ERROR: finguard.service not found in $SCRIPT_DIR"
+    exit 1
+fi
 
-[Service]
-Type=simple
-User=finguard
-Group=finguard
-ExecStart=/usr/local/bin/finguard --config /etc/finguard/config.yaml
-ExecReload=/bin/kill -HUP $MAINPID
-Restart=always
-RestartSec=10
-WorkingDirectory=/var/lib/finguard
+echo "Copying Avahi configuration..."
+if [ -f "$SCRIPT_DIR/avahi-daemon.conf" ]; then
+    cp "$SCRIPT_DIR/avahi-daemon.conf" "$DEB_DIR/etc/avahi/"
+    echo "Copied avahi-daemon.conf"
+else
+    echo "WARNING: avahi-daemon.conf not found in $SCRIPT_DIR"
+fi
 
-# Network capabilities for TUN device creation and port 80 binding
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+echo "Copying Debian control file..."
+if [ -f "$SCRIPT_DIR/control" ]; then
+    cp "$SCRIPT_DIR/control" "$DEB_DIR/DEBIAN/"
+else
+    echo "ERROR: control file not found in $SCRIPT_DIR"
+    exit 1
+fi
 
-# Logging
-StandardOutput=journal
-StandardError=journal
-SyslogIdentifier=finguard
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-echo "Creating Debian control file..."
-cat > "$DEB_DIR/DEBIAN/control" << EOF
-Package: finguard
-Version: $VERSION
-Section: net
-Priority: optional
-Architecture: $DEB_ARCH
-Depends: libc6, avahi-daemon, systemd, libcap2-bin
-Maintainer: Joseph Parker Kribs <joseph@kribs.net>
-Description: High-performance userspace WireGuard proxy with web management
- FinGuard is a modern WireGuard proxy solution that provides:
-  - Userspace WireGuard implementation
-  - HTTP reverse proxy with subdomain routing
-  - Web-based management interface
-  - mDNS service discovery via Avahi
-  - Real-time connection monitoring
-  - Automatic route management
-  - Auto-update system with GitHub integration
- .
- This package includes systemd integration for production deployment.
-EOF
-
-echo "Copying Debian control files..."
-for file in postinst prerm postrm; do
-    if [ -f "$PROJECT_ROOT/packaging/debian/$file" ]; then
-        cp "$PROJECT_ROOT/packaging/debian/$file" "$DEB_DIR/DEBIAN/"
-        chmod 755 "$DEB_DIR/DEBIAN/$file"
+echo "Copying Debian maintainer scripts..."
+for script in postinst prerm postrm; do
+    if [ -f "$SCRIPT_DIR/$script" ]; then
+        cp "$SCRIPT_DIR/$script" "$DEB_DIR/DEBIAN/"
+        chmod 755 "$DEB_DIR/DEBIAN/$script"
+        echo "Copied $script"
+    else
+        echo "WARNING: $script not found in $SCRIPT_DIR"
     fi
 done
-chmod 644 "$DEB_DIR/DEBIAN/control"
 
 cat > "$DEB_DIR/DEBIAN/conffiles" << EOF
 /etc/finguard/config.yaml
 /etc/finguard/services.yaml
 /etc/finguard/wireguard.yaml
 /etc/finguard/update.yaml
+/etc/avahi/avahi-daemon.conf
 EOF
 
 INSTALLED_SIZE=$(du -sk "$DEB_DIR" | cut -f1)
@@ -162,6 +189,12 @@ if [ -f "$DEB_FILE" ]; then
     echo ""
     echo "To install:"
     echo "  sudo dpkg -i $DEB_FILE"
+    echo "  sudo apt install -f  # if dependencies missing"
+    echo ""
+    echo "After installation:"
+    echo "  1. Edit /etc/finguard/config.yaml (replace admin token)"
+    echo "  2. sudo systemctl start finguard"
+    echo "  3. Access web UI: http://localhost:10000"
     echo ""
 else
     echo "Package build failed!"

@@ -1,10 +1,37 @@
 #!/bin/bash
 set -e
 
-# MARK: Debian postinst script for FinGuard
 case "$1" in
     configure)
-        # MARK: Create finguard user and group with proper Debian handling
+        # MARK: Force hostname to FinGuard with persistence
+        echo "Setting hostname to FinGuard with persistence..."
+        
+        # Set current hostname
+        hostnamectl set-hostname FinGuard
+        
+        # Ensure persistence across multiple methods
+        echo "FinGuard" > /etc/hostname
+        
+        # Update /etc/hosts to prevent resolution issues
+        sed -i '/127\.0\.1\.1/d' /etc/hosts 2>/dev/null || true
+        echo "127.0.1.1    FinGuard" >> /etc/hosts
+        
+        # For systems that use /etc/machine-info
+        if [ -f /etc/machine-info ]; then
+            sed -i '/PRETTY_HOSTNAME/d' /etc/machine-info 2>/dev/null || true
+            echo 'PRETTY_HOSTNAME="FinGuard"' >> /etc/machine-info
+        fi
+        
+        # For Armbian/embedded systems that might have additional config
+        if [ -f /etc/armbian-release ]; then
+            # Some Armbian images reset hostname from this file
+            if [ -f /boot/armbianEnv.txt ]; then
+                sed -i '/hostname/d' /boot/armbianEnv.txt 2>/dev/null || true
+                echo "hostname=FinGuard" >> /boot/armbianEnv.txt
+            fi
+        fi
+
+        # MARK: Create finguard user and group
         if ! getent group finguard > /dev/null 2>&1; then
             echo "Creating finguard group..."
             if command -v addgroup >/dev/null 2>&1; then
@@ -35,125 +62,69 @@ case "$1" in
             fi
         fi
 
-        # MARK: Add finguard user to necessary groups
+        # MARK: Add user to necessary groups
         if getent group netdev >/dev/null 2>&1; then
             usermod -a -G netdev finguard 2>/dev/null || true
         fi
-        
-        if getent group avahi >/dev/null 2>&1; then
-            usermod -a -G avahi finguard 2>/dev/null || true
-        fi
 
-        # MARK: Create necessary directories with proper ownership
+        # MARK: Create directories with proper ownership
         install -d -o finguard -g finguard -m 0755 /var/lib/finguard
         install -d -o finguard -g finguard -m 0755 /var/log/finguard
         
         if [ ! -d /run/finguard ]; then
             install -d -o finguard -g finguard -m 0755 /run/finguard
         fi
-        
-        install -d -o root -g root -m 0755 /etc/finguard
 
-        # MARK: Set proper permissions on config files
+        # MARK: Create symlink for web UI
+        echo "Creating web UI symlink..."
+        if [ -d /usr/local/share/finguard/web ] && [ ! -e /var/lib/finguard/web ]; then
+            ln -sf /usr/local/share/finguard/web /var/lib/finguard/web
+            echo "Web UI symlink created"
+        fi
+
+        # MARK: Install Avahi if needed
+        if ! command -v avahi-daemon >/dev/null 2>&1; then
+            echo "Installing avahi-daemon..."
+            apt update && apt install -y avahi-daemon avahi-utils
+        fi
+        
+        echo "Avahi configuration installed via package"
+
+        # MARK: Set proper ownership for config files
         if [ -f /etc/finguard/config.yaml ]; then
             chown root:finguard /etc/finguard/config.yaml
             chmod 640 /etc/finguard/config.yaml
         fi
-
-        if [ -f /etc/finguard/services.yaml ]; then
-            chown finguard:finguard /etc/finguard/services.yaml
-            chmod 644 /etc/finguard/services.yaml
-        fi
-
+        
         if [ -f /etc/finguard/wireguard.yaml ]; then
-            chown finguard:finguard /etc/finguard/wireguard.yaml
+            chown root:finguard /etc/finguard/wireguard.yaml
             chmod 600 /etc/finguard/wireguard.yaml
         fi
 
-        if [ -f /etc/finguard/update.yaml ]; then
-            chown finguard:finguard /etc/finguard/update.yaml
-            chmod 644 /etc/finguard/update.yaml
-        fi
-
-        # MARK: Set capabilities on the binary for TUN device creation and port 80 binding
+        # MARK: Set capabilities on binary
         if [ -f /usr/local/bin/finguard ]; then
             echo "Setting network capabilities on FinGuard binary..."
             if command -v setcap >/dev/null 2>&1; then
-                # Set capabilities for TUN device creation and binding to privileged ports
                 setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard || {
                     echo "Warning: Failed to set capabilities. You may need to run as root."
-                    echo "Manual command: sudo setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard"
                 }
-                
-                # Verify capabilities were set correctly
-                if getcap /usr/local/bin/finguard >/dev/null 2>&1; then
-                    echo "Capabilities set successfully: $(getcap /usr/local/bin/finguard)"
-                fi
-            else
-                echo "Warning: setcap not found. Install libcap2-bin package for proper capabilities."
-                echo "Without capabilities, FinGuard must run as root for TUN device access and port 80 binding."
             fi
         fi
 
-        # MARK: Enable systemd service
-        if [ -x /bin/systemctl ] || [ -x /usr/bin/systemctl ]; then
-            echo "Enabling FinGuard systemd service..."
-            systemctl daemon-reload
-            systemctl enable finguard.service
-            
-            # MARK: Check if config is ready and start service
-            if [ -f /etc/finguard/config.yaml ]; then
-                if grep -q "admin_token.*REPLACE_ME" /etc/finguard/config.yaml 2>/dev/null; then
-                    echo ""
-                    echo "*** CONFIGURATION REQUIRED ***"
-                    echo "Please update the admin_token in /etc/finguard/config.yaml before starting"
-                    echo "Then run: sudo systemctl start finguard"
-                    echo ""
-                else
-                    echo "Starting FinGuard service..."
-                    systemctl start finguard.service || {
-                        echo "Failed to start FinGuard. Check logs with: journalctl -u finguard"
-                        echo "Common issues:"
-                        echo "  - Check config syntax: /etc/finguard/config.yaml"
-                        echo "  - Verify network capabilities are set"
-                        echo "  - Ensure no port conflicts (default: 10000)"
-                    }
-                fi
-            else
-                echo "Warning: No configuration file found at /etc/finguard/config.yaml"
-            fi
-        else
-            echo "Warning: systemctl not found. Manual service management required."
-        fi
-
-        # MARK: Display post-installation information
+        # MARK: Enable and start services
+        systemctl daemon-reload
+        systemctl enable avahi-daemon
+        systemctl restart avahi-daemon
+        systemctl enable finguard.service
+        
+        echo "FinGuard installation completed successfully!"
+        echo "Hostname set to: FinGuard (with persistence)"
         echo ""
-        echo "==================================="
-        echo "FinGuard installation completed!"
-        echo "==================================="
-        echo ""
-        echo "Configuration files:"
-        echo "  - Main config: /etc/finguard/config.yaml"
-        echo "  - Services:    /etc/finguard/services.yaml"
-        echo "  - WireGuard:   /etc/finguard/wireguard.yaml"
-        echo ""
-        echo "Service management:"
-        echo "  - Start:   sudo systemctl start finguard"
-        echo "  - Stop:    sudo systemctl stop finguard"
-        echo "  - Status:  sudo systemctl status finguard"
-        echo "  - Logs:    journalctl -u finguard -f"
-        echo ""
-        echo "Web interface will be available at:"
-        echo "  http://localhost:10000"
-        echo ""
-        ;;
-
-    abort-upgrade|abort-remove|abort-deconfigure)
-        ;;
-
-    *)
-        echo "postinst called with unknown argument '$1'" >&2
-        exit 1
+        echo "Next steps:"
+        echo "1. Edit /etc/finguard/config.yaml and replace the admin token"
+        echo "2. systemctl start finguard"
+        echo "3. Access web interface at http://localhost:10000"
+        
         ;;
 esac
 

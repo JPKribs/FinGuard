@@ -13,7 +13,7 @@
 
 ## Purpose
 
-This tool allows a local machine or SBC to act as a bridge to services behind WireGuard. This enables services to be be accessible in remote locations, without needing to put the entire network behind WireGuard or install WireGuard on every network device. Using Avahi, services are broadcast using friendly `service.local` syntax for ease of use. 
+This tool allows a local machine or SBC to act as a bridge to services behind WireGuard. This enables services to be be accessible in remote locations, without needing to put the entire network behind WireGuard or install WireGuard on every network device. Using Avahi, services are broadcast using friendly `service.finguard.local` syntax for ease of use. 
 
 This project was originally created with Jellyfin in mind.
 
@@ -114,8 +114,8 @@ curl -X POST http://localhost:10000/api/v1/tunnels \
 ### Adding Services via Web Interface
 Services can be added through the web interface at `http://localhost:10000`. Each service creates a "subdomain" route in Avahi:
 
-- `jellyfin.local` → `http://192.168.1.100:8096`
-- `homeassistant.local` → `http://192.168.1.50:8123`
+- `jellyfin.finguard.local` → `http://192.168.1.100:8096`
+- `homeassistant.finguard.local` → `http://192.168.1.50:8123`
 - Services marked as default will be used for any unmatched requests
 - A Tunnel must be selected for traffic to route over the tunnel
 

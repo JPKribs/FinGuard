@@ -197,7 +197,7 @@ func (jb *JellyfinBroadcaster) sendDiscoveryResponse(addr *net.UDPAddr, service 
 	time.Sleep(100 * time.Millisecond)
 
 	serviceNameResponse := JellyfinDiscoveryResponse{
-		Address:         fmt.Sprintf("%s.local", strings.ToLower(service.Name)),
+		Address:         fmt.Sprintf("%s.finguard.local", strings.ToLower(service.Name)),
 		Id:              serverInfo.Id + "-svc",
 		Name:            serverInfo.ServerName,
 		EndpointAddress: nil,

@@ -69,7 +69,7 @@ class ServicesManager {
         return `
             <div class="list-item" style="display: flex; position: relative;">
                 <div style="flex: 1; display: flex; flex-direction: column;">
-                    <strong>${window.Utils.escapeHtml(service.name)}.local</strong>
+                    <strong>${window.Utils.escapeHtml(service.name)}</strong>
                     ${this.generateInfoRowsHTML(infoRows)}
                 </div>
                 <div style="display: flex; flex-direction: column; justify-content: space-between; align-items: flex-end; margin-left: 1rem; padding-left: 1rem; border-left: 1px solid var(--color-border); align-self: stretch;">

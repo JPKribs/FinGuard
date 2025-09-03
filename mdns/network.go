@@ -40,5 +40,5 @@ func (d *Discovery) getHostname() (string, error) {
 	if err == nil && len(hostname) > 0 {
 		return strings.TrimSuffix(hostname[0], "."), nil
 	}
-	return "finguard-host", nil
+	return "FinGuard", nil
 }

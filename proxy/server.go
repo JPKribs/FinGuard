@@ -371,7 +371,7 @@ func (s *Server) findServiceByHost(host string) *ProxyService {
 			defaultService = service
 		}
 
-		if host == service.Config.Name+".local" || host == service.Config.Name {
+		if host == service.Config.Name {
 			return service
 		}
 	}
