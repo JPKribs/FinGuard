@@ -185,8 +185,10 @@ class TunnelsManager {
     // MARK: addPeer
     static addPeer() {
         const peerSection = document.getElementById('peerSection');
-        const currentIndex = window.FinGuardConfig.peerIndex;
         
+        if (!peerSection) return;
+        
+        const currentIndex = window.FinGuardConfig.peerIndex;
         const peerConfig = this.createPeerElement(currentIndex);
         peerSection.appendChild(peerConfig);
         
@@ -205,10 +207,10 @@ class TunnelsManager {
     // MARK: generatePeerHTML
     static generatePeerHTML(index) {
         return `
-            <h5>Peer ${index + 1} <button type="button" class="btn-danger btn-small" onclick="window.TunnelsManager.removePeer(${index})">Remove</button></h5>
+            <h5>Peer ${index + 1} <button type="button" class="btn-danger btn-small" style="width: auto; min-width: 60px;" onclick="window.TunnelsManager.removePeer(${index})">Remove</button></h5>
             <div class="form-group">
                 <label>Peer Name</label>
-                <input type="text" class="peer-name" placeholder="Enter peer name (optional)">
+                <input type="text" class="peer-name" placeholder="Enter peer name">
             </div>
             <div class="form-group">
                 <label>Public Key</label>
@@ -216,7 +218,7 @@ class TunnelsManager {
             </div>
             <div class="form-group">
                 <label>Endpoint</label>
-                <input type="text" class="peer-endpoint" placeholder="host:port (optional)">
+                <input type="text" class="peer-endpoint" placeholder="host:port">
             </div>
             <div class="form-group">
                 <label>Allowed IPs</label>
@@ -250,9 +252,17 @@ class TunnelsManager {
 
         form.addEventListener('submit', this.handleTunnelFormSubmit.bind(this));
 
-        if (!window.FinGuardConfig.peerIndex) {
-            window.FinGuardConfig.peerIndex = 0;
+        // Clear any existing peers first
+        const peerSection = document.getElementById('peerSection');
+        if (peerSection) {
+            this.removeExtraPeerConfigs(peerSection);
         }
+
+        // Initialize peer index and add first peer
+        if (!window.FinGuardConfig) {
+            window.FinGuardConfig = {};
+        }
+        window.FinGuardConfig.peerIndex = 0;
 
         this.addPeer();
         this.setupFormValidation();
@@ -473,7 +483,10 @@ class TunnelsManager {
         if (!peerSection) return;
         
         this.removeExtraPeerConfigs(peerSection);
+        
+        // Reset to 0 so first peer shows as "Peer 1"
         window.FinGuardConfig.peerIndex = 0;
+        
         this.addPeer();
     }
 
@@ -529,6 +542,11 @@ class TunnelsManager {
 
     // MARK: initialize
     static initialize() {
+        // Ensure clean initialization
+        if (!window.FinGuardConfig) {
+            window.FinGuardConfig = {};
+        }
+        
         this.initializeTunnelForm();
         this.loadTunnels();
     }
@@ -536,3 +554,9 @@ class TunnelsManager {
 
 // GLOBAL SCOPE EXPORT
 window.TunnelsManager = TunnelsManager;
+
+window.addPeer = function() {
+    if (window.TunnelsManager) {
+        window.TunnelsManager.addPeer();
+    }
+};

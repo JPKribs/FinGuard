@@ -83,8 +83,3 @@
     margin-bottom: 1rem;
     transition: all var(--animation-normal) ease;
 }
-
-/* Peer config hover effects */
-.peer-config:hover {
-    border-color: var(--color-border-hover);
-}
