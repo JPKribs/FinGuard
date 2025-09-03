@@ -94,9 +94,19 @@ case "$1" in
             chmod 660 /etc/finguard/config.yaml
         fi
         
+        if [ -f /etc/finguard/services.yaml ]; then
+            chown root:finguard /etc/finguard/services.yaml
+            chmod 660 /etc/finguard/services.yaml
+        fi
+
         if [ -f /etc/finguard/wireguard.yaml ]; then
             chown root:finguard /etc/finguard/wireguard.yaml
             chmod 660 /etc/finguard/wireguard.yaml
+        fi
+
+        if [ -f /etc/finguard/update.yaml ]; then
+            chown root:finguard /etc/finguard/update.yaml
+            chmod 660 /etc/finguard/update.yaml
         fi
 
         # MARK: Set capabilities on binary
