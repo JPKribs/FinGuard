@@ -50,6 +50,7 @@ class StatusManager {
             this.createSystemHealthItem(status),
             this.createIPAddressesItem(status),
             this.createActiveServicesItem(status),
+            this.createJellyfinBroadcasterItem(status),
             this.createProxyServerItem(status),
             this.createTunnelManagerItem(status)
         ].join('');
@@ -57,7 +58,14 @@ class StatusManager {
 
     // MARK: createSystemHealthItem
     static createSystemHealthItem(status) {
-        const isHealthy = status.proxy && status.tunnels;
+        const proxyHealthy = status.proxy;
+        const tunnelsHealthy = status.tunnels;
+        
+        // Jellyfin is considered healthy if: no services OR (has services AND running)
+        const jellyfinServices = status.jellyfin ? status.jellyfin.services : 0;
+        const jellyfinHealthy = jellyfinServices === 0 || (status.jellyfin && status.jellyfin.running);
+        
+        const isHealthy = proxyHealthy && tunnelsHealthy && jellyfinHealthy;
         const healthStatus = isHealthy ? 'Healthy' : 'Degraded';
         const healthClass = isHealthy ? 'running' : 'stopped';
 
@@ -121,6 +129,34 @@ class StatusManager {
         }
 
         return `<div style="display: flex; flex-direction: column;">${allIPs.join('')}</div>`;
+    }
+
+    static createJellyfinBroadcasterItem(status) {
+        const jellyfinRunning = status.jellyfin && status.jellyfin.running;
+        const jellyfinServices = status.jellyfin ? status.jellyfin.services : 0;
+        
+        let statusText, statusClass, description;
+        
+        if (jellyfinServices === 0) {
+            statusText = 'Inactive';
+            statusClass = 'status stopped';
+            description = 'No Jellyfin services configured';
+        } else if (jellyfinRunning) {
+            statusText = `Broadcasting (${jellyfinServices})`;
+            statusClass = 'status running';
+            description = `Broadcasting ${jellyfinServices} Jellyfin service${jellyfinServices > 1 ? 's' : ''}`;
+        } else {
+            statusText = 'Stopped';
+            statusClass = 'status stopped';
+            description = `${jellyfinServices} Jellyfin service${jellyfinServices > 1 ? 's' : ''} configured but not broadcasting`;
+        }
+
+        return this.createStatusItem(
+            'Jellyfin Discovery',
+            description,
+            statusText,
+            statusClass
+        );
     }
 
     // MARK: generateInterfacesHtml

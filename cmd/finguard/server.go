@@ -16,7 +16,16 @@ func (app *Application) startManagementServer() error {
 	mux.HandleFunc("/healthz", app.healthCheck.LivenessHandler)
 	mux.HandleFunc("/readyz", app.healthCheck.ReadinessHandler)
 
-	apiServer := v1.NewAPIServer(app.config, app.proxyServer, app.tunnelManager, app.discoveryManager, app.logger, app.updateManager)
+	apiServer := v1.NewAPIServer(
+		app.config,
+		app.proxyServer,
+		app.tunnelManager,
+		app.discoveryManager,
+		app.jellyfinBroadcaster,
+		app.logger,
+		app.updateManager,
+	)
+
 	apiServer.RegisterRoutes(mux)
 
 	app.server = &http.Server{

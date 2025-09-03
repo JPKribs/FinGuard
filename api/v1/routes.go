@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/JPKribs/FinGuard/config"
+	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/mdns"
 	"github.com/JPKribs/FinGuard/proxy"
@@ -13,14 +14,23 @@ import (
 
 // MARK: NewAPIServer
 // Create a new instance of the API Server.
-func NewAPIServer(cfg *config.Config, proxyServer *proxy.Server, tunnelManager wireguard.TunnelManager, discoveryManager *mdns.Discovery, logger *internal.Logger, updateManager *updater.UpdateManager) *APIServer {
+func NewAPIServer(
+	cfg *config.Config,
+	proxyServer *proxy.Server,
+	tunnelManager wireguard.TunnelManager,
+	discoveryManager *mdns.Discovery,
+	jellyfinBroadcaster *discovery.JellyfinBroadcaster,
+	logger *internal.Logger,
+	updateManager *updater.UpdateManager,
+) *APIServer {
 	return &APIServer{
-		cfg:              cfg,
-		proxyServer:      proxyServer,
-		tunnelManager:    tunnelManager,
-		discoveryManager: discoveryManager,
-		logger:           logger,
-		updateManager:    updateManager,
+		cfg:                 cfg,
+		proxyServer:         proxyServer,
+		tunnelManager:       tunnelManager,
+		discoveryManager:    discoveryManager,
+		jellyfinBroadcaster: jellyfinBroadcaster,
+		logger:              logger,
+		updateManager:       updateManager,
 	}
 }
 

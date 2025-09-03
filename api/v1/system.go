@@ -73,9 +73,33 @@ func (a *APIServer) handleStatus(w http.ResponseWriter, r *http.Request) {
 		a.logger.Warn("Failed to get interface details", "error", err)
 	}
 
+	var jellyfinStatus map[string]interface{}
+	if a.jellyfinBroadcaster != nil {
+		serviceCount := 0
+		if a.jellyfinBroadcaster.HasJellyfinServices() {
+			services := a.proxyServer.ListServices()
+			for _, svc := range services {
+				if svc.Jellyfin {
+					serviceCount++
+				}
+			}
+		}
+
+		jellyfinStatus = map[string]interface{}{
+			"running":  a.jellyfinBroadcaster.IsRunning(),
+			"services": serviceCount,
+		}
+	} else {
+		jellyfinStatus = map[string]interface{}{
+			"running":  false,
+			"services": 0,
+		}
+	}
+
 	status := map[string]interface{}{
 		"proxy":      a.proxyServer.IsReady(),
 		"tunnels":    a.tunnelManager.IsReady(),
+		"jellyfin":   jellyfinStatus,
 		"services":   len(a.proxyServer.ListServices()),
 		"uptime":     time.Now().Format(time.RFC3339),
 		"ipv4":       ipv4List,

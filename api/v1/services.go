@@ -92,23 +92,19 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check for existing service BEFORE doing any operations
 	if err := a.checkServiceExists(serviceConfig.Name); err != nil {
 		a.respondWithError(w, http.StatusConflict, err.Error())
 		return
 	}
 
-	// Add to config first - this validates and prevents duplicates
 	if err := a.cfg.AddService(serviceConfig); err != nil {
 		a.respondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	// Add tunnel route after config is saved
 	var tunnelToUpdate *config.TunnelConfig
 	if serviceConfig.Tunnel != "" {
 		if err := a.addServiceRouteToTunnel(serviceConfig); err != nil {
-			// Rollback config change
 			a.cfg.RemoveService(serviceConfig.Name)
 			a.respondWithError(w, http.StatusInternalServerError, "Failed to add route to tunnel: "+err.Error())
 			return
@@ -116,9 +112,7 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 		tunnelToUpdate = a.cfg.GetTunnel(serviceConfig.Tunnel)
 	}
 
-	// Add to proxy server last
 	if err := a.proxyServer.AddService(serviceConfig); err != nil {
-		// Rollback both config and tunnel route
 		a.cfg.RemoveService(serviceConfig.Name)
 		if serviceConfig.Tunnel != "" {
 			a.removeServiceRouteFromTunnel(serviceConfig)
@@ -128,6 +122,15 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 	}
 
 	a.publishServiceMDNS(serviceConfig)
+
+	if serviceConfig.Jellyfin && a.jellyfinBroadcaster != nil {
+		if err := a.jellyfinBroadcaster.AddJellyfinService(serviceConfig.Name, serviceConfig.Upstream); err != nil {
+			a.logger.Error("Failed to add Jellyfin service to broadcaster",
+				"name", serviceConfig.Name, "error", err)
+		} else {
+			a.logger.Info("Added Jellyfin service to broadcaster", "name", serviceConfig.Name)
+		}
+	}
 
 	if tunnelToUpdate != nil {
 		a.logger.Info("Updating tunnel with new service route",
@@ -208,6 +211,11 @@ func (a *APIServer) handleDeleteService(w http.ResponseWriter, r *http.Request, 
 
 	if a.discoveryManager != nil {
 		a.discoveryManager.UnpublishService(serviceName)
+	}
+
+	if serviceToDelete.Jellyfin && a.jellyfinBroadcaster != nil {
+		a.jellyfinBroadcaster.RemoveJellyfinService(serviceName)
+		a.logger.Info("Removed Jellyfin service from broadcaster", "name", serviceName)
 	}
 
 	a.respondWithSuccess(w, fmt.Sprintf("Service %s deleted successfully", serviceName), nil)

@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/JPKribs/FinGuard/config"
+	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/mdns"
 	"github.com/JPKribs/FinGuard/proxy"
@@ -21,12 +22,13 @@ type APIResponse struct {
 
 // MARK: APIServer
 type APIServer struct {
-	cfg              *config.Config
-	proxyServer      *proxy.Server
-	tunnelManager    wireguard.TunnelManager
-	discoveryManager *mdns.Discovery
-	logger           *internal.Logger
-	updateManager    *updater.UpdateManager
+	cfg                 *config.Config
+	proxyServer         *proxy.Server
+	tunnelManager       wireguard.TunnelManager
+	discoveryManager    *mdns.Discovery
+	jellyfinBroadcaster *discovery.JellyfinBroadcaster
+	logger              *internal.Logger
+	updateManager       *updater.UpdateManager
 }
 
 // MARK: LogEntry

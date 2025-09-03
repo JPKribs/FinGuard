@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/JPKribs/FinGuard/config"
+	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/mdns"
 	"github.com/JPKribs/FinGuard/proxy"
@@ -15,15 +16,16 @@ import (
 
 // MARK: Application
 type Application struct {
-	config           *config.Config
-	logger           *internal.Logger
-	healthCheck      *internal.HealthChecker
-	tunnelManager    wireguard.TunnelManager
-	proxyServer      *proxy.Server
-	discoveryManager *mdns.Discovery
-	updateManager    *updater.UpdateManager
-	server           *http.Server
-	context          context.Context
-	cancel           context.CancelFunc
-	waitGroup        sync.WaitGroup
+	config              *config.Config
+	logger              *internal.Logger
+	healthCheck         *internal.HealthChecker
+	tunnelManager       wireguard.TunnelManager
+	proxyServer         *proxy.Server
+	discoveryManager    *mdns.Discovery
+	jellyfinBroadcaster *discovery.JellyfinBroadcaster
+	updateManager       *updater.UpdateManager
+	server              *http.Server
+	context             context.Context
+	cancel              context.CancelFunc
+	waitGroup           sync.WaitGroup
 }

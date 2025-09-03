@@ -5,16 +5,17 @@ import (
 	"fmt"
 
 	"github.com/JPKribs/FinGuard/config"
+	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/mdns"
 	"github.com/JPKribs/FinGuard/proxy"
 	"github.com/JPKribs/FinGuard/updater"
+	"github.com/JPKribs/FinGuard/utilities"
 	"github.com/JPKribs/FinGuard/version"
 	"github.com/JPKribs/FinGuard/wireguard"
 )
 
 // MARK: newApplication
-// Creates and configures a new application instance
 func newApplication(configPath string) (*Application, error) {
 	config, error := config.Load(configPath)
 	if error != nil {
@@ -26,19 +27,21 @@ func newApplication(configPath string) (*Application, error) {
 
 	updateManager := updater.NewUpdateManager(config, logger, version.Version)
 
+	jellyfinBroadcaster := discovery.NewJellyfinBroadcaster(logger)
+
 	return &Application{
-		config:           config,
-		logger:           logger,
-		healthCheck:      healthCheck,
-		tunnelManager:    wireguard.NewManager(logger),
-		proxyServer:      proxy.NewServer(logger),
-		discoveryManager: mdns.NewDiscovery(logger),
-		updateManager:    updateManager,
+		config:              config,
+		logger:              logger,
+		healthCheck:         healthCheck,
+		tunnelManager:       wireguard.NewManager(logger),
+		proxyServer:         proxy.NewServer(logger),
+		discoveryManager:    mdns.NewDiscovery(logger),
+		jellyfinBroadcaster: jellyfinBroadcaster,
+		updateManager:       updateManager,
 	}, nil
 }
 
 // MARK: start
-// Initializes and starts all application components
 func (app *Application) start(ctx context.Context) error {
 	app.logger.Info("Starting FinGuard", "version", version.Version)
 
@@ -48,6 +51,10 @@ func (app *Application) start(ctx context.Context) error {
 
 	if err := app.startDiscovery(ctx); err != nil {
 		return fmt.Errorf("starting discovery: %w", err)
+	}
+
+	if err := app.startJellyfinBroadcaster(ctx); err != nil {
+		return fmt.Errorf("starting jellyfin broadcaster: %w", err)
 	}
 
 	if err := app.startUpdateManager(ctx); err != nil {
@@ -67,7 +74,56 @@ func (app *Application) start(ctx context.Context) error {
 	}
 
 	app.publishServices()
+	app.setupJellyfinServices()
 	app.updateReadiness()
 
 	return app.startManagementServer()
+}
+
+// MARK: startJellyfinBroadcaster
+func (app *Application) startJellyfinBroadcaster(ctx context.Context) error {
+	ips, err := utilities.GetSystemIPv4s()
+	if err != nil || len(ips) == 0 {
+		app.logger.Error("Could not determine local IP for Jellyfin broadcaster", "error", err)
+		return nil
+	}
+	localIP := ips[0]
+
+	hostname := "finguard"
+
+	if err := app.jellyfinBroadcaster.Start(localIP, hostname); err != nil {
+		return fmt.Errorf("failed to start jellyfin broadcaster: %w", err)
+	}
+
+	app.waitGroup.Add(1)
+	go func() {
+		defer app.waitGroup.Done()
+		<-ctx.Done()
+		if err := app.jellyfinBroadcaster.Stop(); err != nil {
+			app.logger.Error("Jellyfin broadcaster shutdown failed", "error", err)
+		}
+	}()
+
+	return nil
+}
+
+// MARK: setupJellyfinServices
+func (app *Application) setupJellyfinServices() {
+	hasJellyfinServices := false
+
+	for _, serviceCfg := range app.config.Services {
+		if serviceCfg.Jellyfin {
+			hasJellyfinServices = true
+			if err := app.jellyfinBroadcaster.AddJellyfinService(serviceCfg.Name, serviceCfg.Upstream); err != nil {
+				app.logger.Error("Failed to add Jellyfin service for broadcast",
+					"name", serviceCfg.Name, "upstream", serviceCfg.Upstream, "error", err)
+			} else {
+				app.logger.Info("Added Jellyfin service for broadcast", "name", serviceCfg.Name)
+			}
+		}
+	}
+
+	if !hasJellyfinServices {
+		app.logger.Info("No Jellyfin services found, skipping Jellyfin discovery setup")
+	}
 }
