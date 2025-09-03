@@ -8,7 +8,6 @@ import (
 	"os"
 	"time"
 
-	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/version"
 )
@@ -55,12 +54,6 @@ func runApplication(configPath string) error {
 	app.context = ctx
 	app.cancel = cancel
 	defer cancel()
-
-	broadcaster, err := discovery.StartProxy()
-	if err != nil {
-		return fmt.Errorf("discovery proxy error: %w", err)
-	}
-	defer broadcaster.Stop()
 
 	if err := app.start(ctx); err != nil {
 		return fmt.Errorf("start app: %w", err)

@@ -2,36 +2,46 @@ package discovery
 
 import (
 	"fmt"
-	"log"
-	"os"
 	"strings"
+
+	"github.com/JPKribs/FinGuard/config"
+	"github.com/JPKribs/FinGuard/utilities"
 )
 
-func StartProxy() (*JellyfinBroadcaster, error) {
-	serverURL := os.Getenv("JELLYFIN_SERVER_URL")
-	if serverURL == "" {
-		serverURL = "http://localhost:8096"
-		log.Println("INF: JELLYFIN_SERVER_URL not set, using default http://localhost:8096")
+func StartProxy(services []config.ServiceConfig) (*JellyfinBroadcaster, error) {
+	var serverURL string
+	var serviceName string
+
+	for _, svc := range services {
+		if svc.Jellyfin {
+			serverURL = svc.Upstream
+			serviceName = svc.Name + ".local"
+			break
+		}
 	}
-	proxyURL := strings.TrimSuffix(os.Getenv("PROXY_URL"), "/")
+
+	if serverURL == "" {
+		return nil, nil
+	}
+
 	serverURL = strings.TrimSuffix(serverURL, "/")
 
 	jb := NewJellyfinBroadcaster(GetCacheDuration())
-	localIP, _ := getLocalIP()
-	hostname, _ := getHostname(localIP)
+
+	ips, err := utilities.GetSystemIPv4s()
+	if err != nil || len(ips) == 0 {
+		return nil, fmt.Errorf("could not resolve local IPs: %w", err)
+	}
+	localIP := ips[0]
+
+	hostname := "jellyfin-proxy"
 
 	if err := jb.Start(localIP, hostname); err != nil {
 		return nil, fmt.Errorf("start broadcaster: %w", err)
 	}
 
-	log.Printf("INF: Broadcaster started on %s (%s)\n", localIP, hostname)
-
-	if err := jb.AddJellyfinService("default", serverURL); err != nil {
+	if err := jb.AddJellyfinService(serviceName, serverURL); err != nil {
 		return nil, fmt.Errorf("add jellyfin service: %w", err)
-	}
-
-	if proxyURL != "" {
-		log.Printf("INF: Proxy mode active, using %s for Address field\n", proxyURL)
 	}
 
 	return jb, nil

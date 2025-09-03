@@ -56,3 +56,8 @@ func (c *ServerInfoCache) Clear() {
 
 	c.services = make(map[string]*CachedServerInfo)
 }
+
+// MARK: GetCacheDuration
+func GetCacheDuration() time.Duration {
+	return 30 * time.Second
+}
