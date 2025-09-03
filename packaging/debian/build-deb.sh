@@ -147,6 +147,8 @@ fi
 echo "Copying Debian control file..."
 if [ -f "$SCRIPT_DIR/control" ]; then
     cp "$SCRIPT_DIR/control" "$DEB_DIR/DEBIAN/"
+    sed -i "s/Architecture: amd64/Architecture: $DEB_ARCH/" "$DEB_DIR/DEBIAN/control"
+    echo "Updated architecture to $DEB_ARCH in control file"
 else
     echo "ERROR: control file not found in $SCRIPT_DIR"
     exit 1
