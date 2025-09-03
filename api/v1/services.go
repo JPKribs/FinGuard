@@ -92,24 +92,33 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check for existing service BEFORE doing any operations
+	if err := a.checkServiceExists(serviceConfig.Name); err != nil {
+		a.respondWithError(w, http.StatusConflict, err.Error())
+		return
+	}
+
+	// Add to config first - this validates and prevents duplicates
+	if err := a.cfg.AddService(serviceConfig); err != nil {
+		a.respondWithError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Add tunnel route after config is saved
 	var tunnelToUpdate *config.TunnelConfig
 	if serviceConfig.Tunnel != "" {
 		if err := a.addServiceRouteToTunnel(serviceConfig); err != nil {
+			// Rollback config change
+			a.cfg.RemoveService(serviceConfig.Name)
 			a.respondWithError(w, http.StatusInternalServerError, "Failed to add route to tunnel: "+err.Error())
 			return
 		}
 		tunnelToUpdate = a.cfg.GetTunnel(serviceConfig.Tunnel)
 	}
 
-	if err := a.cfg.AddService(serviceConfig); err != nil {
-		if serviceConfig.Tunnel != "" {
-			a.removeServiceRouteFromTunnel(serviceConfig)
-		}
-		a.respondWithError(w, http.StatusBadRequest, err.Error())
-		return
-	}
-
+	// Add to proxy server last
 	if err := a.proxyServer.AddService(serviceConfig); err != nil {
+		// Rollback both config and tunnel route
 		a.cfg.RemoveService(serviceConfig.Name)
 		if serviceConfig.Tunnel != "" {
 			a.removeServiceRouteFromTunnel(serviceConfig)
