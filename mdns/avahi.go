@@ -55,7 +55,7 @@ func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceCo
 		avahi.InterfaceUnspec,
 		avahi.ProtoUnspec,
 		0,
-		serviceName,
+		serviceName+".finguard",
 		"_http._tcp",
 		"local",
 		d.hostName,
