@@ -124,9 +124,32 @@ auto_apply: false
 backup_dir: "./backups"
 EOF
 
+echo "Configuring folder permissions..."
+
+# Config files (root-owned, group finguard readable)
+chown root:finguard "$DEB_DIR/etc/finguard/config.yaml"
+chmod 640 "$DEB_DIR/etc/finguard/config.yaml"
+
+chown root:finguard "$DEB_DIR/etc/finguard/wireguard.yaml"
+chmod 640 "$DEB_DIR/etc/finguard/wireguard.yaml"
+
+chown root:finguard "$DEB_DIR/etc/finguard/services.yaml"
 chmod 644 "$DEB_DIR/etc/finguard/services.yaml"
-chmod 600 "$DEB_DIR/etc/finguard/wireguard.yaml"
+
+chown root:finguard "$DEB_DIR/etc/finguard/update.yaml"
 chmod 644 "$DEB_DIR/etc/finguard/update.yaml"
+
+# Persistent state and logs (service-owned, 755 dirs)
+chown -R finguard:finguard "$DEB_DIR/var/lib/finguard"
+chmod 755 "$DEB_DIR/var/lib/finguard"
+
+chown -R finguard:finguard "$DEB_DIR/var/log/finguard"
+chmod 755 "$DEB_DIR/var/log/finguard"
+
+# Web assets (root-owned, world-readable)
+chown -R root:root "$DEB_DIR/usr/local/share/finguard/web"
+find "$DEB_DIR/usr/local/share/finguard/web" -type f -exec chmod 644 {} \;
+find "$DEB_DIR/usr/local/share/finguard/web" -type d -exec chmod 755 {} \;
 
 echo "Copying systemd service..."
 if [ -f "$SCRIPT_DIR/finguard.service" ]; then
