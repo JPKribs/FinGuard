@@ -1,4 +1,3 @@
-
 // WIREGUARD TUNNELS MANAGEMENT
 
 class TunnelsManager {

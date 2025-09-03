@@ -77,39 +77,39 @@
                     <form id="serviceForm">
                         <div class="form-group">
                             <label for="serviceName">Service Name</label>
-                            <input type="text" id="serviceName" required>
+                            <input type="text" id="serviceName" name="serviceName" required>
                         </div>
                         <div class="form-group">
                             <label for="serviceUpstream">Upstream URL</label>
-                            <input type="url" id="serviceUpstream" placeholder="http://192.168.0.1:8096" required>
+                            <input type="url" id="serviceUpstream" name="serviceUpstream" placeholder="http://192.168.0.1:8096" required>
                         </div>
                         <div class="form-group">
                             <label for="serviceJellyfin">
-                                <input type="checkbox" id="serviceJellyfin" class="checkbox-inline">
+                                <input type="checkbox" id="serviceJellyfin" name="serviceJellyfin" class="checkbox-inline">
                                 Jellyfin Server
                             </label>
                         </div>
                         <div class="form-group">
                             <label for="serviceWebsocket">
-                                <input type="checkbox" id="serviceWebsocket" class="checkbox-inline">
+                                <input type="checkbox" id="serviceWebsocket" name="serviceWebsocket" class="checkbox-inline">
                                 WebSocket Support
                             </label>
                         </div>
                         <div class="form-group">
                             <label for="serviceDefault">
-                                <input type="checkbox" id="serviceDefault" class="checkbox-inline">
+                                <input type="checkbox" id="serviceDefault" name="serviceDefault" class="checkbox-inline">
                                 Default Service
                             </label>
                         </div>
                         <div class="form-group">
                             <label for="serviceMDNS">
-                                <input type="checkbox" id="serviceMDNS" class="checkbox-inline">
+                                <input type="checkbox" id="serviceMDNS" name="serviceMDNS" class="checkbox-inline">
                                 Publish via mDNS
                             </label>
                         </div>
                         <div class="form-group">
                             <label for="serviceTunnel">Tunnel</label>
-                            <select id="serviceTunnel">
+                            <select id="serviceTunnel" name="serviceTunnel">
                                 <option value="">None</option>
                             </select>
                         </div>
@@ -138,47 +138,52 @@
                             <!-- Basic Tunnel Configuration -->
                             <div class="form-group">
                                 <label for="tunnelName">Tunnel Name</label>
-                                <input type="text" id="tunnelName" required>
+                                <input type="text" id="tunnelName" name="tunnelName" required>
                             </div>
                             
                             <!-- Interface Configuration Section -->
                             <h4>Interface Configuration</h4>
                             <div class="form-group">
                                 <label for="tunnelPrivateKey">Private Key</label>
-                                <textarea id="tunnelPrivateKey" rows="2" required></textarea>
+                                <textarea id="tunnelPrivateKey" name="tunnelPrivateKey" rows="2" required></textarea>
                             </div>
                             <div class="form-group">
-                                <label for="tunnelAddress">Address (CIDR)</label>
-                                <input type="text" id="tunnelAddress" required>
+                                <label for="tunnelAddresses">Address (CIDR)</label>
+                                <input type="text" id="tunnelAddresses" name="tunnelAddresses" required>
                             </div>
                             <div class="form-group">
                                 <label for="tunnelListenPort">Listen Port (optional)</label>
-                                <input type="number" id="tunnelListenPort" placeholder="0 (auto)" min="0" max="65535">
+                                <input type="number" id="tunnelListenPort" name="tunnelListenPort" placeholder="0 (auto)" min="0" max="65535">
                             </div>
                             <div class="form-group">
                                 <label for="tunnelMTU">MTU</label>
-                                <input type="number" id="tunnelMTU" placeholder="1420" value="1420" min="576" max="65536">
+                                <input type="number" id="tunnelMTU" name="tunnelMTU" placeholder="1420" value="1420" min="576" max="65536">
+                            </div>
+                            <div class="form-group">
+                                <label for="tunnelRoutes">Routes (optional)</label>
+                                <input type="text" id="tunnelRoutes" name="tunnelRoutes" placeholder="10.0.0.0/24,192.168.1.0/24">
+                                <small class="help-text">Comma-separated CIDR routes</small>
                             </div>
 
                             <!-- Advanced Settings Section -->
                             <h4>Advanced Settings</h4>
                             <div class="form-group">
                                 <label for="tunnelMonitorInterval">Monitor Interval (seconds)</label>
-                                <input type="number" id="tunnelMonitorInterval" placeholder="30" value="30" min="10" max="3600">
+                                <input type="number" id="tunnelMonitorInterval" name="tunnelMonitorInterval" placeholder="30" value="30" min="10" max="3600">
                                 <small class="help-text">
                                     How often to check peer connection health
                                 </small>
                             </div>
                             <div class="form-group">
                                 <label for="tunnelStaleTimeout">Stale Connection Timeout (seconds)</label>
-                                <input type="number" id="tunnelStaleTimeout" placeholder="300" value="300" min="60" max="7200">
+                                <input type="number" id="tunnelStaleTimeout" name="tunnelStaleTimeout" placeholder="300" value="300" min="60" max="7200">
                                 <small class="help-text">
                                     When to consider a peer connection stale
                                 </small>
                             </div>
                             <div class="form-group">
                                 <label for="tunnelReconnectRetries">Reconnection Retries</label>
-                                <input type="number" id="tunnelReconnectRetries" placeholder="3" value="3" min="1" max="10">
+                                <input type="number" id="tunnelReconnectRetries" name="tunnelReconnectRetries" placeholder="3" value="3" min="1" max="10">
                                 <small class="help-text">
                                     Maximum reconnection attempts for failed peers
                                 </small>
@@ -186,43 +191,13 @@
                             
                             <!-- Peer Configuration Section -->
                             <h4>Peer Configuration</h4>
-                            <fieldset">
-                                <div id="peerSection">
-                                    <div class="peer-config" data-peer-index="0">
-                                        <div class="form-group">
-                                            <label>Peer Name</label>
-                                            <input type="text" class="peer-name">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Public Key</label>
-                                            <textarea class="peer-public-key" rows="2" required></textarea>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Endpoint</label>
-                                            <input type="text" class="peer-endpoint" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Allowed IPs</label>
-                                            <input type="text" class="peer-allowed-ips" placeholder="10.20.0.0/24,10.20.1.0/24" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Persistent Keepalive (seconds)</label>
-                                            <input type="number" class="peer-keepalive" placeholder="25" value="25" min="0" max="65535">
-                                            <small class="help-text">
-                                                Set to 0 to disable keepalive
-                                            </small>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Preshared Key (optional)</label>
-                                            <textarea class="peer-preshared" placeholder="Optional preshared key" rows="2"></textarea>
-                                        </div>
-                                    </div>
-                                </div>
-                            </fieldset>
+                            <div id="peerSection">
+                                <!-- Peers will be added dynamically here -->
+                            </div>
                             
                             <!-- Form Actions -->
                             <div class="form-controls">
-                                <button type="button" onclick="addPeer()">Add Another Peer</button>
+                                <button type="button" onclick="addPeer()">Add Peer</button>
                                 <button type="submit">Create Tunnel</button>
                             </div>
                         </form>
@@ -270,20 +245,20 @@
             <form id="updateConfigForm">
                 <div class="form-group">
                     <label for="updateEnabled">
-                        <input type="checkbox" id="updateEnabled" class="checkbox-inline">
+                        <input type="checkbox" id="updateEnabled" name="updateEnabled" class="checkbox-inline">
                         Enable Auto-Updates
                     </label>
                 </div>
                 <div class="form-group">
                     <label for="updateSchedule">Update Schedule (Cron Format)</label>
-                    <input type="text" id="updateSchedule" placeholder="0 3 * * *" required>
+                    <input type="text" id="updateSchedule" name="updateSchedule" placeholder="0 3 * * *" required>
                     <small class="help-text">
                         Format: minute hour day month weekday (e.g., "0 3 * * *" = daily at 3 AM)
                     </small>
                 </div>
                 <div class="form-group">
                     <label for="autoApply">
-                        <input type="checkbox" id="autoApply" class="checkbox-inline">
+                        <input type="checkbox" id="autoApply" name="autoApply" class="checkbox-inline">
                         Automatically Apply Updates
                     </label>
                     <small class="help-text">
@@ -292,7 +267,7 @@
                 </div>
                 <div class="form-group">
                     <label for="backupDir">Backup Directory</label>
-                    <input type="text" id="backupDir" placeholder="./backups" required>
+                    <input type="text" id="backupDir" name="backupDir" placeholder="./backups" required>
                 </div>
                 <div class="token-actions">
                     <button type="submit">Save Configuration</button>
