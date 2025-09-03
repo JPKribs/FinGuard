@@ -137,11 +137,11 @@ else
 fi
 
 echo "Copying Avahi configuration..."
-if [ -f "$SCRIPT_DIR/avahi-daemon.conf" ]; then
-    cp "$SCRIPT_DIR/avahi-daemon.conf" "$DEB_DIR/etc/avahi/"
-    echo "Copied avahi-daemon.conf"
+if [ -f "$SCRIPT_DIR/avahi.service" ]; then
+    cp "$SCRIPT_DIR/avahi.service" "$DEB_DIR/etc/avahi/services/finguard.service"
+    echo "Copied avahi.service"
 else
-    echo "WARNING: avahi-daemon.conf not found in $SCRIPT_DIR"
+    echo "WARNING: avahi.service not found in $SCRIPT_DIR"
 fi
 
 echo "Copying Debian control file..."
@@ -170,7 +170,6 @@ cat > "$DEB_DIR/DEBIAN/conffiles" << EOF
 /etc/finguard/services.yaml
 /etc/finguard/wireguard.yaml
 /etc/finguard/update.yaml
-/etc/avahi/avahi-daemon.conf
 EOF
 
 INSTALLED_SIZE=$(du -sk "$DEB_DIR" | cut -f1)
