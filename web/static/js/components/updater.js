@@ -73,53 +73,33 @@ class UpdateManager {
             this.createStatusItem('Current Version', 'Application version currently running', info.current_version, 'text'),
             this.createStatusItem('Latest Available', 'Most recent version on GitHub', info.latest_version, 'text'),
             this.createStatusItem('Update Available', 'Newer version ready for installation', info.available ? 'Available' : 'Up to date', 'status', !info.available),
-            this.createStatusItem('Auto-Updates', `Automatic update checking: ${info.update_schedule || 'Not configured'}`, info.auto_update_enabled ? 'Enabled' : 'Disabled', 'status', info.auto_update_enabled),
-            this.createStatusItem('Last Check', 'Most recent update check performed', lastCheckTime, 'text'),
-            this.createStatusItem('Next Scheduled Check', 'When the next automatic check will occur', nextCheckTime, 'text')
+            this.createStatusItem('Auto-Updates', `Automatic update checking: ${info.update_schedule || 'Not configured'}`, info.auto_update_enabled ? 'Enabled' : 'Disabled', 'status', !info.auto_update_enabled),
+            this.createStatusItem('Last Check', 'When updates were last checked', lastCheckTime, 'text'),
+            this.createStatusItem('Next Check', 'When the next automatic check is scheduled', nextCheckTime, 'text')
         ].join('');
     }
 
     // MARK: createStatusItem
-    static createStatusItem(title, description, value, type, isPositive = false) {
-        const escapedValue = window.Utils.escapeHtml(String(value));
+    static createStatusItem(label, description, value, type, isInactive = false) {
+        const statusClass = type === 'status' ? (isInactive ? 'inactive' : 'active') : '';
         
-        let valueHtml;
-        if (type === 'status') {
-            const valueClass = this.getValueClass(type, isPositive);
-            valueHtml = `<span class="${valueClass}">${escapedValue}</span>`;
-        } else {
-            valueHtml = `<span style="color: var(--color-accent); font-weight: bold; font-family: monospace; display: block; text-align: right;">${escapedValue}</span>`;
-        }
-
         return `
-            <div class="list-item">
-                <div>
-                    <strong>${title}</strong><br>
-                    <small>${description}</small>
-                </div>
-                ${valueHtml}
+            <div class="status-item" title="${description}">
+                <div class="status-label">${label}:</div>
+                <div class="status-value ${statusClass}">${value}</div>
             </div>
         `;
     }
 
-    // MARK: getValueClass
-    static getValueClass(type, isPositive) {
-        if (type === 'version') return 'color: var(--color-accent); font-weight: bold; font-family: monospace;';
-        if (type === 'status') return `status ${isPositive ? 'running' : 'stopped'}`;
-        if (type === 'time') return 'color: var(--color-text-secondary); font-size: 0.9rem;';
-        return '';
-    }
-
     // MARK: configureControls
     static configureControls(updateControls, applyBtn) {
-        updateControls.style.display = 'flex';
-        updateControls.style.gap = '1rem';
-        updateControls.style.justifyContent = 'center';
-
-        if (this.updateInfo.available && applyBtn) {
-            applyBtn.style.display = 'inline-block';
-        } else if (applyBtn) {
-            applyBtn.style.display = 'none';
+        if (updateControls) {
+            updateControls.style.display = 'flex';
+        }
+        
+        if (applyBtn) {
+            applyBtn.disabled = !this.updateInfo?.available;
+            applyBtn.style.display = this.updateInfo?.available ? 'inline-block' : 'none';
         }
     }
 
@@ -131,17 +111,18 @@ class UpdateManager {
             window.Utils.showAlert('Checking for updates...', 'info');
             
             const response = await window.APIClient.checkForUpdate();
-            this.updateInfo = response.data;
-            this.renderUpdateStatus();
+            const data = response.data;
             
-            this.showUpdateCheckResult(response.data);
+            this.updateInfo = data;
+            this.renderUpdateStatus();
+            this.handleUpdateCheckResult(data);
         } catch (error) {
             this.handleUpdateError(error, 'check for updates');
         }
     }
 
-    // MARK: showUpdateCheckResult
-    static showUpdateCheckResult(data) {
+    // MARK: handleUpdateCheckResult
+    static handleUpdateCheckResult(data) {
         if (data.available) {
             window.Utils.showAlert(`Update available! Version ${data.latest_version} is ready for installation.`, 'success');
         } else {
@@ -227,91 +208,75 @@ class UpdateManager {
         const modal = document.getElementById('updateConfigModal');
         
         this.populateConfigForm();
-        modal.style.display = 'flex';
+        modal.style.display = 'block';
     }
 
     // MARK: populateConfigForm
     static populateConfigForm() {
-        document.getElementById('updateEnabled').checked = this.updateConfig.enabled;
-        document.getElementById('updateSchedule').value = this.updateConfig.schedule || '0 3 * * *';
-        document.getElementById('autoApply').checked = this.updateConfig.auto_apply;
-        document.getElementById('backupDir').value = this.updateConfig.backup_dir || './backups';
+        const config = this.updateConfig;
+        
+        this.setFieldValue('updateEnabled', config.enabled);
+        this.setFieldValue('updateSchedule', config.schedule || '0 3 * * *');
+        this.setFieldValue('updateAutoApply', config.auto_apply);
+        this.setFieldValue('updateBackupDir', config.backup_dir || './backups');
+    }
+
+    // MARK: setFieldValue
+    static setFieldValue(fieldId, value) {
+        const field = document.getElementById(fieldId);
+        if (field) {
+            if (field.type === 'checkbox') {
+                field.checked = value;
+            } else {
+                field.value = value;
+            }
+        }
     }
 
     // MARK: setupConfigForm
     static setupConfigForm() {
         const form = document.getElementById('updateConfigForm');
-        form.onsubmit = async (e) => {
-            e.preventDefault();
-            await this.saveUpdateConfig();
-        };
+        if (form) {
+            form.onsubmit = this.handleConfigSubmit.bind(this);
+        }
     }
 
-    // MARK: hideUpdateConfig
-    static hideUpdateConfig() {
-        const modal = document.getElementById('updateConfigModal');
-        modal.style.display = 'none';
-    }
-
-    // MARK: saveUpdateConfig
-    static async saveUpdateConfig() {
+    // MARK: handleConfigSubmit
+    static async handleConfigSubmit(e) {
+        e.preventDefault();
+        
         try {
-            const config = this.collectConfigData();
-            
-            if (!this.validateConfig(config)) return;
-            
-            await this.persistConfig(config);
-            this.handleConfigSaveSuccess();
+            const config = this.extractConfigFromForm();
+            await this.saveConfig(config);
+            this.handleConfigSuccess();
         } catch (error) {
             this.handleConfigError(error, 'save');
         }
     }
 
-    // MARK: collectConfigData
-    static collectConfigData() {
+    // MARK: extractConfigFromForm
+    static extractConfigFromForm() {
         return {
-            enabled: document.getElementById('updateEnabled').checked,
-            schedule: document.getElementById('updateSchedule').value.trim(),
-            auto_apply: document.getElementById('autoApply').checked,
-            backup_dir: document.getElementById('backupDir').value.trim()
+            enabled: document.getElementById('updateEnabled')?.checked || false,
+            schedule: document.getElementById('updateSchedule')?.value || '0 3 * * *',
+            auto_apply: document.getElementById('updateAutoApply')?.checked || false,
+            backup_dir: document.getElementById('updateBackupDir')?.value || './backups'
         };
     }
 
-    // MARK: validateConfig
-    static validateConfig(config) {
-        if (!config.schedule) {
-            window.Utils.showAlert('Schedule is required', 'error');
-            return false;
-        }
-
-        if (!config.backup_dir) {
-            window.Utils.showAlert('Backup directory is required', 'error');
-            return false;
-        }
-
-        if (!this.validateCronFormat(config.schedule)) {
-            window.Utils.showAlert('Invalid cron format. Use: minute hour day month weekday', 'error');
-            return false;
-        }
-
-        return true;
-    }
-
-    // MARK: validateCronFormat
-    static validateCronFormat(schedule) {
-        const cronFields = schedule.split(/\s+/);
-        return cronFields.length === 5;
-    }
-
-    // MARK: persistConfig
-    static async persistConfig(config) {
-        await window.APIClient.saveUpdateConfig(config);
+    // MARK: saveConfig
+    static async saveConfig(config) {
+        await window.APIClient.setUpdateConfig(config);
         this.updateConfig = config;
     }
 
-    // MARK: handleConfigSaveSuccess
-    static handleConfigSaveSuccess() {
-        this.hideUpdateConfig();
+    // MARK: handleConfigSuccess
+    static handleConfigSuccess() {
+        const modal = document.getElementById('updateConfigModal');
+        if (modal) {
+            modal.style.display = 'none';
+        }
+        
         window.Utils.showAlert('Update configuration saved successfully!', 'success');
         
         setTimeout(() => {
@@ -343,8 +308,13 @@ class UpdateManager {
 • 0 3 1 * *    - Monthly on the 1st at 3:00 AM
 • */30 * * * * - Every 30 minutes`;
     }
+
+    // MARK: initialize
+    static initialize() {
+        this.initializeCronHelp();
+        this.loadUpdateStatus();
+    }
 }
 
 // GLOBAL SCOPE EXPORT
-
 window.UpdateManager = UpdateManager;

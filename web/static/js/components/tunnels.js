@@ -105,7 +105,7 @@ class TunnelsManager {
     // MARK: generateTunnelActionsHTML
     static generateTunnelActionsHTML(tunnel, isRunning) {
         const escapedName = window.Utils.escapeHtml(tunnel.name);
-        const restartButton = isRunning ? 
+        const restartButton = isRunning ?
             `<button class="btn-small" onclick="window.TunnelsManager.restartTunnel('${escapedName}')" title="Restart tunnel to apply route changes">Restart</button>` : 
             '';
 
@@ -162,7 +162,7 @@ class TunnelsManager {
 
     // MARK: confirmTunnelDeletion
     static confirmTunnelDeletion(name) {
-        return confirm(`Delete tunnel "${name}"? This will also remove any services using this tunnel.`);
+        return confirm(`Delete tunnel "${name}"?\n\nThis will also remove any services using this tunnel.`);
     }
 
     // MARK: handleDeleteSuccess
@@ -208,27 +208,27 @@ class TunnelsManager {
             <h5>Peer ${index + 1} <button type="button" class="btn-danger btn-small" onclick="window.TunnelsManager.removePeer(${index})">Remove</button></h5>
             <div class="form-group">
                 <label>Peer Name</label>
-                <input type="text" class="peer-name" placeholder="Server ${index + 1}">
+                <input type="text" class="peer-name" placeholder="Enter peer name (optional)">
             </div>
             <div class="form-group">
                 <label>Public Key</label>
-                <textarea class="peer-public-key" placeholder="WGqWDWQ3aQLK6tD7dlKud4PCK515UpopGgAGc2f7FS4=" rows="2" required></textarea>
+                <input type="text" class="peer-publickey" placeholder="Enter peer public key" required>
             </div>
             <div class="form-group">
                 <label>Endpoint</label>
-                <input type="text" class="peer-endpoint" placeholder="server.example.com:51820" required>
+                <input type="text" class="peer-endpoint" placeholder="host:port (optional)">
             </div>
             <div class="form-group">
-                <label>Allowed IPs (comma-separated)</label>
-                <input type="text" class="peer-allowed-ips" placeholder="0.0.0.0/0" required>
+                <label>Allowed IPs</label>
+                <input type="text" class="peer-allowedips" placeholder="0.0.0.0/0 or specific IPs/subnets">
             </div>
             <div class="form-group">
-                <label>Persistent Keepalive (seconds)</label>
-                <input type="number" class="peer-keepalive" placeholder="25" value="25" min="0" max="65535">
+                <label>Pre-shared Key</label>
+                <input type="text" class="peer-presharedkey" placeholder="Optional pre-shared key">
             </div>
             <div class="form-group">
-                <label>Preshared Key (optional)</label>
-                <textarea class="peer-preshared" placeholder="Optional preshared key" rows="2"></textarea>
+                <label>Persistent Keepalive</label>
+                <input type="number" class="peer-keepalive" placeholder="0" min="0" max="65535">
             </div>
         `;
     }
@@ -241,107 +241,185 @@ class TunnelsManager {
         }
     }
 
-    // FORM MANAGEMENT
+    // TUNNEL FORM HANDLING
 
-    // MARK: initializeForm
-    static initializeForm() {
+    // MARK: initializeTunnelForm
+    static initializeTunnelForm() {
         const form = document.getElementById('tunnelForm');
-        if (!form) {
-            console.error('Tunnel form not found');
-            return;
+        if (!form) return;
+
+        form.addEventListener('submit', this.handleTunnelFormSubmit.bind(this));
+
+        if (!window.FinGuardConfig.peerIndex) {
+            window.FinGuardConfig.peerIndex = 0;
         }
 
-        form.addEventListener('submit', this.handleFormSubmit.bind(this));
+        this.addPeer();
+        this.setupFormValidation();
     }
 
-    // MARK: handleFormSubmit
-    static async handleFormSubmit(e) {
+    // MARK: setupFormValidation
+    static setupFormValidation() {
+        const form = document.getElementById('tunnelForm');
+        if (!form) return;
+
+        const validateField = (field, validationFn, errorMsg) => {
+            field.addEventListener('blur', () => {
+                const isValid = validationFn(field.value);
+                this.toggleFieldError(field, !isValid, errorMsg);
+            });
+        };
+
+        const addressesField = document.getElementById('tunnelAddresses');
+        if (addressesField) {
+            validateField(addressesField, (value) => {
+                if (!value.trim()) return false;
+                return value.split(',').every(addr => this.isValidCIDR(addr.trim()));
+            }, 'Enter valid CIDR addresses (e.g., 10.0.0.1/24)');
+        }
+
+        const routesField = document.getElementById('tunnelRoutes');
+        if (routesField) {
+            validateField(routesField, (value) => {
+                if (!value.trim()) return true;
+                return value.split(',').every(route => this.isValidCIDR(route.trim()));
+            }, 'Enter valid CIDR routes (e.g., 10.0.0.0/24)');
+        }
+    }
+
+    // MARK: toggleFieldError
+    static toggleFieldError(field, hasError, message) {
+        const existingError = field.parentNode.querySelector('.field-error');
+        
+        if (hasError) {
+            if (!existingError) {
+                const errorDiv = document.createElement('div');
+                errorDiv.className = 'field-error';
+                errorDiv.style.color = 'var(--color-danger)';
+                errorDiv.style.fontSize = '0.8em';
+                errorDiv.style.marginTop = '0.25rem';
+                errorDiv.textContent = message;
+                field.parentNode.appendChild(errorDiv);
+            }
+            field.style.borderColor = 'var(--color-danger)';
+        } else {
+            if (existingError) {
+                existingError.remove();
+            }
+            field.style.borderColor = '';
+        }
+    }
+
+    // MARK: handleTunnelFormSubmit
+    static async handleTunnelFormSubmit(e) {
         e.preventDefault();
         
-        this.scrollToTop();
-        
-        const peers = this.collectPeerData();
-        if (!peers) return;
-        
-        const tunnel = this.collectTunnelData(peers);
-        
-        if (!this.validateTunnel(tunnel, peers)) return;
+        const submitButton = e.target.querySelector('button[type="submit"]');
+        const originalText = submitButton.textContent;
         
         try {
-            await this.createTunnel(tunnel);
+            this.updateSubmitButton(submitButton, 'Creating Tunnel...');
+            
+            const tunnelData = this.extractTunnelFormData(e.target);
+            
+            if (!this.validateTunnelData(tunnelData)) {
+                throw new Error('Please check the form for errors');
+            }
+
+            await this.createTunnel(tunnelData);
         } catch (error) {
             this.handleTunnelCreationError(error);
+        } finally {
+            this.restoreSubmitButton(submitButton, originalText);
         }
     }
 
-    // MARK: collectPeerData
-    static collectPeerData() {
-        const peers = [];
-        const peerConfigs = document.querySelectorAll('.peer-config');
-        
-        for (let peerConfig of peerConfigs) {
-            const peer = this.extractPeerData(peerConfig);
-            
-            if (!this.validatePeerData(peer)) {
-                return null;
-            }
-            
-            peers.push(peer);
-        }
-        
-        return peers;
+    // MARK: updateSubmitButton
+    static updateSubmitButton(button, text) {
+        button.textContent = text;
+        button.disabled = true;
+    }
+
+    // MARK: restoreSubmitButton
+    static restoreSubmitButton(button, originalText) {
+        button.textContent = originalText;
+        button.disabled = false;
+    }
+
+    // MARK: extractTunnelFormData
+    static extractTunnelFormData(form) {
+        const formData = new FormData(form);
+        const peers = this.extractPeerData(form);
+
+        return {
+            name: formData.get('tunnelName')?.trim(),
+            listen_port: parseInt(formData.get('tunnelListenPort')) || 0,
+            private_key: formData.get('tunnelPrivateKey')?.trim(),
+            mtu: parseInt(formData.get('tunnelMTU')) || 1420,
+            addresses: formData.get('tunnelAddresses')?.split(',').map(addr => addr.trim()).filter(Boolean) || [],
+            routes: formData.get('tunnelRoutes')?.split(',').map(route => route.trim()).filter(Boolean) || [],
+            peers: peers,
+            monitor_interval: parseInt(formData.get('tunnelMonitorInterval')) || 30,
+            stale_connection_timeout: parseInt(formData.get('tunnelStaleTimeout')) || 300,
+            reconnection_retries: parseInt(formData.get('tunnelReconnectRetries')) || 3
+        };
     }
 
     // MARK: extractPeerData
-    static extractPeerData(peerConfig) {
-        const publicKey = peerConfig.querySelector('.peer-public-key').value.trim();
-        const endpoint = peerConfig.querySelector('.peer-endpoint').value.trim();
-        const allowedIPs = peerConfig.querySelector('.peer-allowed-ips').value.trim();
-        const keepaliveValue = parseInt(peerConfig.querySelector('.peer-keepalive').value) || 0;
-        
-        return {
-            name: peerConfig.querySelector('.peer-name').value.trim() || 'Peer',
-            public_key: publicKey,
-            endpoint: endpoint,
-            allowed_ips: allowedIPs.split(',').map(ip => ip.trim()).filter(ip => ip),
-            persistent_keepalive: keepaliveValue > 0 ? keepaliveValue : 0,
-            preshared_key: peerConfig.querySelector('.peer-preshared').value.trim()
-        };
+    static extractPeerData(form) {
+        const peerConfigs = form.querySelectorAll('.peer-config');
+        const peers = [];
+
+        peerConfigs.forEach(peerConfig => {
+            const name = peerConfig.querySelector('.peer-name')?.value?.trim();
+            const publicKey = peerConfig.querySelector('.peer-publickey')?.value?.trim();
+            const endpoint = peerConfig.querySelector('.peer-endpoint')?.value?.trim();
+            const allowedIPs = peerConfig.querySelector('.peer-allowedips')?.value?.trim();
+            const presharedKey = peerConfig.querySelector('.peer-presharedkey')?.value?.trim();
+            const keepalive = parseInt(peerConfig.querySelector('.peer-keepalive')?.value) || 0;
+
+            if (publicKey) {
+                peers.push({
+                    name: name || '',
+                    public_key: publicKey,
+                    endpoint: endpoint || '',
+                    allowed_ips: allowedIPs ? allowedIPs.split(',').map(ip => ip.trim()) : [],
+                    preshared_key: presharedKey || '',
+                    persistent_keepalive: keepalive
+                });
+            }
+        });
+
+        return peers;
     }
 
-    // MARK: validatePeerData
-    static validatePeerData(peer) {
-        if (!peer.public_key || !peer.endpoint || !peer.allowed_ips.length) {
-            window.Utils.showAlert('All peer fields are required', 'error');
+    // MARK: validateTunnelData
+    static validateTunnelData(data) {
+        if (!data.name) {
+            window.Utils.showAlert('Tunnel name is required', 'error');
             return false;
         }
-        return true;
-    }
 
-    // MARK: collectTunnelData
-    static collectTunnelData(peers) {
-        const monitorInterval = parseInt(document.getElementById('tunnelMonitorInterval')?.value) || 30;
-        const staleTimeout = parseInt(document.getElementById('tunnelStaleTimeout')?.value) || 300;
-        const reconnectRetries = parseInt(document.getElementById('tunnelReconnectRetries')?.value) || 3;
-        
-        return {
-            name: document.getElementById('tunnelName').value.trim(),
-            listen_port: parseInt(document.getElementById('tunnelListenPort')?.value) || 0,
-            private_key: document.getElementById('tunnelPrivateKey').value.trim(),
-            mtu: parseInt(document.getElementById('tunnelMTU').value) || 1420,
-            addresses: [document.getElementById('tunnelAddress').value.trim()].filter(addr => addr),
-            routes: [],
-            peers: peers,
-            monitor_interval: monitorInterval,
-            stale_connection_timeout: staleTimeout,
-            reconnection_retries: reconnectRetries
-        };
+        if (!data.private_key) {
+            window.Utils.showAlert('Private key is required', 'error');
+            return false;
+        }
+
+        if (data.peers.length === 0) {
+            window.Utils.showAlert('At least one peer is required', 'error');
+            return false;
+        }
+
+        if (data.addresses.length === 0) {
+            window.Utils.showAlert('At least one address is required', 'error');
+            return false;
+        }
+
+        return true;
     }
 
     // MARK: createTunnel
     static async createTunnel(tunnel) {
-        window.Utils.showAlert('Creating tunnel...', 'info');
-        
         await window.APIClient.addTunnel(tunnel);
         
         window.Utils.showAlert(`Tunnel "${tunnel.name}" created successfully!`, 'success');
@@ -395,136 +473,37 @@ class TunnelsManager {
         if (!peerSection) return;
         
         this.removeExtraPeerConfigs(peerSection);
-        this.resetFirstPeerConfig(peerSection);
-        
-        window.FinGuardConfig.peerIndex = 1;
+        window.FinGuardConfig.peerIndex = 0;
+        this.addPeer();
     }
 
     // MARK: removeExtraPeerConfigs
     static removeExtraPeerConfigs(peerSection) {
         const peerConfigs = peerSection.querySelectorAll('.peer-config');
-        for (let i = 1; i < peerConfigs.length; i++) {
-            peerConfigs[i].remove();
-        }
-    }
-
-    // MARK: resetFirstPeerConfig
-    static resetFirstPeerConfig(peerSection) {
-        const firstPeer = peerSection.querySelector('.peer-config[data-peer-index="0"]');
-        if (firstPeer) {
-            firstPeer.querySelector('.peer-name').value = '';
-            firstPeer.querySelector('.peer-public-key').value = '';
-            firstPeer.querySelector('.peer-endpoint').value = '';
-            firstPeer.querySelector('.peer-allowed-ips').value = '';
-            firstPeer.querySelector('.peer-keepalive').value = '25';
-            firstPeer.querySelector('.peer-preshared').value = '';
-        }
+        peerConfigs.forEach(config => config.remove());
     }
 
     // MARK: focusFirstField
     static focusFirstField() {
         const firstField = document.getElementById('tunnelName');
         if (firstField) {
-            firstField.focus();
+            setTimeout(() => firstField.focus(), 100);
         }
     }
 
     // MARK: scrollToTop
     static scrollToTop() {
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-        
-        const container = document.querySelector('.container');
-        if (container) {
-            container.scrollTop = 0;
+        const tunnelSection = document.getElementById('tunnels');
+        if (tunnelSection) {
+            tunnelSection.scrollIntoView({ behavior: 'smooth' });
         }
     }
 
-    // VALIDATION
-
-    // MARK: validateTunnel
-    static validateTunnel(tunnel, peers) {
-        return this.validateBasicFields(tunnel) &&
-               this.validatePeers(peers) &&
-               this.validateTunnelName(tunnel.name) &&
-               this.validatePrivateKey(tunnel.private_key) &&
-               this.validateAddresses(tunnel.addresses) &&
-               this.validatePeerAllowedIPs(peers);
-    }
-
-    // MARK: validateBasicFields
-    static validateBasicFields(tunnel) {
-        if (!tunnel.name) {
-            window.Utils.showAlert('Tunnel name is required', 'error');
-            return false;
-        }
-        
-        if (!tunnel.private_key) {
-            window.Utils.showAlert('Private key is required', 'error');
-            return false;
-        }
-        
-        if (tunnel.addresses.length === 0) {
-            window.Utils.showAlert('At least one address is required', 'error');
-            return false;
-        }
-        
-        return true;
-    }
-
-    // MARK: validatePeers
-    static validatePeers(peers) {
-        if (peers.length === 0) {
-            window.Utils.showAlert('At least one peer is required', 'error');
-            return false;
-        }
-        return true;
-    }
-
-    // MARK: validateTunnelName
-    static validateTunnelName(name) {
-        if (!/^[a-zA-Z0-9-_]+$/.test(name)) {
-            window.Utils.showAlert('Tunnel name can only contain letters, numbers, hyphens, and underscores', 'error');
-            return false;
-        }
-        return true;
-    }
-
-    // MARK: validatePrivateKey
-    static validatePrivateKey(privateKey) {
-        if (privateKey.length !== 44 || !/^[A-Za-z0-9+/]+=*$/.test(privateKey)) {
-            window.Utils.showAlert('Invalid private key format. Should be 44 characters base64-encoded.', 'error');
-            return false;
-        }
-        return true;
-    }
-
-    // MARK: validateAddresses
-    static validateAddresses(addresses) {
-        for (const addr of addresses) {
-            if (!this.isValidCIDR(addr)) {
-                window.Utils.showAlert(`Invalid address format: ${addr}. Use CIDR notation (e.g., 10.0.0.1/24)`, 'error');
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // MARK: validatePeerAllowedIPs
-    static validatePeerAllowedIPs(peers) {
-        for (const peer of peers) {
-            for (const allowedIP of peer.allowed_ips) {
-                if (!this.isValidCIDR(allowedIP)) {
-                    window.Utils.showAlert(`Invalid allowed IP format for peer ${peer.name}: ${allowedIP}`, 'error');
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
+    // VALIDATION UTILITIES
 
     // MARK: isValidCIDR
     static isValidCIDR(cidr) {
-        const cidrRegex = /^(\d{1,3}\.){3}\d{1,3}\/\d{1,2}$/;
+        const cidrRegex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\/(?:[0-9]|[1-2][0-9]|3[0-2])$/;
         if (!cidrRegex.test(cidr)) {
             return false;
         }
@@ -547,8 +526,13 @@ class TunnelsManager {
     static resetForm() {
         this.clearForm();
     }
+
+    // MARK: initialize
+    static initialize() {
+        this.initializeTunnelForm();
+        this.loadTunnels();
+    }
 }
 
 // GLOBAL SCOPE EXPORT
-
 window.TunnelsManager = TunnelsManager;

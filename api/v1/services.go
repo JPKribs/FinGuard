@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/JPKribs/FinGuard/config"
 )
@@ -91,24 +92,49 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var tunnelToUpdate *config.TunnelConfig
 	if serviceConfig.Tunnel != "" {
-		if err := a.handleServiceTunnelRoute(&serviceConfig); err != nil {
-			a.respondWithError(w, http.StatusInternalServerError, "Failed to manage tunnel route: "+err.Error())
+		if err := a.addServiceRouteToTunnel(serviceConfig); err != nil {
+			a.respondWithError(w, http.StatusInternalServerError, "Failed to add route to tunnel: "+err.Error())
 			return
 		}
+		tunnelToUpdate = a.cfg.GetTunnel(serviceConfig.Tunnel)
 	}
 
 	if err := a.cfg.AddService(serviceConfig); err != nil {
+		if serviceConfig.Tunnel != "" {
+			a.removeServiceRouteFromTunnel(serviceConfig)
+		}
 		a.respondWithError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
 	if err := a.proxyServer.AddService(serviceConfig); err != nil {
+		a.cfg.RemoveService(serviceConfig.Name)
+		if serviceConfig.Tunnel != "" {
+			a.removeServiceRouteFromTunnel(serviceConfig)
+		}
 		a.respondWithError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
 	a.publishServiceMDNS(serviceConfig)
+
+	if tunnelToUpdate != nil {
+		a.logger.Info("Updating tunnel with new service route",
+			"service", serviceConfig.Name, "tunnel", serviceConfig.Tunnel)
+
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		if err := a.updateRunningTunnel(ctx, *tunnelToUpdate); err != nil {
+			a.logger.Warn("Failed to update tunnel configuration",
+				"service", serviceConfig.Name, "tunnel", serviceConfig.Tunnel, "error", err)
+		} else {
+			a.logger.Info("Successfully updated tunnel with new route",
+				"service", serviceConfig.Name, "tunnel", serviceConfig.Tunnel)
+		}
+	}
 
 	response := ServiceStatusResponse{
 		Name:        serviceConfig.Name,
@@ -121,7 +147,12 @@ func (a *APIServer) handleAddService(w http.ResponseWriter, r *http.Request) {
 		PublishMDNS: serviceConfig.PublishMDNS,
 	}
 
-	a.respondWithSuccess(w, "Service added", response)
+	successMessage := fmt.Sprintf("Service %s added successfully", serviceConfig.Name)
+	if serviceConfig.Tunnel != "" {
+		successMessage += fmt.Sprintf(" with route to tunnel %s", serviceConfig.Tunnel)
+	}
+
+	a.respondWithSuccess(w, successMessage, response)
 }
 
 // MARK: handleDeleteService
@@ -135,8 +166,30 @@ func (a *APIServer) handleDeleteService(w http.ResponseWriter, r *http.Request, 
 		}
 	}
 
-	if err := a.proxyServer.RemoveService(serviceName); err != nil {
+	if serviceToDelete == nil {
 		a.respondWithError(w, http.StatusNotFound, "Service not found")
+		return
+	}
+
+	if serviceToDelete.Tunnel != "" {
+		if err := a.removeServiceRouteFromTunnel(*serviceToDelete); err != nil {
+			a.logger.Error("Failed to remove route from tunnel", "error", err)
+		}
+
+		tunnelConfig := a.cfg.GetTunnel(serviceToDelete.Tunnel)
+		if tunnelConfig != nil {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			if err := a.updateRunningTunnel(ctx, *tunnelConfig); err != nil {
+				a.logger.Warn("Failed to update tunnel after service deletion",
+					"service", serviceName, "tunnel", serviceToDelete.Tunnel, "error", err)
+			}
+		}
+	}
+
+	if err := a.proxyServer.RemoveService(serviceName); err != nil {
+		a.respondWithError(w, http.StatusNotFound, "Service not found in proxy")
 		return
 	}
 
@@ -144,18 +197,11 @@ func (a *APIServer) handleDeleteService(w http.ResponseWriter, r *http.Request, 
 		a.logger.Warn("Failed to remove service from config", "service", serviceName, "error", err)
 	}
 
-	if serviceToDelete != nil && serviceToDelete.Tunnel != "" {
-		if err := a.removeServiceTunnelRoute(serviceToDelete); err != nil {
-			a.logger.Error("Failed to remove tunnel route for deleted service",
-				"service", serviceName, "tunnel", serviceToDelete.Tunnel, "error", err)
-		}
-	}
-
 	if a.discoveryManager != nil {
 		a.discoveryManager.UnpublishService(serviceName)
 	}
 
-	a.respondWithSuccess(w, "Service deleted", nil)
+	a.respondWithSuccess(w, fmt.Sprintf("Service %s deleted successfully", serviceName), nil)
 }
 
 // MARK: handleGetService
@@ -176,74 +222,100 @@ func (a *APIServer) handleGetService(w http.ResponseWriter, r *http.Request, ser
 	a.respondWithSuccess(w, "Service retrieved", response)
 }
 
-// MARK: handleServiceTunnelRoute
-func (a *APIServer) handleServiceTunnelRoute(serviceConfig *config.ServiceConfig) error {
+// MARK: addServiceRouteToTunnel
+func (a *APIServer) addServiceRouteToTunnel(serviceConfig config.ServiceConfig) error {
 	serviceIP, err := a.extractIPFromUpstream(serviceConfig.Upstream)
 	if err != nil {
 		return fmt.Errorf("failed to extract IP from upstream %s: %w", serviceConfig.Upstream, err)
 	}
 
-	tunnelConfig, err := a.findTunnelByName(serviceConfig.Tunnel)
-	if err != nil {
-		return fmt.Errorf("tunnel %s not found: %w", serviceConfig.Tunnel, err)
+	tunnel := a.cfg.GetTunnel(serviceConfig.Tunnel)
+	if tunnel == nil {
+		return fmt.Errorf("tunnel %s not found", serviceConfig.Tunnel)
 	}
 
-	hostRoute := serviceIP + "/32"
-	if !a.routeExists(tunnelConfig.Routes, hostRoute) {
-		tunnelConfig.Routes = append(tunnelConfig.Routes, hostRoute)
-		if err := a.cfg.UpdateTunnel(*tunnelConfig); err != nil {
-			return fmt.Errorf("failed to update tunnel configuration: %w", err)
+	route := serviceIP + "/32"
+
+	for _, existingRoute := range tunnel.Routes {
+		if existingRoute == route {
+			a.logger.Info("Route already exists for service", "service", serviceConfig.Name, "route", route)
+			return nil
 		}
-		if err := a.restartTunnelForRouteChanges(serviceConfig.Tunnel); err != nil {
-			a.logger.Error("Failed to restart tunnel after route addition",
-				"tunnel", serviceConfig.Tunnel, "route", hostRoute, "error", err)
-			return fmt.Errorf("failed to restart tunnel %s: %w", serviceConfig.Tunnel, err)
-		}
-		a.logger.Info("Added service route to tunnel",
-			"service", serviceConfig.Name,
-			"tunnel", serviceConfig.Tunnel,
-			"route", hostRoute)
 	}
+
+	tunnel.Routes = append(tunnel.Routes, route)
+
+	if err := a.cfg.UpdateTunnel(*tunnel); err != nil {
+		return fmt.Errorf("failed to update tunnel config: %w", err)
+	}
+
+	a.logger.Info("Added service route to tunnel",
+		"service", serviceConfig.Name, "tunnel", serviceConfig.Tunnel, "route", route)
 
 	return nil
 }
 
-// MARK: removeServiceTunnelRoute
-func (a *APIServer) removeServiceTunnelRoute(serviceConfig *config.ServiceConfig) error {
+// MARK: removeServiceRouteFromTunnel
+func (a *APIServer) removeServiceRouteFromTunnel(serviceConfig config.ServiceConfig) error {
+	if serviceConfig.Tunnel == "" {
+		return nil
+	}
+
 	serviceIP, err := a.extractIPFromUpstream(serviceConfig.Upstream)
 	if err != nil {
-		return fmt.Errorf("failed to extract IP from upstream: %w", err)
+		return fmt.Errorf("failed to extract IP from upstream %s: %w", serviceConfig.Upstream, err)
 	}
 
-	tunnelConfig, err := a.findTunnelByName(serviceConfig.Tunnel)
+	tunnel := a.cfg.GetTunnel(serviceConfig.Tunnel)
+	if tunnel == nil {
+		return fmt.Errorf("tunnel %s not found", serviceConfig.Tunnel)
+	}
+
+	route := serviceIP + "/32"
+
+	newRoutes := make([]string, 0, len(tunnel.Routes))
+	routeRemoved := false
+
+	for _, existingRoute := range tunnel.Routes {
+		if existingRoute != route {
+			newRoutes = append(newRoutes, existingRoute)
+		} else {
+			routeRemoved = true
+		}
+	}
+
+	if !routeRemoved {
+		a.logger.Debug("Route not found in tunnel", "route", route, "tunnel", serviceConfig.Tunnel)
+		return nil
+	}
+
+	tunnel.Routes = newRoutes
+
+	if err := a.cfg.UpdateTunnel(*tunnel); err != nil {
+		return fmt.Errorf("failed to update tunnel config: %w", err)
+	}
+
+	a.logger.Info("Removed service route from tunnel",
+		"service", serviceConfig.Name, "tunnel", serviceConfig.Tunnel, "route", route)
+
+	return nil
+}
+
+// MARK: updateRunningTunnel
+func (a *APIServer) updateRunningTunnel(ctx context.Context, tunnelConfig config.TunnelConfig) error {
+	status, err := a.tunnelManager.Status(ctx, tunnelConfig.Name)
 	if err != nil {
-		return fmt.Errorf("tunnel not found: %w", err)
+		a.logger.Debug("Tunnel not running or status unavailable", "tunnel", tunnelConfig.Name, "error", err)
+		return nil
 	}
 
-	hostRoute := serviceIP + "/32"
-	originalCount := len(tunnelConfig.Routes)
-	newRoutes := make([]string, 0, originalCount)
-
-	for _, r := range tunnelConfig.Routes {
-		if r != hostRoute {
-			newRoutes = append(newRoutes, r)
-		}
+	if status.State != "running" {
+		a.logger.Debug("Tunnel not in running state, skipping update", "tunnel", tunnelConfig.Name, "state", status.State)
+		return nil
 	}
 
-	if len(newRoutes) != originalCount {
-		tunnelConfig.Routes = newRoutes
-		if err := a.cfg.UpdateTunnel(*tunnelConfig); err != nil {
-			return fmt.Errorf("failed to update tunnel configuration: %w", err)
-		}
-		if err := a.restartTunnelForRouteChanges(serviceConfig.Tunnel); err != nil {
-			a.logger.Error("Failed to restart tunnel after route removal",
-				"tunnel", serviceConfig.Tunnel, "route", hostRoute, "error", err)
-			return fmt.Errorf("failed to restart tunnel: %w", err)
-		}
-		a.logger.Info("Removed service route from tunnel",
-			"service", serviceConfig.Name,
-			"tunnel", serviceConfig.Tunnel,
-			"route", hostRoute)
+	if err := a.tunnelManager.UpdateTunnel(ctx, tunnelConfig); err != nil {
+		return fmt.Errorf("updating tunnel configuration: %w", err)
 	}
 
 	return nil
@@ -282,44 +354,25 @@ func (a *APIServer) extractIPFromUpstream(upstream string) (string, error) {
 	return ips[0].String(), nil
 }
 
-// MARK: findTunnelByName
-func (a *APIServer) findTunnelByName(tunnelName string) (*config.TunnelConfig, error) {
-	for i := range a.cfg.WireGuard.Tunnels {
-		if strings.EqualFold(a.cfg.WireGuard.Tunnels[i].Name, tunnelName) {
-			return &a.cfg.WireGuard.Tunnels[i], nil
+// MARK: checkServiceExists
+func (a *APIServer) checkServiceExists(serviceName string) error {
+	// Check config first (case-insensitive)
+	for _, existing := range a.cfg.Services {
+		if strings.EqualFold(existing.Name, serviceName) {
+			return fmt.Errorf("service %s already exists in configuration", serviceName)
 		}
 	}
-	return nil, fmt.Errorf("tunnel %s not found", tunnelName)
-}
 
-// MARK: routeExists
-func (a *APIServer) routeExists(routes []string, target string) bool {
-	for _, r := range routes {
-		if r == target {
-			return true
+	// Check proxy server services (in case of config/runtime mismatch)
+	services := a.proxyServer.ListServices()
+	for _, svc := range services {
+		if strings.EqualFold(svc.Name, serviceName) {
+			a.logger.Warn("Service exists in proxy but not in config - this indicates a state mismatch",
+				"service", serviceName, "proxy_upstream", svc.Upstream)
+			return fmt.Errorf("service %s already exists in proxy server (state mismatch - restart application to sync)", serviceName)
 		}
 	}
-	return false
-}
 
-// MARK: restartTunnelForRouteChanges
-func (a *APIServer) restartTunnelForRouteChanges(tunnelName string) error {
-	ctx := context.Background()
-
-	if err := a.tunnelManager.DeleteTunnel(ctx, tunnelName); err != nil {
-		a.logger.Warn("Failed to stop tunnel for restart", "tunnel", tunnelName, "error", err)
-	}
-
-	tunnelConfig, err := a.findTunnelByName(tunnelName)
-	if err != nil {
-		return err
-	}
-
-	if err := a.tunnelManager.CreateTunnel(ctx, *tunnelConfig); err != nil {
-		return fmt.Errorf("failed to start tunnel %s: %w", tunnelName, err)
-	}
-
-	a.logger.Info("Tunnel restarted successfully", "tunnel", tunnelName)
 	return nil
 }
 

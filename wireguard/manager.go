@@ -114,11 +114,28 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 	}
 
 	m.mu.Lock()
-	if _, exists := m.tunnels[cfg.Name]; exists {
+	if existingTunnel, exists := m.tunnels[cfg.Name]; exists {
 		m.mu.Unlock()
-		return fmt.Errorf("tunnel %s already exists", cfg.Name)
+
+		// Check if existing tunnel is actually running
+		status := existingTunnel.Status(ctx)
+		if status.State == "running" {
+			m.logger.Debug("Tunnel already exists and running", "name", cfg.Name)
+			return fmt.Errorf("tunnel %s already exists", cfg.Name)
+		}
+
+		// If tunnel exists but not running, clean it up first
+		m.logger.Info("Cleaning up stopped tunnel before recreate", "name", cfg.Name)
+		m.mu.Lock()
+		delete(m.tunnels, cfg.Name)
+		m.mu.Unlock()
+
+		// Stop the old tunnel to ensure cleanup
+		existingTunnel.Stop(ctx)
+		time.Sleep(1 * time.Second)
+	} else {
+		m.mu.Unlock()
 	}
-	m.mu.Unlock()
 
 	var tunnel *Tunnel
 	var err error
@@ -151,7 +168,7 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 	m.tunnels[cfg.Name] = tunnel
 	m.mu.Unlock()
 
-	m.logger.Info("Created  tunnel", "name", cfg.Name)
+	m.logger.Info("Created tunnel", "name", cfg.Name)
 	return nil
 }
 
@@ -167,7 +184,8 @@ func (m *Manager) UpdateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 	m.mu.RUnlock()
 
 	if !exists {
-		return fmt.Errorf("tunnel %s not found", cfg.Name)
+		m.logger.Info("Tunnel not found for update, creating new one", "name", cfg.Name)
+		return m.CreateTunnel(ctx, cfg)
 	}
 
 	oldConfig := tunnel.config
@@ -197,7 +215,8 @@ func (m *Manager) DeleteTunnel(ctx context.Context, name string) error {
 	tunnel, exists := m.tunnels[name]
 	if !exists {
 		m.mu.Unlock()
-		return fmt.Errorf("tunnel %s not found", name)
+		m.logger.Debug("Tunnel not found for deletion", "name", name)
+		return nil // Don't error if tunnel doesn't exist
 	}
 	delete(m.tunnels, name)
 	m.mu.Unlock()
@@ -207,6 +226,7 @@ func (m *Manager) DeleteTunnel(ctx context.Context, name string) error {
 
 	if err := tunnel.Stop(ctx); err != nil {
 		m.logger.Error("Failed to stop tunnel during deletion", "name", name, "error", err)
+		// Continue with deletion even if stop failed
 	}
 
 	m.logger.Info("Deleted tunnel", "name", name)
