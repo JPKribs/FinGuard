@@ -3,8 +3,7 @@ Version: 1.1.0
 Section: net
 Priority: optional
 Architecture: amd64
-Depends: libc6, systemd, libcap2-bin
-Recommends: avahi-daemon, avahi-utils
+Depends: libc6, systemd, libcap2-bin, avahi-daemon, avahi-utils
 Maintainer: Joseph Parker Kribs <joseph@kribs.net>
 Description: High-performance userspace WireGuard proxy with web management
  FinGuard is a modern WireGuard proxy solution that provides:

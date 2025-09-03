@@ -84,12 +84,10 @@ case "$1" in
 
         # MARK: Install Avahi if needed
         if ! command -v avahi-daemon >/dev/null 2>&1; then
-            echo "Installing avahi-daemon..."
-            apt update && apt install -y avahi-daemon avahi-utils
+            echo "Avahi is missing. This will cause issues."
+            false
         fi
         
-        echo "Avahi configuration installed via package"
-
         # MARK: Set proper ownership for config files
         if [ -f /etc/finguard/config.yaml ]; then
             chown root:finguard /etc/finguard/config.yaml
