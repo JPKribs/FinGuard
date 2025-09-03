@@ -68,11 +68,11 @@ case "$1" in
         fi
 
         # MARK: Create directories with proper ownership
-        install -d -o finguard -g finguard -m 0755 /var/lib/finguard
-        install -d -o finguard -g finguard -m 0755 /var/log/finguard
+        install -d -o finguard -g finguard -m 0775 /var/lib/finguard
+        install -d -o finguard -g finguard -m 0775 /var/log/finguard
         
         if [ ! -d /run/finguard ]; then
-            install -d -o finguard -g finguard -m 0755 /run/finguard
+            install -d -o finguard -g finguard -m 0775 /run/finguard
         fi
 
         # MARK: Create symlink for web UI
@@ -91,12 +91,12 @@ case "$1" in
         # MARK: Set proper ownership for config files
         if [ -f /etc/finguard/config.yaml ]; then
             chown root:finguard /etc/finguard/config.yaml
-            chmod 640 /etc/finguard/config.yaml
+            chmod 660 /etc/finguard/config.yaml
         fi
         
         if [ -f /etc/finguard/wireguard.yaml ]; then
             chown root:finguard /etc/finguard/wireguard.yaml
-            chmod 600 /etc/finguard/wireguard.yaml
+            chmod 660 /etc/finguard/wireguard.yaml
         fi
 
         # MARK: Set capabilities on binary
