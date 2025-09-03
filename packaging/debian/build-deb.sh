@@ -138,6 +138,7 @@ fi
 
 echo "Copying Avahi configuration..."
 if [ -f "$SCRIPT_DIR/avahi.service" ]; then
+    mkdir -p "$DEB_DIR/etc/avahi/services"
     cp "$SCRIPT_DIR/avahi.service" "$DEB_DIR/etc/avahi/services/finguard.service"
     echo "Copied avahi.service"
 else
