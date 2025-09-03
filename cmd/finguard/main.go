@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/JPKribs/FinGuard/discovery"
 	"github.com/JPKribs/FinGuard/internal"
 	"github.com/JPKribs/FinGuard/version"
 )
@@ -47,7 +48,7 @@ func main() {
 func runApplication(configPath string) error {
 	app, err := newApplication(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to initialize application: %w", err)
+		return fmt.Errorf("init app: %w", err)
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -55,12 +56,17 @@ func runApplication(configPath string) error {
 	app.cancel = cancel
 	defer cancel()
 
+	broadcaster, err := discovery.StartProxy()
+	if err != nil {
+		return fmt.Errorf("discovery proxy error: %w", err)
+	}
+	defer broadcaster.Stop()
+
 	if err := app.start(ctx); err != nil {
-		return fmt.Errorf("failed to start application: %w", err)
+		return fmt.Errorf("start app: %w", err)
 	}
 
 	app.handleSignals()
 	app.waitGroup.Wait()
-
 	return nil
 }
