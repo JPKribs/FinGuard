@@ -90,8 +90,9 @@ mkdir -p "$DEB_DIR/usr/local/bin"
 cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
 chmod 755 "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
 
-# Create symlink in /usr/local/bin pointing to the lib location
-ln -sf ../lib/finguard/bin/finguard "$DEB_DIR/usr/local/bin/finguard"
+# Symlink binary to /usr/local/bin
+ln -sf /usr/local/lib/finguard/bin/finguard "$DEB_DIR/usr/local/bin/finguard"
+chmod 755 "$DEB_DIR/usr/local/bin/finguard"
 
 echo "Copying web interface..."
 if [ -d "$PROJECT_ROOT/web" ]; then
@@ -140,23 +141,8 @@ echo "Creating backup directories..."
 mkdir -p "$DEB_DIR/etc/finguard/backups"
 
 echo "Creating systemd service that uses the correct binary path..."
-cat > "$DEB_DIR/etc/systemd/system/finguard.service" << 'EOF'
-[Unit]
-Description=FinGuard Network Service
-After=network.target
-
-[Service]
-Type=simple
-User=finguard
-Group=finguard
-ExecStart=/usr/local/bin/finguard --config /etc/finguard/config.yaml
-Restart=always
-RestartSec=5
-KillMode=process
-
-[Install]
-WantedBy=multi-user.target
-EOF
+cp "$SCRIPT_DIR/finguard.service" "$DEB_DIR/etc/systemd/system/finguard.service"
+chmod 644 "$DEB_DIR/etc/systemd/system/finguard.service"
 
 echo "Copying Avahi configuration..."
 if [ -f "$SCRIPT_DIR/avahi.service" ]; then
@@ -164,6 +150,17 @@ if [ -f "$SCRIPT_DIR/avahi.service" ]; then
     echo "Copied avahi.service"
 else
     echo "WARNING: avahi.service not found in $SCRIPT_DIR"
+fi
+
+# MARK: Copy sudoers file
+echo "Copying sudoers file..."
+if [ -f "$SCRIPT_DIR/sudoer" ]; then
+    mkdir -p "$DEB_DIR/etc/sudoers.d"
+    cp "$SCRIPT_DIR/sudoer" "$DEB_DIR/etc/sudoers.d/finguard"
+    chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
+    echo "Copied sudoer file to /etc/sudoers.d/finguard"
+else
+    echo "WARNING: sudoer file not found in $SCRIPT_DIR"
 fi
 
 echo "Copying Debian control file..."

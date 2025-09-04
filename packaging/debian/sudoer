@@ -1,28 +1,12 @@
 # FinGuard service management permissions
 # Allow finguard user to manage systemd service and set capabilities without password
 
-# Systemd service management
+# MARK: Systemd service management
 finguard ALL=(root) NOPASSWD: /bin/systemctl start finguard
 finguard ALL=(root) NOPASSWD: /bin/systemctl stop finguard
 finguard ALL=(root) NOPASSWD: /bin/systemctl restart finguard
 finguard ALL=(root) NOPASSWD: /bin/systemctl is-active finguard
 
-# Binary capability management for updates
-finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_admin+ep /usr/bin/finguard
-finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_bind_service+ep /usr/bin/finguard
-finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_admin+ep /usr/local/bin/finguard
-finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_bind_service+ep /usr/local/bin/finguard
-
-# Binary capability management for updates
-finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_admin+ep /usr/local/lib/finguard/bin/finguard
-finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard
-
-# Alternative paths for setcap
-finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin+ep /usr/bin/finguard
-finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_bind_service+ep /usr/bin/finguard
-finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin+ep /usr/local/bin/finguard
-finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_bind_service+ep /usr/local/bin/finguard
-
-# Alternative paths for setcap
-finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin+ep /usr/local/lib/finguard/bin/finguard
-finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard
+# MARK: Binary capability management for updates
+finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard
+finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard

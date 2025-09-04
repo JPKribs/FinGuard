@@ -3,6 +3,9 @@ set -e
 
 case "$1" in
     purge)
+        # MARK: Remove sudoers file
+        rm -f /etc/sudoers.d/finguard
+
         # MARK: Remove user and group on purge
         echo "Purging FinGuard user and data..."
         

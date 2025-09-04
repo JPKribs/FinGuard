@@ -6,6 +6,8 @@ case "$1" in
         # MARK: Force hostname to FinGuard with persistence
         echo "Setting hostname to FinGuard with persistence..."
         
+        REAL_BINARY="/usr/local/lib/finguard/bin/finguard"
+
         hostnamectl set-hostname FinGuard
         echo "FinGuard" > /etc/hostname
         
@@ -78,10 +80,14 @@ case "$1" in
         install -d -o finguard -g finguard -m 0775 /usr/local/lib/finguard
         install -d -o finguard -g finguard -m 0775 /usr/local/lib/finguard/bin
         
-        if [ -f /usr/local/bin/finguard ]; then
-            chown finguard:finguard /usr/local/bin/finguard
-            chmod 755 /usr/local/bin/finguard
-            setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard
+        if [ -f "$REAL_BINARY" ]; then
+            echo "Setting network capabilities on FinGuard binary..."
+            chown finguard:finguard "$REAL_BINARY"
+            chmod 755 "$REAL_BINARY"
+            if command -v setcap >/dev/null 2>&1; then
+                setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep "$REAL_BINARY" || \
+                    echo "Warning: Failed to set capabilities. Network features may not work."
+            fi
         fi
 
         # MARK: Web directories - finguard owned
@@ -96,7 +102,6 @@ case "$1" in
         # MARK: Web symlink - finguard owned
         if [ -d /usr/local/share/finguard/web ] && [ ! -e /var/lib/finguard/web ]; then
             ln -sf /usr/local/share/finguard/web /var/lib/finguard/web
-            chown -h finguard:finguard /var/lib/finguard/web
         fi
 
         # MARK: Config directory - finguard owned
@@ -147,16 +152,6 @@ case "$1" in
             echo "WARNING: Avahi is missing. mDNS features will not work."
         fi
 
-        # MARK: Set capabilities on binary (network access without root)
-        if [ -f /usr/local/bin/finguard ]; then
-            echo "Setting network capabilities on FinGuard binary..."
-            if command -v setcap >/dev/null 2>&1; then
-                setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard || {
-                    echo "Warning: Failed to set capabilities. Network features may not work."
-                }
-            fi
-        fi
-
         # MARK: Comprehensive permission test
         echo "Testing ALL permissions for finguard user..."
         
@@ -197,10 +192,16 @@ case "$1" in
             exit 1
         }
 
-        if [ -f /tmp/finguard-sudoers ]; then
-            sudo cp sudoer /etc/sudoers.d/finguard
-            sudo chmod 440 /etc/sudoers.d/finguard
-            sudo chown root:root /etc/sudoers.d/finguard
+        # MARK: Validate sudoers file if it exists
+        if [ -f /etc/sudoers.d/finguard ]; then
+            chmod 440 /etc/sudoers.d/finguard
+            chown root:root /etc/sudoers.d/finguard
+            visudo -c -f /etc/sudoers.d/finguard || {
+                echo "WARNING: Invalid sudoers file, removing..."
+                rm -f /etc/sudoers.d/finguard
+            }
+        else
+            echo "WARNING: No sudoers file found - service management may require manual sudo"
         fi
 
         # MARK: Enable and start services
