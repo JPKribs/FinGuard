@@ -7,7 +7,7 @@
     <type>_http._tcp</type>
     <port>80</port>
     <txt-record>path=/</txt-record>
-    <txt-record>version=1.1.0</txt-record>
+    <txt-record>version=1.1.1</txt-record>
     <txt-record>service=finguard</txt-record>
   </service>
 </service-group>
