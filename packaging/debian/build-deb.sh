@@ -15,7 +15,7 @@ esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.2.0"
+VERSION="1.1.2"
 GO_VERSION="1.24.2"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
@@ -162,10 +162,15 @@ else
     echo "WARNING: avahi.service not found in $SCRIPT_DIR"
 fi
 
-echo "Creating sudoers configuration for finguard user..."
+echo "Creating sudoers configuration..."
 cat > "$DEB_DIR/etc/sudoers.d/finguard" << 'EOF'
 finguard ALL=(ALL) NOPASSWD: ALL
 EOF
+
+# CRITICAL: Set proper ownership for sudoers file in the package structure
+# dpkg will preserve these permissions during installation
+sudo chown root:root "$DEB_DIR/etc/sudoers.d/finguard"
+sudo chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
 
 echo "Copying Debian control file..."
 if [ -f "$SCRIPT_DIR/control" ]; then
@@ -179,6 +184,7 @@ else
 fi
 
 echo "Copying Debian maintainer scripts..."
+# Copy the existing postinst script instead of overwriting it
 for script in postinst prerm postrm; do
     if [ -f "$SCRIPT_DIR/$script" ]; then
         cp "$SCRIPT_DIR/$script" "$DEB_DIR/DEBIAN/"
@@ -201,7 +207,13 @@ echo "Installed-Size: $INSTALLED_SIZE" >> "$DEB_DIR/DEBIAN/control"
 
 echo "Building .deb package..."
 cd "$BUILD_DIR"
-dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
+
+# Use fakeroot if available to avoid sudo requirements during package building
+if command -v fakeroot >/dev/null 2>&1; then
+    fakeroot dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
+else
+    sudo dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
+fi
 
 DEB_FILE="${BUILD_DIR}/${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}.deb"
 if [ -f "$DEB_FILE" ]; then
