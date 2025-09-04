@@ -157,6 +157,7 @@ if [ -f "$SCRIPT_DIR/sudoer" ]; then
     mkdir -p "$DEB_DIR/etc/sudoers.d"
     cp "$SCRIPT_DIR/sudoer" "$DEB_DIR/etc/sudoers.d/finguard"
     chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
+    chown root:root "$DEB_DIR/etc/sudoers.d/finguard" 2>/dev/null || true
     echo "Copied sudoer file to /etc/sudoers.d/finguard"
 else
     echo "WARNING: sudoer file not found in $SCRIPT_DIR"
