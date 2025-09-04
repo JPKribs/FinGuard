@@ -7,6 +7,12 @@ finguard ALL=(root) NOPASSWD: /bin/systemctl stop finguard
 finguard ALL=(root) NOPASSWD: /bin/systemctl restart finguard
 finguard ALL=(root) NOPASSWD: /bin/systemctl is-active finguard
 
+# MARK: Fallback systemd service management
+finguard ALL=(root) NOPASSWD: /usr/bin/systemctl start finguard
+finguard ALL=(root) NOPASSWD: /usr/bin/systemctl stop finguard
+finguard ALL=(root) NOPASSWD: /usr/bin/systemctl restart finguard
+finguard ALL=(root) NOPASSWD: /usr/bin/systemctl is-active finguard
+
 # MARK: Binary capability management for updates
 finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard
 finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard
