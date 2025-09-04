@@ -92,7 +92,6 @@ chmod 755 "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
 
 # Symlink binary to /usr/local/bin
 ln -sf /usr/local/lib/finguard/bin/finguard "$DEB_DIR/usr/local/bin/finguard"
-chmod 755 "$DEB_DIR/usr/local/bin/finguard"
 
 echo "Copying web interface..."
 if [ -d "$PROJECT_ROOT/web" ]; then
