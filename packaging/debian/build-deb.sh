@@ -34,8 +34,9 @@ mkdir -p "$DEB_DIR/usr/local/bin"
 mkdir -p "$DEB_DIR/etc/finguard"
 mkdir -p "$DEB_DIR/usr/local/share/finguard/web"
 mkdir -p "$DEB_DIR/etc/systemd/system"
-mkdir -p "$DEB_DIR/etc/avahi"
-mkdir -p "$DEB_DIR/var/lib/finguard"
+mkdir -p "$DEB_DIR/etc/avahi/services"
+mkdir -p "$DEB_DIR/etc/sudoers.d"
+mkdir -p "$DEB_DIR/var/lib/finguard/backups"
 mkdir -p "$DEB_DIR/var/log/finguard"
 mkdir -p "$DEB_DIR/DEBIAN"
 
@@ -77,7 +78,7 @@ echo "Building FinGuard binary with version $VERSION for $GO_ARCH..."
 cd "$PROJECT_ROOT"
 mkdir -p bin
 export PATH="/usr/local/go/bin:$PATH"
-if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -o "bin/finguard" ./cmd/finguard; then
+if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -ldflags "-X github.com/JPKribs/FinGuard/version.Version=$VERSION" -o "bin/finguard" ./cmd/finguard; then
     echo "Build failed. Check Go installation and project compilation."
     exit 1
 fi
@@ -118,10 +119,10 @@ echo "Creating default config files..."
 echo "services: []" > "$DEB_DIR/etc/finguard/services.yaml"
 echo "tunnels: []" > "$DEB_DIR/etc/finguard/wireguard.yaml"
 cat > "$DEB_DIR/etc/finguard/update.yaml" << 'EOF'
-enabled: false
+enabled: true
 schedule: "0 3 * * *"
 auto_apply: false
-backup_dir: "./backups"
+backup_dir: "/var/lib/finguard/backups"
 EOF
 
 chmod 644 "$DEB_DIR/etc/finguard/services.yaml"
@@ -138,7 +139,6 @@ fi
 
 echo "Copying Avahi configuration..."
 if [ -f "$SCRIPT_DIR/avahi.service" ]; then
-    mkdir -p "$DEB_DIR/etc/avahi/services"
     cp "$SCRIPT_DIR/avahi.service" "$DEB_DIR/etc/avahi/services/finguard.service"
     echo "Copied avahi.service"
 else
@@ -146,19 +146,18 @@ else
 fi
 
 echo "Creating sudoers configuration for finguard user..."
-mkdir -p "$DEB_DIR/etc/sudoers.d"
 cat > "$DEB_DIR/etc/sudoers.d/finguard" << 'EOF'
 # FinGuard user gets full sudo without password for auto-updates
 finguard ALL=(ALL) NOPASSWD: ALL
 EOF
-chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
 echo "Created sudoers configuration"
 
 echo "Copying Debian control file..."
 if [ -f "$SCRIPT_DIR/control" ]; then
     cp "$SCRIPT_DIR/control" "$DEB_DIR/DEBIAN/"
     sed -i "s/Architecture: amd64/Architecture: $DEB_ARCH/" "$DEB_DIR/DEBIAN/control"
-    echo "Updated architecture to $DEB_ARCH in control file"
+    sed -i "s/Version: 1.1.0/Version: $VERSION/" "$DEB_DIR/DEBIAN/control"
+    echo "Updated architecture to $DEB_ARCH and version to $VERSION in control file"
 else
     echo "ERROR: control file not found in $SCRIPT_DIR"
     exit 1
@@ -174,6 +173,38 @@ for script in postinst prerm postrm; do
         echo "WARNING: $script not found in $SCRIPT_DIR"
     fi
 done
+
+echo "Creating postinst script for proper ownership..."
+cat > "$DEB_DIR/DEBIAN/postinst" << 'EOF'
+#!/bin/bash
+set -e
+
+# Create finguard user if it doesn't exist
+if ! id "finguard" &>/dev/null; then
+    useradd --system --home /var/lib/finguard --shell /bin/false finguard
+fi
+
+# Set proper ownership
+chown -R finguard:finguard /var/lib/finguard
+chown -R finguard:finguard /var/log/finguard
+chown finguard:finguard /etc/finguard/services.yaml
+chown finguard:finguard /etc/finguard/wireguard.yaml
+chown finguard:finguard /etc/finguard/update.yaml
+
+# Fix sudoers ownership
+chown root:root /etc/sudoers.d/finguard
+chmod 440 /etc/sudoers.d/finguard
+
+# Enable and start service
+systemctl daemon-reload
+systemctl enable finguard
+if ! systemctl is-active --quiet finguard; then
+    systemctl start finguard
+fi
+
+exit 0
+EOF
+chmod 755 "$DEB_DIR/DEBIAN/postinst"
 
 cat > "$DEB_DIR/DEBIAN/conffiles" << EOF
 /etc/finguard/config.yaml
@@ -204,7 +235,7 @@ if [ -f "$DEB_FILE" ]; then
     echo ""
     echo "After installation:"
     echo "  1. Edit /etc/finguard/config.yaml (replace admin token)"
-    echo "  2. sudo systemctl start finguard"
+    echo "  2. Service will start automatically"
     echo "  3. Access web UI: http://localhost:10000"
     echo ""
 else
