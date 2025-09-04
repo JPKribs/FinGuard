@@ -82,12 +82,15 @@ if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -ldflags "-X github.com
     exit 1
 fi
 
-echo "Copying binary to dedicated directory..."
-cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/bin/finguard"
-chmod 755 "$DEB_DIR/usr/local/bin/finguard"
-
-echo "Creating symlink in /usr/local/bin..."
+# Ensure the directories exist first
+mkdir -p "$DEB_DIR/usr/local/lib/finguard/bin"
 mkdir -p "$DEB_DIR/usr/local/bin"
+
+# Copy binary to its "lib" location
+cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
+chmod 755 "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
+
+# Create symlink in /usr/local/bin pointing to the lib location
 ln -sf ../lib/finguard/bin/finguard "$DEB_DIR/usr/local/bin/finguard"
 
 echo "Copying web interface..."
