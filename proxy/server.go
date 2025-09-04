@@ -375,18 +375,22 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Server) findServiceByHost(host string) *ProxyService {
 	var defaultService *ProxyService
 
+	// Strip port if present
+	hostname := strings.Split(host, ":")[0]
+
 	for _, service := range s.services {
 		if service.Config.Default {
 			defaultService = service
 		}
 
-		// exact match
-		if host == service.Config.Name {
+		// Check if hostname starts with service name as subdomain
+		// e.g., "requests.finguard.local" starts with "requests."
+		if strings.HasPrefix(hostname, service.Config.Name+".") {
 			return service
 		}
 
-		// subdomain match: serviceName.baseDomain
-		if strings.HasPrefix(host, service.Config.Name+".") {
+		// Exact match for service name (unlikely but keep for compatibility)
+		if hostname == service.Config.Name {
 			return service
 		}
 	}

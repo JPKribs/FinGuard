@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"time"
 
@@ -125,19 +126,12 @@ func (sm *ServiceManager) SetCapabilities(binaryPath string) error {
 		return nil
 	}
 
-	sm.logger.Info("Setting binary capabilities for TUN device access", "path", binaryPath)
+	sm.logger.Info("Setting binary capabilities", "path", binaryPath)
 
-	capabilities := []string{
-		"cap_net_admin+ep",
-		"cap_net_bind_service+ep",
-	}
-
-	for _, cap := range capabilities {
-		cmd := exec.Command("sudo", "setcap", cap, binaryPath)
-		if err := cmd.Run(); err != nil {
-			sm.logger.Error("Failed to set capability", "capability", cap, "error", err)
-			return fmt.Errorf("failed to set capability %s: %w", cap, err)
-		}
+	cmd := exec.Command("sudo", "setcap", "cap_net_admin,cap_net_raw,cap_net_bind_service+ep", binaryPath)
+	if err := cmd.Run(); err != nil {
+		sm.logger.Error("Failed to set capabilities", "error", err)
+		return fmt.Errorf("failed to set capabilities: %w", err)
 	}
 
 	sm.logger.Info("Binary capabilities set successfully")
@@ -162,12 +156,23 @@ func (sm *ServiceManager) ValidatePermissions() error {
 		return nil
 	}
 
-	if os.Geteuid() != 0 {
-		return fmt.Errorf("service requires root privileges for TUN device creation")
+	// Check if we can write to the binary location
+	execPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("cannot determine executable path: %w", err)
 	}
 
-	if _, err := os.Stat("/dev/net/tun"); err != nil {
-		return fmt.Errorf("TUN device not available: %w", err)
+	// Check write permission to binary directory
+	binDir := filepath.Dir(execPath)
+	testFile := filepath.Join(binDir, ".update-test")
+	if err := os.WriteFile(testFile, []byte("test"), 0755); err != nil {
+		return fmt.Errorf("cannot write to binary directory %s: %w", binDir, err)
+	}
+	os.Remove(testFile)
+
+	// Check if we have sudo access for setcap (just check sudo existence)
+	if _, err := exec.LookPath("sudo"); err != nil {
+		return fmt.Errorf("sudo not available for setting capabilities: %w", err)
 	}
 
 	return nil
