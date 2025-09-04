@@ -179,6 +179,21 @@ func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceCo
 	baseHostname := strings.TrimSuffix(d.hostName, ".local")
 	subdomainName := fmt.Sprintf("%s.%s.local", sanitizedName, baseHostname)
 
+	// CNAME record data must be in DNS wire format (length-prefixed labels)
+	targetHostname := d.hostName
+	if !strings.HasSuffix(targetHostname, ".") {
+		targetHostname += "."
+	}
+
+	// Convert to DNS wire format: each label prefixed by its length
+	var rdata []byte
+	labels := strings.Split(strings.TrimSuffix(targetHostname, "."), ".")
+	for _, label := range labels {
+		rdata = append(rdata, byte(len(label)))
+		rdata = append(rdata, []byte(label)...)
+	}
+	rdata = append(rdata, 0) // Root label (empty)
+
 	// Use raw values since constants aren't exposed
 	// RecordClassIn = 1, RecordTypeCName = 5
 	err = entryGroup.AddRecord(
@@ -189,7 +204,7 @@ func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceCo
 		1,   // CLASS_IN
 		5,   // TYPE_CNAME
 		300, // TTL
-		[]byte(d.hostName),
+		rdata,
 	)
 	if err != nil {
 		d.logger.Warn("Failed to add CNAME record for subdomain",

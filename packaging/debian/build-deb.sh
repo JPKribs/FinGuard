@@ -15,7 +15,7 @@ esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.1.1"
+VERSION="1.1.2"
 GO_VERSION="1.24.2"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
@@ -39,7 +39,7 @@ mkdir -p "$DEB_DIR/var/lib/finguard"
 mkdir -p "$DEB_DIR/var/log/finguard"
 mkdir -p "$DEB_DIR/DEBIAN"
 
-# MARK: Install Go if not present or wrong version
+# Install Go if not present or wrong version
 echo "Checking Go installation..."
 if ! command -v go &> /dev/null || [[ "$(go version | cut -d' ' -f3)" != "go$GO_VERSION" ]]; then
     echo "Installing Go $GO_VERSION for $DEB_ARCH..."
@@ -144,6 +144,15 @@ if [ -f "$SCRIPT_DIR/avahi.service" ]; then
 else
     echo "WARNING: avahi.service not found in $SCRIPT_DIR"
 fi
+
+echo "Creating sudoers configuration for finguard user..."
+mkdir -p "$DEB_DIR/etc/sudoers.d"
+cat > "$DEB_DIR/etc/sudoers.d/finguard" << 'EOF'
+# FinGuard user gets full sudo without password for auto-updates
+finguard ALL=(ALL) NOPASSWD: ALL
+EOF
+chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
+echo "Created sudoers configuration"
 
 echo "Copying Debian control file..."
 if [ -f "$SCRIPT_DIR/control" ]; then
