@@ -2,6 +2,7 @@ package v1
 
 import (
 	"net/http"
+	"path/filepath"
 
 	"github.com/JPKribs/FinGuard/config"
 	"github.com/JPKribs/FinGuard/discovery"
@@ -38,7 +39,8 @@ func NewAPIServer(
 // Register all API Routes.
 func (a *APIServer) RegisterRoutes(mux *http.ServeMux) {
 	webRoot := a.cfg.Server.WebRoot
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(webRoot))))
+	staticPath := filepath.Join(webRoot, "static")
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(staticPath))))
 
 	mux.HandleFunc("/", a.handleWebUI)
 	mux.HandleFunc("/api/v1/services", a.authMiddleware(a.handleServices))
