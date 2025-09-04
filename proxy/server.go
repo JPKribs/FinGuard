@@ -377,20 +377,23 @@ func (s *Server) findServiceByHost(host string) *ProxyService {
 
 	// Strip port if present
 	hostname := strings.Split(host, ":")[0]
+	hostname = strings.ToLower(hostname)
 
 	for _, service := range s.services {
 		if service.Config.Default {
 			defaultService = service
 		}
 
+		serviceName := strings.ToLower(service.Config.Name) // Convert to lowercase
+
 		// Check if hostname starts with service name as subdomain
 		// e.g., "requests.finguard.local" starts with "requests."
-		if strings.HasPrefix(hostname, service.Config.Name+".") {
+		if strings.HasPrefix(hostname, serviceName+".") {
 			return service
 		}
 
 		// Exact match for service name (unlikely but keep for compatibility)
-		if hostname == service.Config.Name {
+		if hostname == serviceName {
 			return service
 		}
 	}
