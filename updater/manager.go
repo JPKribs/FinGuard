@@ -56,7 +56,34 @@ func (sm *ServiceManager) StopService(ctx context.Context) error {
 	sm.logger.Info("Stopping service via systemd", "service", sm.serviceName)
 
 	cmd := exec.CommandContext(ctx, "sudo", "systemctl", "stop", sm.serviceName)
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		// Treat "already stopped" (exit code 1) as non-critical
+		if exitErr, ok := err.(*exec.ExitError); ok && exitErr.ExitCode() == 1 {
+			sm.logger.Warn("Service may already be stopped", "output", string(output))
+			return nil
+		}
+		// Other errors are real failures
+		return fmt.Errorf("failed to stop service: %w, output: %s", err, string(output))
+	}
+
+	// Wait until the service is actually inactive (up to 10s)
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("timeout waiting for service to stop")
+		case <-ticker.C:
+			if !sm.isServiceActive(ctx) {
+				return nil
+			}
+		}
+	}
 }
 
 // MARK: StartService
