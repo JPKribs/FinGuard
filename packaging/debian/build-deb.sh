@@ -15,7 +15,7 @@ esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.2.5"
+VERSION="1.3.0"
 GO_VERSION="1.24.2"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
@@ -83,8 +83,8 @@ if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -ldflags "-X github.com
 fi
 
 echo "Copying binary to dedicated directory..."
-cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/lib/finguard/bin/"
-chmod 755 "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
+cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/bin/finguard"
+chmod 755 "$DEB_DIR/usr/local/bin/finguard"
 
 echo "Creating symlink in /usr/local/bin..."
 mkdir -p "$DEB_DIR/usr/local/bin"
@@ -146,7 +146,7 @@ After=network.target
 Type=simple
 User=finguard
 Group=finguard
-ExecStart=/usr/local/lib/finguard/bin/finguard --config /etc/finguard/config.yaml
+ExecStart=/usr/local/bin/finguard --config /etc/finguard/config.yaml
 Restart=always
 RestartSec=5
 KillMode=process

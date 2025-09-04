@@ -78,9 +78,10 @@ case "$1" in
         install -d -o finguard -g finguard -m 0775 /usr/local/lib/finguard
         install -d -o finguard -g finguard -m 0775 /usr/local/lib/finguard/bin
         
-        if [ -f /usr/local/lib/finguard/bin/finguard ]; then
-            chown finguard:finguard /usr/local/lib/finguard/bin/finguard
-            chmod 755 /usr/local/lib/finguard/bin/finguard
+        if [ -f /usr/local/bin/finguard ]; then
+            chown finguard:finguard /usr/local/bin/finguard
+            chmod 755 /usr/local/bin/finguard
+            setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard
         fi
 
         # MARK: Web directories - finguard owned
@@ -147,10 +148,10 @@ case "$1" in
         fi
 
         # MARK: Set capabilities on binary (network access without root)
-        if [ -f /usr/local/lib/finguard/bin/finguard ]; then
+        if [ -f /usr/local/bin/finguard ]; then
             echo "Setting network capabilities on FinGuard binary..."
             if command -v setcap >/dev/null 2>&1; then
-                setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard || {
+                setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep /usr/local/bin/finguard || {
                     echo "Warning: Failed to set capabilities. Network features may not work."
                 }
             fi

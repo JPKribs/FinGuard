@@ -13,8 +13,16 @@ finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_bind_service+ep /usr/bin/fing
 finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_admin+ep /usr/local/bin/finguard
 finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_bind_service+ep /usr/local/bin/finguard
 
-# Alternative paths for setcap (different distributions)
+# Binary capability management for updates
+finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_admin+ep /usr/local/lib/finguard/bin/finguard
+finguard ALL=(root) NOPASSWD: /sbin/setcap cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard
+
+# Alternative paths for setcap
 finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin+ep /usr/bin/finguard
 finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_bind_service+ep /usr/bin/finguard
 finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin+ep /usr/local/bin/finguard
 finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_bind_service+ep /usr/local/bin/finguard
+
+# Alternative paths for setcap
+finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_admin+ep /usr/local/lib/finguard/bin/finguard
+finguard ALL=(root) NOPASSWD: /usr/sbin/setcap cap_net_bind_service+ep /usr/local/lib/finguard/bin/finguard
