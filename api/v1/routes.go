@@ -37,7 +37,9 @@ func NewAPIServer(
 // MARK: RegisterRoutes
 // Register all API Routes.
 func (a *APIServer) RegisterRoutes(mux *http.ServeMux) {
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./web/static/"))))
+	webRoot := a.cfg.Server.WebRoot
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir(webRoot))))
+
 	mux.HandleFunc("/", a.handleWebUI)
 	mux.HandleFunc("/api/v1/services", a.authMiddleware(a.handleServices))
 	mux.HandleFunc("/api/v1/services/", a.authMiddleware(a.handleServiceByName))

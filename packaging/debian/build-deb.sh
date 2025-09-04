@@ -97,12 +97,13 @@ if [ -d "$PROJECT_ROOT/web" ]; then
     find "$DEB_DIR/usr/local/share/finguard/web" -type d -exec chmod 755 {} \;
 fi
 
-echo "Creating production configuration..."
+echo "Creating configuration..."
 cat > "$DEB_DIR/etc/finguard/config.yaml" << 'EOF'
 server:
   http_addr: "0.0.0.0:10000"
   proxy_addr: "0.0.0.0:80"
   admin_token: "REPLACE_ME_WITH_SECURE_TOKEN"
+  web_root: "/usr/local/share/finguard/web"
 
 log:
   level: "info"
@@ -161,16 +162,6 @@ if [ -f "$SCRIPT_DIR/avahi.service" ]; then
 else
     echo "WARNING: avahi.service not found in $SCRIPT_DIR"
 fi
-
-echo "Creating sudoers configuration..."
-cat > "$DEB_DIR/etc/sudoers.d/finguard" << 'EOF'
-finguard ALL=(ALL) NOPASSWD: ALL
-EOF
-
-# CRITICAL: Set proper ownership for sudoers file in the package structure
-# dpkg will preserve these permissions during installation
-sudo chown root:root "$DEB_DIR/etc/sudoers.d/finguard"
-sudo chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
 
 echo "Copying Debian control file..."
 if [ -f "$SCRIPT_DIR/control" ]; then

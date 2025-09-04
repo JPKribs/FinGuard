@@ -9,6 +9,9 @@ func (c *Config) setDefaults() {
 	if c.Server.ProxyAddr == "" {
 		c.Server.ProxyAddr = DefaultProxyAddr
 	}
+	if c.Server.WebRoot == "" {
+		c.Server.WebRoot = DefaultWebRoot
+	}
 	if c.Log.Level == "" {
 		c.Log.Level = DefaultLogLevel
 	}

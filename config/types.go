@@ -26,6 +26,7 @@ type ServerConfig struct {
 	HTTPAddr   string `yaml:"http_addr"`
 	ProxyAddr  string `yaml:"proxy_addr"`
 	AdminToken string `yaml:"admin_token"`
+	WebRoot    string `yaml:"web_root"`
 }
 
 // MARK: LogConfig

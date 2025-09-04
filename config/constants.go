@@ -4,6 +4,7 @@ const (
 	DefaultHTTPAddr        = "0.0.0.0:8080"
 	DefaultProxyAddr       = "0.0.0.0:80"
 	DefaultLogLevel        = "info"
+	DefaultWebRoot         = "./web"
 	DefaultMTU             = 1420
 	DefaultKeepalive       = 25
 	DefaultMonitorInterval = 30
