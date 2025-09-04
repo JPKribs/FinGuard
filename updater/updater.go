@@ -28,7 +28,6 @@ const (
 )
 
 // MARK: NewUpdateManager
-// Initializes a new UpdateManager instance with configuration, logger, and current version
 func NewUpdateManager(cfg *config.Config, logger *internal.Logger, currentVersion string) *UpdateManager {
 	ctx, cancel := context.WithCancel(context.Background())
 
@@ -51,7 +50,6 @@ func NewUpdateManager(cfg *config.Config, logger *internal.Logger, currentVersio
 }
 
 // MARK: Start
-// Starts the auto-update scheduler if enabled
 func (u *UpdateManager) Start() error {
 	if !u.cfg.Update.Enabled {
 		u.logger.Info("Auto-update is disabled")
@@ -80,7 +78,6 @@ func (u *UpdateManager) Start() error {
 }
 
 // MARK: Stop
-// Stops the auto-update scheduler
 func (u *UpdateManager) Stop() error {
 	u.cancel()
 	if u.scheduler != nil {
@@ -91,7 +88,6 @@ func (u *UpdateManager) Stop() error {
 }
 
 // MARK: CheckForUpdates
-// Checks GitHub for the latest release and returns update info
 func (u *UpdateManager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error) {
 	u.lastCheckTime = time.Now()
 
@@ -120,7 +116,6 @@ func (u *UpdateManager) CheckForUpdates(ctx context.Context) (*UpdateInfo, error
 }
 
 // MARK: PerformUpdate
-// Downloads and installs the latest release if available
 func (u *UpdateManager) PerformUpdate(ctx context.Context) error {
 	if !atomic.CompareAndSwapInt64(&u.updateInProgress, 0, 1) {
 		return fmt.Errorf("update already in progress")
@@ -170,7 +165,6 @@ func (u *UpdateManager) PerformUpdate(ctx context.Context) error {
 }
 
 // MARK: GetUpdateStatus
-// Returns current update status and scheduling information
 func (u *UpdateManager) GetUpdateStatus() UpdateInfo {
 	nextCheck := time.Time{}
 	if u.scheduler != nil {
@@ -189,7 +183,6 @@ func (u *UpdateManager) GetUpdateStatus() UpdateInfo {
 }
 
 // MARK: UpdateSchedule
-// Updates the cron schedule for the auto-update system
 func (u *UpdateManager) UpdateSchedule(schedule string) error {
 	if u.scheduler == nil {
 		return fmt.Errorf("scheduler not initialized")
@@ -209,7 +202,6 @@ func (u *UpdateManager) UpdateSchedule(schedule string) error {
 }
 
 // MARK: fetchLatestRelease
-// Fetches the latest GitHub release information
 func (u *UpdateManager) fetchLatestRelease(ctx context.Context) (*GitHubRelease, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", GitHubReleasesAPI, nil)
 	if err != nil {
@@ -239,7 +231,6 @@ func (u *UpdateManager) fetchLatestRelease(ctx context.Context) (*GitHubRelease,
 }
 
 // MARK: isNewerVersion
-// Compares latest release tag with current version
 func (u *UpdateManager) isNewerVersion(latest, current string) bool {
 	latest = strings.TrimPrefix(latest, "v")
 	current = strings.TrimPrefix(current, "v")
@@ -285,7 +276,6 @@ func (u *UpdateManager) compareVersions(v1, v2 string) int {
 }
 
 // MARK: createBackup
-// Creates a backup of the currently running binary
 func (u *UpdateManager) createBackup() error {
 	execPath, err := os.Executable()
 	if err != nil {
@@ -322,7 +312,6 @@ func (u *UpdateManager) createBackup() error {
 }
 
 // MARK: downloadAndExtractBinary
-// Downloads the binary from GitHub release and extracts if needed
 func (u *UpdateManager) downloadAndExtractBinary(ctx context.Context, release *GitHubRelease) (string, error) {
 	assetName := u.getBinaryAssetName()
 	var downloadURL string
@@ -384,7 +373,6 @@ func (u *UpdateManager) downloadAndExtractBinary(ctx context.Context, release *G
 }
 
 // MARK: extractTarGz
-// Extracts the tar.gz archive to a destination directory
 func (u *UpdateManager) extractTarGz(reader io.Reader, destDir string) (string, error) {
 	gzReader, err := gzip.NewReader(reader)
 	if err != nil {
@@ -440,7 +428,6 @@ func (u *UpdateManager) extractTarGz(reader io.Reader, destDir string) (string, 
 }
 
 // MARK: getBinaryAssetName
-// Determines the expected binary asset name based on OS and architecture
 func (u *UpdateManager) getBinaryAssetName() string {
 	arch := runtime.GOARCH
 	if arch == "amd64" {
@@ -456,43 +443,135 @@ func (u *UpdateManager) getBinaryAssetName() string {
 }
 
 // MARK: replaceBinary
-// Replaces the running binary with the new downloaded binary
 func (u *UpdateManager) replaceBinary(newBinaryPath string) error {
 	execPath, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("getting executable path: %w", err)
 	}
 
-	tempPath := execPath + ".new"
+	actualBinaryPath, isSymlink := u.resolveActualBinaryPath(execPath)
+	u.logger.Info("Updating binary", "current", execPath, "actual", actualBinaryPath, "is_symlink", isSymlink)
 
+	binaryDir := filepath.Dir(actualBinaryPath)
+	if err := u.checkWritePermissions(binaryDir); err != nil {
+		return fmt.Errorf("insufficient permissions to update binary: %w", err)
+	}
+
+	backupPath := actualBinaryPath + ".old"
+	if err := u.copyFile(actualBinaryPath, backupPath); err != nil {
+		return fmt.Errorf("creating backup: %w", err)
+	}
+
+	tempPath := actualBinaryPath + ".new"
 	if err := u.copyFile(newBinaryPath, tempPath); err != nil {
 		return fmt.Errorf("copying new binary: %w", err)
 	}
 
-	if runtime.GOOS == "windows" {
-		oldPath := execPath + ".old"
-		if err := os.Rename(execPath, oldPath); err != nil {
-			return fmt.Errorf("backing up current binary: %w", err)
+	if err := os.Rename(tempPath, actualBinaryPath); err != nil {
+		os.Rename(backupPath, actualBinaryPath)
+		return fmt.Errorf("installing new binary: %w", err)
+	}
+
+	if err := os.Chmod(actualBinaryPath, 0755); err != nil {
+		u.logger.Warn("Failed to set binary permissions", "error", err)
+	}
+
+	os.Remove(backupPath)
+
+	u.logger.Info("Binary updated successfully", "path", actualBinaryPath)
+	return nil
+}
+
+// MARK: resolveActualBinaryPath
+// Resolves the actual binary path, handling symlinks and various installation types
+func (u *UpdateManager) resolveActualBinaryPath(execPath string) (string, bool) {
+	if linkTarget, err := os.Readlink(execPath); err == nil {
+		var actualPath string
+		if filepath.IsAbs(linkTarget) {
+			actualPath = linkTarget
+		} else {
+			actualPath = filepath.Clean(filepath.Join(filepath.Dir(execPath), linkTarget))
 		}
 
-		if err := os.Rename(tempPath, execPath); err != nil {
-			os.Rename(oldPath, execPath)
-			return fmt.Errorf("installing new binary: %w", err)
-		}
+		u.logger.Debug("Resolved symlink", "symlink", execPath, "target", actualPath)
+		return actualPath, true
+	}
 
-		os.Remove(oldPath)
-	} else {
-		if err := os.Rename(tempPath, execPath); err != nil {
-			return fmt.Errorf("installing new binary: %w", err)
+	if u.isSystemPath(execPath) && u.hasAlternativeLocation() {
+		if altPath := u.findWritableAlternative(execPath); altPath != "" {
+			u.logger.Info("Using writable alternative path", "system_path", execPath, "writable_path", altPath)
+			return altPath, false
 		}
 	}
 
-	u.logger.Info("Binary updated successfully", "path", execPath)
+	return execPath, false
+}
+
+// MARK: isSystemPath
+func (u *UpdateManager) isSystemPath(path string) bool {
+	systemPaths := []string{
+		"/usr/bin",
+		"/usr/local/bin",
+		"/bin",
+		"/sbin",
+		"/usr/sbin",
+	}
+
+	for _, sysPath := range systemPaths {
+		if strings.HasPrefix(path, sysPath+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// MARK: hasAlternativeLocation
+func (u *UpdateManager) hasAlternativeLocation() bool {
+	alternatives := []string{
+		"/usr/local/lib/finguard/bin/finguard",
+		"/opt/finguard/bin/finguard",
+		filepath.Join(os.Getenv("HOME"), ".local/bin/finguard"),
+	}
+
+	for _, alt := range alternatives {
+		if _, err := os.Stat(alt); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// MARK: findWritableAlternative
+func (u *UpdateManager) findWritableAlternative(currentPath string) string {
+	alternatives := []string{
+		"/usr/local/lib/finguard/bin/finguard",
+		"/opt/finguard/bin/finguard",
+		filepath.Join(os.Getenv("HOME"), ".local/bin/finguard"),
+	}
+
+	for _, alt := range alternatives {
+		if _, err := os.Stat(alt); err == nil {
+			if u.checkWritePermissions(filepath.Dir(alt)) == nil {
+				return alt
+			}
+		}
+	}
+	return ""
+}
+
+// MARK: checkWritePermissions
+func (u *UpdateManager) checkWritePermissions(dir string) error {
+	testFile := filepath.Join(dir, ".finguard_update_test")
+	file, err := os.Create(testFile)
+	if err != nil {
+		return fmt.Errorf("cannot write to directory %s: %w", dir, err)
+	}
+	file.Close()
+	os.Remove(testFile)
 	return nil
 }
 
 // MARK: copyFile
-// Helper function to copy a file from src to dst
 func (u *UpdateManager) copyFile(src, dst string) error {
 	srcFile, err := os.Open(src)
 	if err != nil {
@@ -519,7 +598,6 @@ func (u *UpdateManager) copyFile(src, dst string) error {
 }
 
 // MARK: restoreFromBackup
-// Restores the binary from the latest backup
 func (u *UpdateManager) restoreFromBackup() error {
 	backupFiles, err := filepath.Glob(filepath.Join(u.backupDir, "finguard_*.backup"))
 	if err != nil || len(backupFiles) == 0 {
@@ -542,7 +620,6 @@ func (u *UpdateManager) restoreFromBackup() error {
 }
 
 // MARK: restartApplication
-// Restarts the application process
 func (u *UpdateManager) restartApplication() {
 	u.logger.Info("Restarting application after update")
 
@@ -566,7 +643,6 @@ func (u *UpdateManager) restartApplication() {
 }
 
 // MARK: performScheduledUpdate
-// Called by the cron scheduler to check or apply updates
 func (u *UpdateManager) performScheduledUpdate() {
 	if !u.cfg.Update.AutoApply {
 		u.logger.Info("Scheduled update check (auto-apply disabled)")
@@ -583,7 +659,6 @@ func (u *UpdateManager) performScheduledUpdate() {
 }
 
 // MARK: buildUpdateInfo
-// Builds an UpdateInfo object to report update status
 func (u *UpdateManager) buildUpdateInfo(available bool, latestVersion, releaseNotes string) *UpdateInfo {
 	nextCheck := time.Time{}
 	if u.scheduler != nil {

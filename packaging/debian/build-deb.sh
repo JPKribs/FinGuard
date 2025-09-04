@@ -15,7 +15,7 @@ esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.1.2"
+VERSION="1.2.0"
 GO_VERSION="1.24.2"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
@@ -30,7 +30,7 @@ rm -rf "$BUILD_DIR"
 mkdir -p "$DEB_DIR"
 
 echo "Creating package directory structure..."
-mkdir -p "$DEB_DIR/usr/local/bin"
+mkdir -p "$DEB_DIR/usr/local/lib/finguard/bin"
 mkdir -p "$DEB_DIR/etc/finguard"
 mkdir -p "$DEB_DIR/usr/local/share/finguard/web"
 mkdir -p "$DEB_DIR/etc/systemd/system"
@@ -45,7 +45,6 @@ echo "Checking Go installation..."
 if ! command -v go &> /dev/null || [[ "$(go version | cut -d' ' -f3)" != "go$GO_VERSION" ]]; then
     echo "Installing Go $GO_VERSION for $DEB_ARCH..."
     
-    # Map Debian architecture to Go architecture
     case "$DEB_ARCH" in
         amd64) GO_TAR_ARCH="amd64" ;;
         arm64) GO_TAR_ARCH="arm64" ;;
@@ -83,9 +82,13 @@ if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -ldflags "-X github.com
     exit 1
 fi
 
-echo "Copying binary..."
-cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/bin/"
-chmod 755 "$DEB_DIR/usr/local/bin/finguard"
+echo "Copying binary to dedicated directory..."
+cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/lib/finguard/bin/"
+chmod 755 "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
+
+echo "Creating symlink in /usr/local/bin..."
+mkdir -p "$DEB_DIR/usr/local/bin"
+ln -sf ../lib/finguard/bin/finguard "$DEB_DIR/usr/local/bin/finguard"
 
 echo "Copying web interface..."
 if [ -d "$PROJECT_ROOT/web" ]; then
@@ -122,20 +125,34 @@ cat > "$DEB_DIR/etc/finguard/update.yaml" << 'EOF'
 enabled: true
 schedule: "0 3 * * *"
 auto_apply: false
-backup_dir: "/var/lib/finguard/backups"
+backup_dir: "/etc/finguard/backups"
 EOF
 
 chmod 644 "$DEB_DIR/etc/finguard/services.yaml"
 chmod 600 "$DEB_DIR/etc/finguard/wireguard.yaml"
 chmod 644 "$DEB_DIR/etc/finguard/update.yaml"
 
-echo "Copying systemd service..."
-if [ -f "$SCRIPT_DIR/finguard.service" ]; then
-    cp "$SCRIPT_DIR/finguard.service" "$DEB_DIR/etc/systemd/system/"
-else
-    echo "ERROR: finguard.service not found in $SCRIPT_DIR"
-    exit 1
-fi
+echo "Creating backup directories..."
+mkdir -p "$DEB_DIR/etc/finguard/backups"
+
+echo "Creating systemd service that uses the correct binary path..."
+cat > "$DEB_DIR/etc/systemd/system/finguard.service" << 'EOF'
+[Unit]
+Description=FinGuard Network Service
+After=network.target
+
+[Service]
+Type=simple
+User=finguard
+Group=finguard
+ExecStart=/usr/local/lib/finguard/bin/finguard --config /etc/finguard/config.yaml
+Restart=always
+RestartSec=5
+KillMode=process
+
+[Install]
+WantedBy=multi-user.target
+EOF
 
 echo "Copying Avahi configuration..."
 if [ -f "$SCRIPT_DIR/avahi.service" ]; then
@@ -147,10 +164,8 @@ fi
 
 echo "Creating sudoers configuration for finguard user..."
 cat > "$DEB_DIR/etc/sudoers.d/finguard" << 'EOF'
-# FinGuard user gets full sudo without password for auto-updates
 finguard ALL=(ALL) NOPASSWD: ALL
 EOF
-echo "Created sudoers configuration"
 
 echo "Copying Debian control file..."
 if [ -f "$SCRIPT_DIR/control" ]; then
@@ -173,38 +188,6 @@ for script in postinst prerm postrm; do
         echo "WARNING: $script not found in $SCRIPT_DIR"
     fi
 done
-
-echo "Creating postinst script for proper ownership..."
-cat > "$DEB_DIR/DEBIAN/postinst" << 'EOF'
-#!/bin/bash
-set -e
-
-# Create finguard user if it doesn't exist
-if ! id "finguard" &>/dev/null; then
-    useradd --system --home /var/lib/finguard --shell /bin/false finguard
-fi
-
-# Set proper ownership
-chown -R finguard:finguard /var/lib/finguard
-chown -R finguard:finguard /var/log/finguard
-chown finguard:finguard /etc/finguard/services.yaml
-chown finguard:finguard /etc/finguard/wireguard.yaml
-chown finguard:finguard /etc/finguard/update.yaml
-
-# Fix sudoers ownership
-chown root:root /etc/sudoers.d/finguard
-chmod 440 /etc/sudoers.d/finguard
-
-# Enable and start service
-systemctl daemon-reload
-systemctl enable finguard
-if ! systemctl is-active --quiet finguard; then
-    systemctl start finguard
-fi
-
-exit 0
-EOF
-chmod 755 "$DEB_DIR/DEBIAN/postinst"
 
 cat > "$DEB_DIR/DEBIAN/conffiles" << EOF
 /etc/finguard/config.yaml
