@@ -2,7 +2,7 @@
 
 BINARY_NAME=finguard
 BUILD_DIR=bin
-VERSION=1.2.4
+VERSION=1.2.5
 
 build:
 	mkdir -p $(BUILD_DIR)

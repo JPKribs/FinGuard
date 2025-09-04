@@ -6,7 +6,7 @@ import (
 )
 
 const (
-	Version = "1.2.4"
+	Version = "1.2.5"
 )
 
 // MARK: AsString
