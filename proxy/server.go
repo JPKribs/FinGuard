@@ -86,6 +86,16 @@ func (s *Server) AddService(svc config.ServiceConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// Disallow multiple defaults
+	if svc.Default {
+		for _, existing := range s.services {
+			if existing.Config.Default {
+				return fmt.Errorf("multiple defaults not allowed: %s and %s",
+					existing.Config.Name, svc.Name)
+			}
+		}
+	}
+
 	// Check if service already exists
 	if _, exists := s.services[svc.Name]; exists {
 		s.logger.Warn("Service already exists, updating", "name", svc.Name)
@@ -370,7 +380,13 @@ func (s *Server) findServiceByHost(host string) *ProxyService {
 			defaultService = service
 		}
 
+		// exact match
 		if host == service.Config.Name {
+			return service
+		}
+
+		// subdomain match: serviceName.baseDomain
+		if strings.HasPrefix(host, service.Config.Name+".") {
 			return service
 		}
 	}
