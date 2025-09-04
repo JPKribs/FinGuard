@@ -11,6 +11,7 @@ User=finguard
 Group=finguard
 ExecStart=/usr/local/bin/finguard --config /etc/finguard/config.yaml
 ExecReload=/bin/kill -HUP $MAINPID
+ExecStopPost=/bin/bash -c 'pkill -9 -f finguard || true'
 Restart=always
 RestartSec=10
 WorkingDirectory=/var/lib/finguard

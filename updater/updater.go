@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -127,6 +126,12 @@ func (u *UpdateManager) PerformUpdate(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, UpdateTimeout)
 	defer cancel()
 
+	serviceManager := NewServiceManager("finguard", u.logger)
+
+	if err := serviceManager.ValidatePermissions(); err != nil {
+		return fmt.Errorf("permission validation failed: %w", err)
+	}
+
 	release, err := u.fetchLatestRelease(ctx)
 	if err != nil {
 		return fmt.Errorf("fetching release info: %w", err)
@@ -136,30 +141,59 @@ func (u *UpdateManager) PerformUpdate(ctx context.Context) error {
 		return fmt.Errorf("no newer version available")
 	}
 
-	if err := u.createBackup(); err != nil {
-		return fmt.Errorf("creating backup: %w", err)
+	currentBinaryPath, err := os.Executable()
+	if err != nil {
+		return fmt.Errorf("getting executable path: %w", err)
 	}
 
-	binaryPath, err := u.downloadAndExtractBinary(ctx, release)
+	u.logger.Info("Creating backup before update")
+	if err := u.createBackup(); err != nil {
+		u.logger.Error("Failed to backup binary", "error", err)
+	}
+
+	u.logger.Info("Downloading new binary")
+	tempBinaryPath, err := u.downloadAndExtractBinary(ctx, release)
 	if err != nil {
 		return fmt.Errorf("downloading binary: %w", err)
 	}
+	defer os.Remove(tempBinaryPath)
 
-	if err := u.replaceBinary(binaryPath); err != nil {
-		if restoreErr := u.restoreFromBackup(); restoreErr != nil {
-			u.logger.Error("Failed to restore from backup", "error", restoreErr)
-		}
+	u.logger.Info("Stopping service for update")
+	if err := serviceManager.StopService(ctx); err != nil {
+		u.logger.Error("Failed to stop service cleanly, attempting cleanup", "error", err)
+	}
+
+	serviceManager.KillZombieProcesses("finguard")
+	serviceManager.CleanupNetworkResources()
+
+	time.Sleep(3 * time.Second)
+
+	u.logger.Info("Replacing binary")
+	if err := u.replaceBinary(tempBinaryPath); err != nil {
+		u.logger.Error("Failed to replace binary, attempting rollback", "error", err)
+		u.restoreFromBackup()
+		serviceManager.SetCapabilities(currentBinaryPath)
+		serviceManager.StartService(ctx)
 		return fmt.Errorf("replacing binary: %w", err)
+	}
+
+	u.logger.Info("Setting binary capabilities")
+	if err := serviceManager.SetCapabilities(currentBinaryPath); err != nil {
+		u.logger.Error("Failed to set capabilities", "error", err)
+	}
+
+	u.logger.Info("Starting updated service")
+	if err := serviceManager.StartService(ctx); err != nil {
+		u.logger.Error("Failed to start updated service, attempting rollback", "error", err)
+		u.restoreFromBackup()
+		serviceManager.SetCapabilities(currentBinaryPath)
+		serviceManager.StartService(ctx)
+		return fmt.Errorf("starting updated service: %w", err)
 	}
 
 	u.logger.Info("Update completed successfully",
 		"old_version", u.currentVersion,
 		"new_version", release.TagName)
-
-	go func() {
-		time.Sleep(2 * time.Second)
-		u.restartApplication()
-	}()
 
 	return nil
 }
@@ -239,7 +273,6 @@ func (u *UpdateManager) isNewerVersion(latest, current string) bool {
 }
 
 // MARK: compareVersions
-// Returns 1 if v1 > v2, -1 if v1 < v2, 0 if equal
 func (u *UpdateManager) compareVersions(v1, v2 string) int {
 	v1Parts := strings.Split(v1, ".")
 	v2Parts := strings.Split(v2, ".")
@@ -449,125 +482,36 @@ func (u *UpdateManager) replaceBinary(newBinaryPath string) error {
 		return fmt.Errorf("getting executable path: %w", err)
 	}
 
-	actualBinaryPath, isSymlink := u.resolveActualBinaryPath(execPath)
-	u.logger.Info("Updating binary", "current", execPath, "actual", actualBinaryPath, "is_symlink", isSymlink)
+	tempPath := execPath + ".new"
+	oldPath := execPath + ".old"
 
-	binaryDir := filepath.Dir(actualBinaryPath)
-	if err := u.checkWritePermissions(binaryDir); err != nil {
-		return fmt.Errorf("insufficient permissions to update binary: %w", err)
-	}
-
-	backupPath := actualBinaryPath + ".old"
-	if err := u.copyFile(actualBinaryPath, backupPath); err != nil {
-		return fmt.Errorf("creating backup: %w", err)
-	}
-
-	tempPath := actualBinaryPath + ".new"
 	if err := u.copyFile(newBinaryPath, tempPath); err != nil {
 		return fmt.Errorf("copying new binary: %w", err)
 	}
 
-	if err := os.Rename(tempPath, actualBinaryPath); err != nil {
-		os.Rename(backupPath, actualBinaryPath)
+	info, err := os.Stat(execPath)
+	if err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("getting binary info: %w", err)
+	}
+
+	if err := os.Chmod(tempPath, info.Mode()); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("setting permissions on new binary: %w", err)
+	}
+
+	if err := os.Rename(execPath, oldPath); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("backing up current binary: %w", err)
+	}
+
+	if err := os.Rename(tempPath, execPath); err != nil {
+		os.Rename(oldPath, execPath)
 		return fmt.Errorf("installing new binary: %w", err)
 	}
 
-	if err := os.Chmod(actualBinaryPath, 0755); err != nil {
-		u.logger.Warn("Failed to set binary permissions", "error", err)
-	}
-
-	os.Remove(backupPath)
-
-	u.logger.Info("Binary updated successfully", "path", actualBinaryPath)
-	return nil
-}
-
-// MARK: resolveActualBinaryPath
-// Resolves the actual binary path, handling symlinks and various installation types
-func (u *UpdateManager) resolveActualBinaryPath(execPath string) (string, bool) {
-	if linkTarget, err := os.Readlink(execPath); err == nil {
-		var actualPath string
-		if filepath.IsAbs(linkTarget) {
-			actualPath = linkTarget
-		} else {
-			actualPath = filepath.Clean(filepath.Join(filepath.Dir(execPath), linkTarget))
-		}
-
-		u.logger.Debug("Resolved symlink", "symlink", execPath, "target", actualPath)
-		return actualPath, true
-	}
-
-	if u.isSystemPath(execPath) && u.hasAlternativeLocation() {
-		if altPath := u.findWritableAlternative(execPath); altPath != "" {
-			u.logger.Info("Using writable alternative path", "system_path", execPath, "writable_path", altPath)
-			return altPath, false
-		}
-	}
-
-	return execPath, false
-}
-
-// MARK: isSystemPath
-func (u *UpdateManager) isSystemPath(path string) bool {
-	systemPaths := []string{
-		"/usr/bin",
-		"/usr/local/bin",
-		"/bin",
-		"/sbin",
-		"/usr/sbin",
-	}
-
-	for _, sysPath := range systemPaths {
-		if strings.HasPrefix(path, sysPath+"/") {
-			return true
-		}
-	}
-	return false
-}
-
-// MARK: hasAlternativeLocation
-func (u *UpdateManager) hasAlternativeLocation() bool {
-	alternatives := []string{
-		"/usr/local/lib/finguard/bin/finguard",
-		"/opt/finguard/bin/finguard",
-		filepath.Join(os.Getenv("HOME"), ".local/bin/finguard"),
-	}
-
-	for _, alt := range alternatives {
-		if _, err := os.Stat(alt); err == nil {
-			return true
-		}
-	}
-	return false
-}
-
-// MARK: findWritableAlternative
-func (u *UpdateManager) findWritableAlternative(currentPath string) string {
-	alternatives := []string{
-		"/usr/local/lib/finguard/bin/finguard",
-		"/opt/finguard/bin/finguard",
-		filepath.Join(os.Getenv("HOME"), ".local/bin/finguard"),
-	}
-
-	for _, alt := range alternatives {
-		if _, err := os.Stat(alt); err == nil {
-			if u.checkWritePermissions(filepath.Dir(alt)) == nil {
-				return alt
-			}
-		}
-	}
-	return ""
-}
-
-// MARK: checkWritePermissions
-func (u *UpdateManager) checkWritePermissions(dir string) error {
-	testFile := filepath.Join(dir, ".finguard_update_test")
-	file, err := os.Create(testFile)
-	if err != nil {
-		return fmt.Errorf("cannot write to directory %s: %w", dir, err)
-	}
-	file.Close()
-	os.Remove(testFile)
+	os.Remove(oldPath)
+	u.logger.Info("Binary replaced successfully", "path", execPath)
 	return nil
 }
 
@@ -617,29 +561,6 @@ func (u *UpdateManager) restoreFromBackup() error {
 
 	u.logger.Info("Restored from backup", "backup", latestBackup)
 	return nil
-}
-
-// MARK: restartApplication
-func (u *UpdateManager) restartApplication() {
-	u.logger.Info("Restarting application after update")
-
-	execPath, err := os.Executable()
-	if err != nil {
-		u.logger.Error("Failed to get executable path for restart", "error", err)
-		return
-	}
-
-	cmd := exec.Command(execPath, os.Args[1:]...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	if err := cmd.Start(); err != nil {
-		u.logger.Error("Failed to start new process", "error", err)
-		return
-	}
-
-	u.logger.Info("New process started, shutting down current instance")
-	os.Exit(0)
 }
 
 // MARK: performScheduledUpdate

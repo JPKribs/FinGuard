@@ -38,7 +38,7 @@ func (s *Server) Start(ctx context.Context, addr string) error {
 
 	s.server = &http.Server{
 		Addr:           addr,
-		Handler:        s.withMinimalMiddleware(mux),
+		Handler:        s.withMiddleware(mux),
 		ReadTimeout:    30 * time.Second,
 		WriteTimeout:   30 * time.Second,
 		IdleTimeout:    120 * time.Second,
@@ -363,7 +363,6 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 // MARK: findServiceByHost
 // Matches hostname to service using subdomain pattern matching
 func (s *Server) findServiceByHost(host string) *ProxyService {
-	host = s.stripPort(host)
 	var defaultService *ProxyService
 
 	for _, service := range s.services {
@@ -416,7 +415,7 @@ func (s *Server) setSecurityHeaders(resp *http.Response) {
 
 // MARK: withMinimalMiddleware
 // Applies logging and recovery middleware stack
-func (s *Server) withMinimalMiddleware(handler http.Handler) http.Handler {
+func (s *Server) withMiddleware(handler http.Handler) http.Handler {
 	return s.loggingMiddleware(s.recoveryMiddleware(handler))
 }
 
@@ -471,15 +470,6 @@ func (rw *responseWriter) Write(b []byte) (int, error) {
 		rw.statusCode = http.StatusOK
 	}
 	return rw.ResponseWriter.Write(b)
-}
-
-// MARK: stripPort
-// Removes port from hostname if present
-func (s *Server) stripPort(host string) string {
-	if colonIndex := strings.Index(host, ":"); colonIndex != -1 {
-		return host[:colonIndex]
-	}
-	return host
 }
 
 // MARK: getClientIP

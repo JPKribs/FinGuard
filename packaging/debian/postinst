@@ -196,6 +196,12 @@ case "$1" in
             exit 1
         }
 
+        if [ -f /tmp/finguard-sudoers ]; then
+            sudo cp sudoer /etc/sudoers.d/finguard
+            sudo chmod 440 /etc/sudoers.d/finguard
+            sudo chown root:root /etc/sudoers.d/finguard
+        fi
+
         # MARK: Enable and start services
         systemctl daemon-reload
         systemctl enable avahi-daemon 2>/dev/null || echo "Note: avahi-daemon not available"

@@ -1,5 +1,5 @@
 Package: finguard
-Version: 1.2.3
+Version: 1.2.4
 Section: net
 Priority: optional
 Architecture: amd64

@@ -8,6 +8,13 @@ import (
 	"github.com/JPKribs/FinGuard/internal"
 )
 
+// MARK: ServiceManager
+type ServiceManager struct {
+	serviceName string
+	isSystemd   bool
+	logger      *internal.Logger
+}
+
 // MARK: CronScheduler
 type CronScheduler struct {
 	logger   *internal.Logger
