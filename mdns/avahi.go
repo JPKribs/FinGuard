@@ -156,8 +156,8 @@ func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceCo
 		return fmt.Errorf("failed to create entry group for service %s: %w", serviceName, err)
 	}
 
+	// Publish the main service
 	fullServiceName := fmt.Sprintf("%s FinGuard", sanitizedName)
-
 	err = entryGroup.AddService(
 		avahi.InterfaceUnspec,
 		avahi.ProtoUnspec,
@@ -175,6 +175,30 @@ func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceCo
 			serviceName, sanitizedName, fullServiceName, err)
 	}
 
+	// Add CNAME record for subdomain access (servicename.hostname.local -> hostname.local)
+	baseHostname := strings.TrimSuffix(d.hostName, ".local")
+	subdomainName := fmt.Sprintf("%s.%s.local", sanitizedName, baseHostname)
+
+	// Use raw values since constants aren't exposed
+	// RecordClassIn = 1, RecordTypeCName = 5
+	err = entryGroup.AddRecord(
+		avahi.InterfaceUnspec,
+		avahi.ProtoUnspec,
+		0,
+		subdomainName,
+		1,   // CLASS_IN
+		5,   // TYPE_CNAME
+		300, // TTL
+		[]byte(d.hostName),
+	)
+	if err != nil {
+		d.logger.Warn("Failed to add CNAME record for subdomain",
+			"subdomain", subdomainName, "target", d.hostName, "error", err)
+		// Don't fail the entire operation if CNAME fails
+	} else {
+		d.logger.Debug("Added CNAME record", "subdomain", subdomainName, "target", d.hostName)
+	}
+
 	if err := entryGroup.Commit(); err != nil {
 		entryGroup.Reset()
 		return fmt.Errorf("failed to commit service %s: %w", serviceName, err)
@@ -185,6 +209,7 @@ func (d *Discovery) publishServiceAvahi(serviceName string, svc config.ServiceCo
 		"original_name", serviceName,
 		"sanitized_name", sanitizedName,
 		"full_name", fullServiceName,
+		"subdomain", subdomainName,
 		"port", proxyPort,
 		"host", d.hostName,
 		"txt_records", len(txtRecords))
