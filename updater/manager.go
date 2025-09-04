@@ -55,7 +55,7 @@ func (sm *ServiceManager) StopService(ctx context.Context) error {
 
 	sm.logger.Info("Stopping service via systemd", "service", sm.serviceName)
 
-	cmd := exec.CommandContext(ctx, "systemctl", "stop", sm.serviceName)
+	cmd := exec.CommandContext(ctx, "sudo", "systemctl", "stop", sm.serviceName)
 	return cmd.Run()
 }
 
@@ -67,7 +67,7 @@ func (sm *ServiceManager) StartService(ctx context.Context) error {
 
 	sm.logger.Info("Starting service via systemd", "service", sm.serviceName)
 
-	cmd := exec.CommandContext(ctx, "systemctl", "start", sm.serviceName)
+	cmd := exec.CommandContext(ctx, "sudo", "systemctl", "start", sm.serviceName)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("failed to start service: %w", err)
 	}
@@ -97,7 +97,7 @@ func (sm *ServiceManager) waitForService(ctx context.Context, timeout time.Durat
 
 // MARK: isServiceActive
 func (sm *ServiceManager) isServiceActive(ctx context.Context) bool {
-	cmd := exec.CommandContext(ctx, "systemctl", "is-active", "--quiet", sm.serviceName)
+	cmd := exec.CommandContext(ctx, "sudo", "systemctl", "is-active", "--quiet", sm.serviceName)
 	return cmd.Run() == nil
 }
 
