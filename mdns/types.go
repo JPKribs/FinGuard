@@ -11,12 +11,12 @@ import (
 // MARK: Discovery
 type Discovery struct {
 	logger      *internal.Logger
-	conn        *dbus.Conn
 	server      *avahi.Server
+	conn        *dbus.Conn
 	entryGroups map[string]*avahi.EntryGroup
-	mu          sync.RWMutex
-	running     bool
 	localIP     string
-	stopChan    chan struct{}
 	hostName    string
+	running     bool
+	stopChan    chan struct{}
+	mu          sync.RWMutex
 }

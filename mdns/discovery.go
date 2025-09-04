@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/JPKribs/FinGuard/config"
 	"github.com/JPKribs/FinGuard/internal"
@@ -11,7 +12,6 @@ import (
 )
 
 // MARK: NewDiscovery
-// Creates a new mDNS service discovery manager using Avahi only.
 func NewDiscovery(logger *internal.Logger) *Discovery {
 	return &Discovery{
 		logger:      logger,
@@ -21,7 +21,6 @@ func NewDiscovery(logger *internal.Logger) *Discovery {
 }
 
 // MARK: Start
-// Initializes the Avahi publisher and determines the local IP address.
 func (d *Discovery) Start(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -44,7 +43,8 @@ func (d *Discovery) Start(ctx context.Context) error {
 
 	hostname, err := d.getHostname()
 	if err != nil {
-		return fmt.Errorf("failed to get hostname: %w", err)
+		d.logger.Warn("Failed to get hostname, using fallback", "error", err)
+		hostname = "finguard.local"
 	}
 	d.hostName = hostname
 
@@ -56,7 +56,6 @@ func (d *Discovery) Start(ctx context.Context) error {
 }
 
 // MARK: Stop
-// Shuts down all published Avahi services.
 func (d *Discovery) Stop(ctx context.Context) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -88,12 +87,15 @@ func (d *Discovery) Stop(ctx context.Context) error {
 }
 
 // MARK: PublishService
-// Advertises a service via Avahi; skipped if Avahi unavailable.
 func (d *Discovery) PublishService(svc config.ServiceConfig, proxyPort int) error {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
 	if !svc.PublishMDNS || !d.running || d.server == nil {
+		d.logger.Debug("Skipping mDNS publish",
+			"publish_mdns", svc.PublishMDNS,
+			"running", d.running,
+			"server_available", d.server != nil)
 		return nil
 	}
 
@@ -101,11 +103,42 @@ func (d *Discovery) PublishService(svc config.ServiceConfig, proxyPort int) erro
 	if serviceName == "" {
 		return fmt.Errorf("service name cannot be empty")
 	}
+
+	if err := d.validateServiceName(serviceName); err != nil {
+		return fmt.Errorf("service name validation failed: %w", err)
+	}
+
 	return d.publishServiceAvahi(serviceName, svc, proxyPort)
 }
 
+// MARK: validateServiceName
+func (d *Discovery) validateServiceName(name string) error {
+	if len(name) == 0 {
+		return fmt.Errorf("service name cannot be empty")
+	}
+
+	if len(name) > 63 {
+		return fmt.Errorf("service name too long (max 63 chars): %s", name)
+	}
+
+	for i, r := range name {
+		if i == 0 && !isAlphaNumeric(r) {
+			return fmt.Errorf("service name must start with alphanumeric character: %s", name)
+		}
+
+		if !isAlphaNumeric(r) && r != '-' {
+			return fmt.Errorf("service name contains invalid character '%c': %s", r, name)
+		}
+
+		if r == '-' && (i == 0 || i == len(name)-1) {
+			return fmt.Errorf("service name cannot start or end with hyphen: %s", name)
+		}
+	}
+
+	return nil
+}
+
 // MARK: UnpublishService
-// Removes a service from Avahi advertisement.
 func (d *Discovery) UnpublishService(serviceName string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -121,7 +154,6 @@ func (d *Discovery) UnpublishService(serviceName string) {
 }
 
 // MARK: ListServices
-// Returns a list of currently published Avahi service names.
 func (d *Discovery) ListServices() []string {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
@@ -134,9 +166,40 @@ func (d *Discovery) ListServices() []string {
 }
 
 // MARK: IsReady
-// Reports whether the Avahi publisher is running.
 func (d *Discovery) IsReady() bool {
 	d.mu.RLock()
 	defer d.mu.RUnlock()
 	return d.running
+}
+
+// MARK: monitorServices
+func (d *Discovery) monitorServices(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-d.stopChan:
+			return
+		case <-ticker.C:
+			d.healthCheck()
+		}
+	}
+}
+
+// MARK: healthCheck
+func (d *Discovery) healthCheck() {
+	d.mu.RLock()
+	serviceCount := len(d.entryGroups)
+	d.mu.RUnlock()
+
+	if serviceCount > 0 && d.server != nil {
+		if state, err := d.server.GetState(); err != nil {
+			d.logger.Warn("Avahi server health check failed", "error", err)
+		} else {
+			d.logger.Debug("Avahi server health check", "state", state, "services", serviceCount)
+		}
+	}
 }
