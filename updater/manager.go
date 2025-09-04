@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
-	"syscall"
 	"time"
 
 	"github.com/JPKribs/FinGuard/internal"
@@ -159,11 +158,15 @@ func (sm *ServiceManager) CleanupNetworkResources() error {
 
 // MARK: ValidatePermissions
 func (sm *ServiceManager) ValidatePermissions() error {
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+
 	if os.Geteuid() != 0 {
 		return fmt.Errorf("service requires root privileges for TUN device creation")
 	}
 
-	if err := syscall.Access("/dev/net/tun", syscall.F_OK); err != nil {
+	if _, err := os.Stat("/dev/net/tun"); err != nil {
 		return fmt.Errorf("TUN device not available: %w", err)
 	}
 
