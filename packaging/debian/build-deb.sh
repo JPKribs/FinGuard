@@ -15,7 +15,7 @@ esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.3.8"
+VERSION="1.3.7"
 GO_VERSION="1.24.2"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
@@ -35,7 +35,6 @@ mkdir -p "$DEB_DIR/etc/finguard"
 mkdir -p "$DEB_DIR/usr/local/share/finguard/web"
 mkdir -p "$DEB_DIR/etc/systemd/system"
 mkdir -p "$DEB_DIR/etc/avahi/services"
-mkdir -p "$DEB_DIR/etc/sudoers.d"
 mkdir -p "$DEB_DIR/var/lib/finguard/backups"
 mkdir -p "$DEB_DIR/var/log/finguard"
 mkdir -p "$DEB_DIR/DEBIAN"
@@ -154,19 +153,6 @@ else
     echo "WARNING: avahi.service not found in $SCRIPT_DIR"
 fi
 
-# MARK: Copy sudoers file with proper permissions
-echo "Copying sudoers file..."
-if [ -f "$SCRIPT_DIR/sudoer" ]; then
-    mkdir -p "$DEB_DIR/etc/sudoers.d"
-    cp "$SCRIPT_DIR/sudoer" "$DEB_DIR/etc/sudoers.d/finguard"
-    # Set permissions as close as possible during build
-    chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
-    # Note: We cannot set root ownership here without sudo/fakeroot
-    # The postinst script will handle ownership
-    echo "Copied sudoer file to /etc/sudoers.d/finguard (ownership will be fixed during install)"
-else
-    echo "WARNING: sudoer file not found in $SCRIPT_DIR"
-fi
 
 # MARK: Copy Debian control file
 echo "Copying Debian control file..."
@@ -207,26 +193,7 @@ echo "Installed-Size: $INSTALLED_SIZE" >> "$DEB_DIR/DEBIAN/control"
 echo "Building .deb package..."
 cd "$BUILD_DIR"
 
-# Use fakeroot if available to handle ownership issues
-if command -v fakeroot >/dev/null 2>&1; then
-    echo "Using fakeroot for package building..."
-    # Create a fakeroot script to ensure proper ownership
-    cat > build_with_fakeroot.sh << 'SCRIPT_EOF'
-#!/bin/bash
-# Fix sudoers file ownership in fakeroot environment
-if [ -f "${1}/etc/sudoers.d/finguard" ]; then
-    chown 0:0 "${1}/etc/sudoers.d/finguard"
-    chmod 440 "${1}/etc/sudoers.d/finguard"
-fi
-dpkg-deb --build "$1"
-SCRIPT_EOF
-    chmod +x build_with_fakeroot.sh
-    fakeroot ./build_with_fakeroot.sh "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
-    rm build_with_fakeroot.sh
-else
-    echo "WARNING: fakeroot not available, sudoers file ownership will be fixed during install"
-    dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
-fi
+dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
 
 DEB_FILE="${BUILD_DIR}/${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}.deb"
 if [ -f "$DEB_FILE" ]; then
