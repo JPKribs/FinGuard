@@ -165,8 +165,26 @@ set_locale() {
 
 # MARK: set_timezone
 set_timezone() {
-    timedatectl set-timezone America/Denver
-    echo "Set timezone to Mountain Time (America/Denver)"
+    echo "Setting timezone to Mountain Time..."
+    
+    # Try timedatectl first
+    if timedatectl set-timezone America/Denver 2>/dev/null; then
+        echo "Set timezone to Mountain Time (America/Denver)"
+    else
+        echo "timedatectl failed, trying alternative method..."
+        
+        # Fallback method using ln
+        if [ -f /usr/share/zoneinfo/America/Denver ]; then
+            ln -sf /usr/share/zoneinfo/America/Denver /etc/localtime
+            echo "America/Denver" > /etc/timezone
+            echo "Set timezone to Mountain Time (fallback method)"
+        else
+            echo "Warning: Could not set timezone - will use system default"
+        fi
+    fi
+    
+    # Disable automatic time sync to avoid timeout issues during setup
+    timedatectl set-ntp false 2>/dev/null || true
 }
 
 # MARK: set_hostname
