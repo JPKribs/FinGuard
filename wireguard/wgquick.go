@@ -112,6 +112,12 @@ func (wq *WgQuickTunnel) ensureConfigDirectory() error {
 
 // MARK: generateConfig
 func (wq *WgQuickTunnel) generateConfig() error {
+	// Check if config file already exists
+	if _, err := os.Stat(wq.configPath); err == nil {
+		wq.logger.Info("Config file already exists", "path", wq.configPath)
+		return nil
+	}
+
 	config := wq.buildWgQuickConfig()
 
 	if err := os.WriteFile(wq.configPath, []byte(config), 0600); err != nil {
