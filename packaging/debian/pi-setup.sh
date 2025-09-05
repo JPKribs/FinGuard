@@ -79,29 +79,21 @@ EOF
 
 # MARK: configure_tmpfs
 configure_tmpfs() {
-    # Create mount points first
-    mkdir -p /var/log.real /var/cache/apt.real
-    
-    # Backup important log files before tmpfs mount
-    if [ -d /var/log ] && [ "$(ls -A /var/log 2>/dev/null)" ]; then
-        cp -r /var/log/* /var/log.real/ 2>/dev/null || true
-    fi
-    
+    # Only add tmpfs entries, don't modify existing fstab entries
     cat >> /etc/fstab << 'EOF'
 
-# tmpfs mounts to reduce eMMC writes - safe options
+# tmpfs mounts to reduce eMMC writes
 tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=100M 0 0
 tmpfs /var/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=50M 0 0
 EOF
-    echo "Added safe tmpfs mounts for /tmp and /var/tmp only"
+    echo "Added safe tmpfs mounts"
 }
 
 # MARK: optimize_filesystem
 optimize_filesystem() {
     cp /etc/fstab /etc/fstab.backup.$(date +%Y%m%d_%H%M%S)
     
-    sed -i 's/defaults/defaults,noatime,commit=60/' /etc/fstab
-    
+    # DON'T modify existing fstab entries - just add sysctl settings
     if ! grep -q "vm.dirty_ratio" /etc/sysctl.conf; then
         cat >> /etc/sysctl.conf << 'EOF'
 
@@ -115,7 +107,7 @@ vm.vfs_cache_pressure = 50
 EOF
     fi
     
-    echo "Optimized filesystem settings for eMMC longevity"
+    echo "Added sysctl optimizations only - left fstab mount options alone"
 }
 
 # MARK: disable_unnecessary_services
