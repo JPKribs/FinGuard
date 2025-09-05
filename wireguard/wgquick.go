@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	wgQuickConfigDir = "/etc/wireguard"
+	wgQuickConfigDir = "/tmp"
 )
 
 // MARK: NewWgQuickTunnel
