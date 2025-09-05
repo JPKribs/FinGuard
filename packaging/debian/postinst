@@ -55,6 +55,14 @@ case "$1" in
             chown -R finguard:finguard /usr/local/share/finguard
         fi
 
+        # MARK: Set hostname
+        echo "FinGuard" > /etc/hostname
+        hostnamectl set-hostname FinGuard
+
+        # MARK: Ensure /etc/hosts maps hostname
+        sed -i "s/127\.0\.1\.1.*/127.0.1.1 FinGuard/" /etc/hosts || \
+        echo "127.0.1.1 FinGuard" >> /etc/hosts
+
         # MARK: Register systemd service
         systemctl daemon-reload
         systemctl enable finguard.service
