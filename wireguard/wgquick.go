@@ -210,7 +210,7 @@ func (wq *WgQuickTunnel) startWithWgQuick() error {
 		return fmt.Errorf("wg-quick path not configured")
 	}
 
-	cmd := exec.Command(wgQuickPath, "up", wq.name)
+	cmd := exec.Command(wgQuickPath, "up", wq.configPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("wg-quick up failed: %w (output: %s)", err, string(output))
@@ -253,7 +253,7 @@ func (wq *WgQuickTunnel) stopWithWgQuick() error {
 		return fmt.Errorf("wg-quick path not configured")
 	}
 
-	cmd := exec.Command(wgQuickPath, "down", wq.name)
+	cmd := exec.Command(wgQuickPath, "down", wq.configPath)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		if !strings.Contains(string(output), "is not a WireGuard interface") {
