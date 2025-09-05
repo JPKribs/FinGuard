@@ -51,9 +51,9 @@ fix_repositories() {
 
 # MARK: disable_swap
 disable_swap() {
-    swapoff -a
+    swapoff -a 2>/dev/null || true
     sed -i '/swap/d' /etc/fstab
-    systemctl mask swap.target
+    systemctl mask swap.target 2>/dev/null || true
     echo "Disabled all swap to protect eMMC"
 }
 
@@ -73,21 +73,27 @@ Storage=volatile
 Compress=yes
 EOF
     
-    systemctl restart systemd-journald
+    systemctl restart systemd-journald 2>/dev/null || true
     echo "Configured minimal journald logging"
 }
 
 # MARK: configure_tmpfs
 configure_tmpfs() {
+    # Create mount points first
+    mkdir -p /var/log.real /var/cache/apt.real
+    
+    # Backup important log files before tmpfs mount
+    if [ -d /var/log ] && [ "$(ls -A /var/log 2>/dev/null)" ]; then
+        cp -r /var/log/* /var/log.real/ 2>/dev/null || true
+    fi
+    
     cat >> /etc/fstab << 'EOF'
 
-# tmpfs mounts to reduce eMMC writes
+# tmpfs mounts to reduce eMMC writes - safe options
 tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=100M 0 0
 tmpfs /var/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=50M 0 0
-tmpfs /var/log tmpfs defaults,noatime,nosuid,nodev,noexec,mode=0755,size=50M 0 0
-tmpfs /var/cache/apt tmpfs defaults,noatime,nosuid,nodev,noexec,mode=0755,size=100M 0 0
 EOF
-    echo "Added tmpfs mounts for high-write directories"
+    echo "Added safe tmpfs mounts for /tmp and /var/tmp only"
 }
 
 # MARK: optimize_filesystem
@@ -126,7 +132,7 @@ disable_unnecessary_services() {
     
     for service in "${SERVICES_TO_DISABLE[@]}"; do
         if systemctl is-enabled "$service" &>/dev/null; then
-            systemctl disable "$service"
+            systemctl disable "$service" 2>/dev/null || true
             echo "Disabled $service"
         fi
     done
@@ -167,37 +173,58 @@ set_locale() {
 set_timezone() {
     echo "Setting timezone to Mountain Time..."
     
-    # Try timedatectl first
-    if timedatectl set-timezone America/Denver 2>/dev/null; then
-        echo "Set timezone to Mountain Time (America/Denver)"
+    # Skip systemd bullshit entirely
+    if [ -f /usr/share/zoneinfo/America/Denver ]; then
+        ln -sf /usr/share/zoneinfo/America/Denver /etc/localtime
+        echo "America/Denver" > /etc/timezone
+        echo "Set timezone to Mountain Time (direct method)"
     else
-        echo "timedatectl failed, trying alternative method..."
-        
-        # Fallback method using ln
-        if [ -f /usr/share/zoneinfo/America/Denver ]; then
-            ln -sf /usr/share/zoneinfo/America/Denver /etc/localtime
-            echo "America/Denver" > /etc/timezone
-            echo "Set timezone to Mountain Time (fallback method)"
-        else
-            echo "Warning: Could not set timezone - will use system default"
-        fi
+        echo "Warning: Could not find timezone file"
     fi
-    
-    # Disable automatic time sync to avoid timeout issues during setup
-    timedatectl set-ntp false 2>/dev/null || true
 }
 
 # MARK: set_hostname
 set_hostname() {
-    hostnamectl set-hostname FinGuard
+    local hostname="$1"
     
-    sed -i 's/^127\.0\.1\.1.*/127.0.1.1\tFinGuard/' /etc/hosts
+    echo "Setting hostname to $hostname..."
     
+    # Direct method - no systemd
+    echo "$hostname" > /etc/hostname
+    
+    # Update /etc/hosts
+    sed -i "s/^127\.0\.1\.1.*/127.0.1.1\t$hostname/" /etc/hosts
+    
+    # Add entry if it doesn't exist
     if ! grep -q "127.0.1.1" /etc/hosts; then
-        echo "127.0.1.1	FinGuard" >> /etc/hosts
+        echo "127.0.1.1	$hostname" >> /etc/hosts
     fi
     
-    echo "Set hostname to FinGuard"
+    # Set it immediately
+    hostname "$hostname" 2>/dev/null || true
+    
+    echo "Set hostname to $hostname"
+}
+
+# MARK: install_wireguard
+install_wireguard() {
+    echo "Installing WireGuard..."
+    
+    if apt-get install -y wireguard wireguard-tools; then
+        echo "WireGuard installed successfully"
+        
+        if command -v wg &> /dev/null; then
+            echo "WireGuard version: $(wg --version 2>/dev/null | head -n1 || echo 'unknown')"
+        fi
+        
+        modprobe wireguard 2>/dev/null || echo "Warning: Could not load WireGuard kernel module"
+        
+        echo "WireGuard tools available:"
+        echo "- wg: $(which wg 2>/dev/null || echo 'not found')"
+        echo "- wg-quick: $(which wg-quick 2>/dev/null || echo 'not found')"
+    else
+        echo "Warning: Failed to install WireGuard - continuing with setup"
+    fi
 }
 
 # MARK: create_update_script
@@ -254,8 +281,8 @@ setup_cron_job() {
         echo "Cron job already exists"
     fi
     
-    systemctl enable cron
-    systemctl start cron
+    systemctl enable cron 2>/dev/null || true
+    systemctl start cron 2>/dev/null || true
 }
 
 # MARK: main_execution
