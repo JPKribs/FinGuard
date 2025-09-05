@@ -61,6 +61,25 @@ case "$1" in
             usermod -a -G netdev finguard 2>/dev/null || true
         fi
 
+        # MARK: Ensure sudoers file ownership and permissions
+        if [ -f /etc/sudoers.d/finguard ]; then
+            echo "Fixing sudoers file permissions..."
+            chown root:root /etc/sudoers.d/finguard
+            chmod 440 /etc/sudoers.d/finguard
+            
+            # Validate sudoers syntax
+            if ! visudo -c -f /etc/sudoers.d/finguard 2>/dev/null; then
+                echo "ERROR: Invalid sudoers syntax detected. Removing file for safety."
+                rm -f /etc/sudoers.d/finguard
+                echo "WARNING: Auto-updates will not work without valid sudoers file"
+            else
+                echo "Sudoers file validated successfully"
+            fi
+        else
+            echo "WARNING: No sudoers file found at /etc/sudoers.d/finguard"
+            echo "Auto-updates will require manual sudo configuration"
+        fi
+
         # MARK: Create ALL directories with finguard ownership
         echo "Creating directories with finguard ownership..."
         install -d -o finguard -g finguard -m 0775 /var/lib/finguard
@@ -129,7 +148,7 @@ case "$1" in
             chmod 660 /etc/finguard/update.yaml
         fi
 
-        # MARK: Ensure ALL /etc/finguard contents are finguard owned
+        # MARK: Ensure ALL /etc/finguard contents are finguard owned (except sudoers)
         chown -R finguard:finguard /etc/finguard
         
         # MARK: Other directories
@@ -192,18 +211,6 @@ case "$1" in
             exit 1
         }
 
-        # MARK: Validate sudoers file if it exists
-        if [ -f /etc/sudoers.d/finguard ]; then
-            chmod 440 /etc/sudoers.d/finguard
-            chown root:root /etc/sudoers.d/finguard
-            visudo -c -f /etc/sudoers.d/finguard || {
-                echo "WARNING: Invalid sudoers file, removing..."
-                rm -f /etc/sudoers.d/finguard
-            }
-        else
-            echo "WARNING: No sudoers file found - service management may require manual sudo"
-        fi
-
         # MARK: Enable and start services
         systemctl daemon-reload
         systemctl enable avahi-daemon 2>/dev/null || echo "Note: avahi-daemon not available"
@@ -228,7 +235,7 @@ case "$1" in
         echo "3. Access web interface at http://localhost:10000"
         echo ""
         echo "Note: System restart/shutdown from web UI will use process signals"
-        echo "      (systemctl commands removed for security)"
+        echo "      (systemctl commands enabled via sudoers for updates)"
         echo "========================================="
         
         ;;

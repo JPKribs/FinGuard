@@ -15,7 +15,7 @@ esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.3.6"
+VERSION="1.3.7"
 GO_VERSION="1.24.2"
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
@@ -40,7 +40,7 @@ mkdir -p "$DEB_DIR/var/lib/finguard/backups"
 mkdir -p "$DEB_DIR/var/log/finguard"
 mkdir -p "$DEB_DIR/DEBIAN"
 
-# Install Go if not present or wrong version
+# MARK: Check/Install Go
 echo "Checking Go installation..."
 if ! command -v go &> /dev/null || [[ "$(go version | cut -d' ' -f3)" != "go$GO_VERSION" ]]; then
     echo "Installing Go $GO_VERSION for $DEB_ARCH..."
@@ -73,6 +73,7 @@ else
     echo "Go already installed: $(go version)"
 fi
 
+# MARK: Build binary
 echo "Building FinGuard binary with version $VERSION for $GO_ARCH..."
 cd "$PROJECT_ROOT"
 mkdir -p bin
@@ -82,17 +83,16 @@ if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -ldflags "-X github.com
     exit 1
 fi
 
-# Ensure the directories exist first
+# MARK: Copy binary
 mkdir -p "$DEB_DIR/usr/local/lib/finguard/bin"
 mkdir -p "$DEB_DIR/usr/local/bin"
 
-# Copy binary to its "lib" location
 cp "$PROJECT_ROOT/bin/finguard" "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
 chmod 755 "$DEB_DIR/usr/local/lib/finguard/bin/finguard"
 
-# Symlink binary to /usr/local/bin
 ln -sf /usr/local/lib/finguard/bin/finguard "$DEB_DIR/usr/local/bin/finguard"
 
+# MARK: Copy web interface
 echo "Copying web interface..."
 if [ -d "$PROJECT_ROOT/web" ]; then
     cp -r "$PROJECT_ROOT/web/"* "$DEB_DIR/usr/local/share/finguard/web/"
@@ -100,6 +100,7 @@ if [ -d "$PROJECT_ROOT/web" ]; then
     find "$DEB_DIR/usr/local/share/finguard/web" -type d -exec chmod 755 {} \;
 fi
 
+# MARK: Create configuration files
 echo "Creating configuration..."
 cat > "$DEB_DIR/etc/finguard/config.yaml" << 'EOF'
 server:
@@ -139,10 +140,12 @@ chmod 644 "$DEB_DIR/etc/finguard/update.yaml"
 echo "Creating backup directories..."
 mkdir -p "$DEB_DIR/etc/finguard/backups"
 
+# MARK: Copy systemd service
 echo "Creating systemd service that uses the correct binary path..."
 cp "$SCRIPT_DIR/finguard.service" "$DEB_DIR/etc/systemd/system/finguard.service"
 chmod 644 "$DEB_DIR/etc/systemd/system/finguard.service"
 
+# MARK: Copy Avahi configuration
 echo "Copying Avahi configuration..."
 if [ -f "$SCRIPT_DIR/avahi.service" ]; then
     cp "$SCRIPT_DIR/avahi.service" "$DEB_DIR/etc/avahi/services/finguard.service"
@@ -151,18 +154,21 @@ else
     echo "WARNING: avahi.service not found in $SCRIPT_DIR"
 fi
 
-# MARK: Copy sudoers file
+# MARK: Copy sudoers file with proper permissions
 echo "Copying sudoers file..."
 if [ -f "$SCRIPT_DIR/sudoer" ]; then
     mkdir -p "$DEB_DIR/etc/sudoers.d"
     cp "$SCRIPT_DIR/sudoer" "$DEB_DIR/etc/sudoers.d/finguard"
+    # Set permissions as close as possible during build
     chmod 440 "$DEB_DIR/etc/sudoers.d/finguard"
-    chown root:root "$DEB_DIR/etc/sudoers.d/finguard" 2>/dev/null || true
-    echo "Copied sudoer file to /etc/sudoers.d/finguard"
+    # Note: We cannot set root ownership here without sudo/fakeroot
+    # The postinst script will handle ownership
+    echo "Copied sudoer file to /etc/sudoers.d/finguard (ownership will be fixed during install)"
 else
     echo "WARNING: sudoer file not found in $SCRIPT_DIR"
 fi
 
+# MARK: Copy Debian control file
 echo "Copying Debian control file..."
 if [ -f "$SCRIPT_DIR/control" ]; then
     cp "$SCRIPT_DIR/control" "$DEB_DIR/DEBIAN/"
@@ -174,8 +180,8 @@ else
     exit 1
 fi
 
+# MARK: Copy maintainer scripts
 echo "Copying Debian maintainer scripts..."
-# Copy the existing postinst script instead of overwriting it
 for script in postinst prerm postrm; do
     if [ -f "$SCRIPT_DIR/$script" ]; then
         cp "$SCRIPT_DIR/$script" "$DEB_DIR/DEBIAN/"
@@ -186,6 +192,7 @@ for script in postinst prerm postrm; do
     fi
 done
 
+# MARK: Create conffiles list
 cat > "$DEB_DIR/DEBIAN/conffiles" << EOF
 /etc/finguard/config.yaml
 /etc/finguard/services.yaml
@@ -196,14 +203,29 @@ EOF
 INSTALLED_SIZE=$(du -sk "$DEB_DIR" | cut -f1)
 echo "Installed-Size: $INSTALLED_SIZE" >> "$DEB_DIR/DEBIAN/control"
 
+# MARK: Build package
 echo "Building .deb package..."
 cd "$BUILD_DIR"
 
-# Use fakeroot if available to avoid sudo requirements during package building
+# Use fakeroot if available to handle ownership issues
 if command -v fakeroot >/dev/null 2>&1; then
-    fakeroot dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
+    echo "Using fakeroot for package building..."
+    # Create a fakeroot script to ensure proper ownership
+    cat > build_with_fakeroot.sh << 'SCRIPT_EOF'
+#!/bin/bash
+# Fix sudoers file ownership in fakeroot environment
+if [ -f "${1}/etc/sudoers.d/finguard" ]; then
+    chown 0:0 "${1}/etc/sudoers.d/finguard"
+    chmod 440 "${1}/etc/sudoers.d/finguard"
+fi
+dpkg-deb --build "$1"
+SCRIPT_EOF
+    chmod +x build_with_fakeroot.sh
+    fakeroot ./build_with_fakeroot.sh "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
+    rm build_with_fakeroot.sh
 else
-    sudo dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
+    echo "WARNING: fakeroot not available, sudoers file ownership will be fixed during install"
+    dpkg-deb --build "${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}"
 fi
 
 DEB_FILE="${BUILD_DIR}/${PACKAGE_NAME}_${VERSION}_${DEB_ARCH}.deb"
