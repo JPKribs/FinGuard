@@ -79,14 +79,13 @@ EOF
 
 # MARK: configure_tmpfs
 configure_tmpfs() {
-    # Only add tmpfs entries, don't modify existing fstab entries
     cat >> /etc/fstab << 'EOF'
 
-# tmpfs mounts to reduce eMMC writes
-tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=100M 0 0
-tmpfs /var/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=50M 0 0
+# tmpfs mounts to reduce eMMC writes (sized for development)
+tmpfs /tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=500M 0 0
+tmpfs /var/tmp tmpfs defaults,noatime,nosuid,nodev,noexec,mode=1777,size=200M 0 0
 EOF
-    echo "Added safe tmpfs mounts"
+    echo "Added tmpfs mounts with larger sizes for development"
 }
 
 # MARK: optimize_filesystem
