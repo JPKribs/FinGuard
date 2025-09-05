@@ -37,7 +37,7 @@ func (c *Config) loadServicesFile() error {
 // Loads or creates the wireguard.yaml configuration file.
 func (c *Config) loadWireGuardFile() error {
 	if _, err := os.Stat(c.WireGuardFile); os.IsNotExist(err) {
-		return c.createEmptyFile(c.WireGuardFile, WireGuardConfig{})
+		return os.ErrNotExist
 	}
 
 	data, err := os.ReadFile(c.WireGuardFile)

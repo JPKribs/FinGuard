@@ -1,13 +1,15 @@
 Package: finguard
-Version: 1.4.1
+Version: 1.5.0
 Section: net
 Priority: optional
 Architecture: amd64
-Depends: libc6, systemd, libcap2-bin, avahi-daemon, avahi-utils
+Depends: libc6, systemd, libcap2-bin, avahi-daemon, avahi-utils, wireguard-tools, iproute2
+Recommends: wireguard
 Maintainer: Joseph Parker Kribs <joseph@kribs.net>
-Description: High-performance userspace WireGuard proxy with web management
+Description: High-performance WireGuard proxy with kernel and userspace modes
  FinGuard is a modern WireGuard proxy solution that provides:
-  - Userspace WireGuard implementation
+  - Kernel WireGuard support with wg-quick for optimal performance
+  - Automatic fallback to userspace WireGuard implementation
   - HTTP reverse proxy with subdomain routing
   - Web-based management interface
   - mDNS service discovery via Avahi
@@ -16,3 +18,6 @@ Description: High-performance userspace WireGuard proxy with web management
   - Auto-update system with GitHub integration
  .
  This package includes systemd integration for production deployment.
+ When installed on systems with kernel WireGuard support, FinGuard
+ automatically uses the high-performance kernel implementation to
+ eliminate streaming timeouts and improve throughput.

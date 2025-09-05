@@ -11,26 +11,77 @@ import (
 )
 
 const (
-	maxRetryAttempts    = 3
-	managerRetryDelay   = 2 * time.Second
-	shutdownTimeout     = 30 * time.Second
-	healthCheckInterval = 15 * time.Second
+	maxRetryAttempts               = 3
+	managerRetryDelay              = 2 * time.Second
+	shutdownTimeout                = 30 * time.Second
+	healthCheckInterval            = 15 * time.Second
+	ModeWgQuick         TunnelMode = "wg-quick"
+	ModeKernel          TunnelMode = "kernel"
+	ModeUserspace       TunnelMode = "userspace"
+	ModeAuto            TunnelMode = "auto"
 )
 
 // Manager lifecycle functions
 
 // MARK: NewManager
 // Creates a new tunnel manager with logger and resolver
-func NewManager(logger *internal.Logger) TunnelManager {
+func NewManager(mode TunnelMode, paths config.WireGuardPaths, logger *internal.Logger) (TunnelManager, error) {
 	if logger == nil {
 		logger = &internal.Logger{}
 	}
 
+	actualMode := determineActualMode(mode, paths, logger)
+
 	return &Manager{
 		logger:   logger,
-		tunnels:  make(map[string]*Tunnel),
+		tunnels:  make(map[string]TunnelInterface),
+		mode:     actualMode,
+		paths:    paths,
 		resolver: NewAsyncResolver(),
+	}, nil
+}
+
+// MARK: determineActualMode
+func determineActualMode(requestedMode TunnelMode, paths config.WireGuardPaths, logger *internal.Logger) TunnelMode {
+	switch requestedMode {
+	case ModeWgQuick:
+		if isWgQuickAvailable(paths) {
+			return ModeWgQuick
+		}
+		logger.Warn("wg-quick not available, falling back to userspace mode")
+		return ModeUserspace
+	case ModeKernel:
+		if isKernelWireGuardAvailable(paths) {
+			return ModeKernel
+		}
+		logger.Warn("kernel WireGuard not available, falling back to userspace mode")
+		return ModeUserspace
+	case ModeAuto:
+		if isWgQuickAvailable(paths) {
+			logger.Info("Auto-selected wg-quick mode for best performance")
+			return ModeWgQuick
+		}
+		if isKernelWireGuardAvailable(paths) {
+			logger.Info("Auto-selected kernel mode")
+			return ModeKernel
+		}
+		logger.Info("Auto-selected userspace mode")
+		return ModeUserspace
+	default:
+		return ModeUserspace
 	}
+}
+
+// MARK: isKernelWireGuardAvailable
+func isKernelWireGuardAvailable(paths config.WireGuardPaths) bool {
+	// For now, we'll implement this when we add kernel support
+	// This is just wg-quick for this step
+	return false
+}
+
+// MARK: GetMode
+func (m *Manager) GetMode() TunnelMode {
+	return m.mode
 }
 
 // MARK: Start
@@ -43,7 +94,7 @@ func (m *Manager) Start(ctx context.Context) error {
 		return fmt.Errorf("tunnel manager already running")
 	}
 
-	m.logger.Info("Starting WireGuard tunnel manager")
+	m.logger.Info("Starting WireGuard tunnel manager", "mode", m.mode)
 	atomic.StoreInt64(&m.running, 1)
 	m.lastError = nil
 	atomic.StoreInt32(&m.retryAttempts, 0)
@@ -73,7 +124,7 @@ func (m *Manager) Stop(ctx context.Context) error {
 	defer cancel()
 
 	m.mu.Lock()
-	tunnels := make([]*Tunnel, 0, len(m.tunnels))
+	tunnels := make([]TunnelInterface, 0, len(m.tunnels))
 	for _, tunnel := range m.tunnels {
 		tunnels = append(tunnels, tunnel)
 	}
@@ -82,8 +133,8 @@ func (m *Manager) Stop(ctx context.Context) error {
 	var errors []error
 	for _, tunnel := range tunnels {
 		if err := tunnel.Stop(ctx); err != nil {
-			m.logger.Error("Failed to stop tunnel", "name", tunnel.name, "error", err)
-			errors = append(errors, fmt.Errorf("tunnel %s: %w", tunnel.name, err))
+			m.logger.Error("Failed to stop tunnel", "error", err)
+			errors = append(errors, fmt.Errorf("tunnel: %w", err))
 		}
 	}
 
@@ -137,11 +188,19 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 		m.mu.Unlock()
 	}
 
-	var tunnel *Tunnel
+	var tunnel TunnelInterface
 	var err error
 
 	for attempt := 1; attempt <= maxRetryAttempts; attempt++ {
-		tunnel, err = NewTunnel(cfg, m.logger, m.resolver)
+		// Choose tunnel type based on mode
+		switch m.mode {
+		case ModeWgQuick:
+			tunnel, err = NewWgQuickTunnel(cfg, m.paths, m.logger, m.resolver)
+		case ModeUserspace:
+			tunnel, err = NewTunnel(cfg, m.logger, m.resolver)
+		default:
+			err = fmt.Errorf("unsupported tunnel mode: %s", m.mode)
+		}
 		if err != nil {
 			m.logger.Error("Failed to create tunnel", "name", cfg.Name, "attempt", attempt, "error", err)
 			if attempt < maxRetryAttempts {
@@ -168,12 +227,12 @@ func (m *Manager) CreateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 	m.tunnels[cfg.Name] = tunnel
 	m.mu.Unlock()
 
-	m.logger.Info("Created tunnel", "name", cfg.Name)
+	m.logger.Info("Created tunnel", "name", cfg.Name, "mode", m.mode)
 	return nil
 }
 
 // MARK: UpdateTunnel
-// Updates an existing tunnel configuration with rollback on failure
+// Updates an existing tunnel configuration
 func (m *Manager) UpdateTunnel(ctx context.Context, cfg config.TunnelConfig) error {
 	if atomic.LoadInt64(&m.running) == 0 {
 		return fmt.Errorf("tunnel manager not running")
@@ -188,15 +247,8 @@ func (m *Manager) UpdateTunnel(ctx context.Context, cfg config.TunnelConfig) err
 		return m.CreateTunnel(ctx, cfg)
 	}
 
-	oldConfig := tunnel.config
 	if err := tunnel.Update(ctx, cfg); err != nil {
-		m.logger.Error("Failed to update tunnel, attempting rollback", "name", cfg.Name, "error", err)
-
-		if rollbackErr := tunnel.Update(ctx, oldConfig); rollbackErr != nil {
-			m.logger.Error("Rollback failed", "name", cfg.Name, "error", rollbackErr)
-			return fmt.Errorf("update failed and rollback failed: %w, rollback error: %v", err, rollbackErr)
-		}
-
+		m.logger.Error("Failed to update tunnel", "name", cfg.Name, "error", err)
 		return fmt.Errorf("updating tunnel %s: %w", cfg.Name, err)
 	}
 
@@ -262,7 +314,7 @@ func (m *Manager) Status(ctx context.Context, name string) (TunnelStatus, error)
 // Returns status information for all tunnels
 func (m *Manager) ListTunnels(ctx context.Context) ([]TunnelStatus, error) {
 	m.mu.RLock()
-	tunnels := make([]*Tunnel, 0, len(m.tunnels))
+	tunnels := make([]TunnelInterface, 0, len(m.tunnels))
 	for _, tunnel := range m.tunnels {
 		tunnels = append(tunnels, tunnel)
 	}
@@ -298,7 +350,7 @@ func (m *Manager) Recover(ctx context.Context) error {
 	m.logger.Info("Starting tunnel recovery process")
 
 	m.mu.RLock()
-	tunnels := make([]*Tunnel, 0, len(m.tunnels))
+	tunnels := make([]TunnelInterface, 0, len(m.tunnels))
 	for _, tunnel := range m.tunnels {
 		tunnels = append(tunnels, tunnel)
 	}
@@ -308,13 +360,13 @@ func (m *Manager) Recover(ctx context.Context) error {
 	for _, tunnel := range tunnels {
 		status := tunnel.Status(ctx)
 		if status.State == "stopped" {
-			m.logger.Info("Attempting to recover tunnel", "name", tunnel.name)
+			m.logger.Info("Attempting to recover tunnel", "name", status.Name)
 
 			if err := tunnel.Start(ctx); err != nil {
-				m.logger.Error("Failed to recover tunnel", "name", tunnel.name, "error", err)
+				m.logger.Error("Failed to recover tunnel", "name", status.Name, "error", err)
 				failed++
 			} else {
-				m.logger.Info("Successfully recovered tunnel", "name", tunnel.name)
+				m.logger.Info("Successfully recovered tunnel", "name", status.Name)
 				recovered++
 			}
 		}
@@ -356,7 +408,7 @@ func (m *Manager) performHealthCheck() {
 	}
 
 	m.mu.RLock()
-	tunnels := make([]*Tunnel, 0, len(m.tunnels))
+	tunnels := make([]TunnelInterface, 0, len(m.tunnels))
 	for _, tunnel := range m.tunnels {
 		tunnels = append(tunnels, tunnel)
 	}
@@ -366,7 +418,7 @@ func (m *Manager) performHealthCheck() {
 	for _, tunnel := range tunnels {
 		status := tunnel.Status(m.ctx)
 		if status.State == "stopped" {
-			failedTunnels = append(failedTunnels, tunnel.name)
+			failedTunnels = append(failedTunnels, status.Name)
 		}
 	}
 

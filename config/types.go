@@ -1,5 +1,18 @@
 package config
 
+// MARK: WireGuardMode
+type WireGuardMode string
+
+// MARK: WireGuardPaths
+type WireGuardPaths struct {
+	WgTool    string `yaml:"wg_tool"`
+	WgQuick   string `yaml:"wg_quick"`
+	IpTool    string `yaml:"ip_tool"`
+	ModProbe  string `yaml:"modprobe"`
+	SysCtl    string `yaml:"sysctl"`
+	SystemCtl string `yaml:"systemctl"`
+}
+
 // MARK: Config
 type Config struct {
 	Server        ServerConfig    `yaml:"server"`
@@ -36,6 +49,8 @@ type LogConfig struct {
 
 // MARK: WireGuardConfig
 type WireGuardConfig struct {
+	Mode    WireGuardMode  `yaml:"mode"`
+	Paths   WireGuardPaths `yaml:"paths"`
 	Tunnels []TunnelConfig `yaml:"tunnels"`
 }
 

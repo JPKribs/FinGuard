@@ -22,18 +22,43 @@ func newApplication(configPath string) (*Application, error) {
 		return nil, fmt.Errorf("loading config: %w", error)
 	}
 
+	// Load WireGuard configuration with defaults
+	if err := config.LoadWireGuardWithDefaults(); err != nil {
+		return nil, fmt.Errorf("loading WireGuard config: %w", err)
+	}
+
 	logger := internal.NewLogger(config.Log.Level)
 	healthCheck := internal.NewHealthChecker()
 
 	updateManager := updater.NewUpdateManager(config, logger, version.Version)
-
 	jellyfinBroadcaster := discovery.NewJellyfinBroadcaster(logger)
+
+	// Convert config.WireGuardMode to wireguard.TunnelMode using string comparison
+	wireGuardMode := config.WireGuard.GetWireGuardMode()
+	var tunnelMode wireguard.TunnelMode
+	switch string(wireGuardMode) {
+	case "wg-quick":
+		tunnelMode = wireguard.ModeWgQuick
+	case "kernel":
+		tunnelMode = wireguard.ModeKernel
+	case "userspace":
+		tunnelMode = wireguard.ModeUserspace
+	case "auto":
+		tunnelMode = wireguard.ModeAuto
+	default:
+		tunnelMode = wireguard.ModeUserspace
+	}
+
+	tunnelManager, err := wireguard.NewManager(tunnelMode, config.WireGuard.Paths, logger)
+	if err != nil {
+		return nil, fmt.Errorf("creating tunnel manager: %w", err)
+	}
 
 	return &Application{
 		config:              config,
 		logger:              logger,
 		healthCheck:         healthCheck,
-		tunnelManager:       wireguard.NewManager(logger),
+		tunnelManager:       tunnelManager,
 		proxyServer:         proxy.NewServer(logger),
 		discoveryManager:    mdns.NewDiscovery(logger),
 		jellyfinBroadcaster: jellyfinBroadcaster,

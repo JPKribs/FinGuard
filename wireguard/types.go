@@ -17,7 +17,9 @@ import (
 // MARK: Manager
 type Manager struct {
 	logger        *internal.Logger
-	tunnels       map[string]*Tunnel
+	tunnels       map[string]TunnelInterface
+	mode          TunnelMode
+	paths         config.WireGuardPaths
 	resolver      *AsyncResolver
 	mu            sync.RWMutex
 	running       int64
@@ -26,6 +28,16 @@ type Manager struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+}
+
+type TunnelMode string
+
+// MARK: TunnelInterface
+type TunnelInterface interface {
+	Start(ctx context.Context) error
+	Stop(ctx context.Context) error
+	Update(ctx context.Context, cfg config.TunnelConfig) error
+	Status(ctx context.Context) TunnelStatus
 }
 
 // MARK: TunnelManager
@@ -75,6 +87,21 @@ type Tunnel struct {
 	reconnectCount   map[string]int
 	endpointCache    map[string]string
 	bufferPool       *PacketBufferPool
+}
+
+type WgQuickTunnel struct {
+	name           string
+	config         config.TunnelConfig
+	paths          config.WireGuardPaths
+	logger         *internal.Logger
+	resolver       *AsyncResolver
+	running        int64
+	lastError      error
+	mu             sync.RWMutex
+	configPath     string
+	stopMonitoring chan struct{}
+	reconnectCount map[string]int
+	endpointCache  map[string]string
 }
 
 // MARK: AsyncResolver
