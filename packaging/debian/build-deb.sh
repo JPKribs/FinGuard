@@ -5,18 +5,20 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PACKAGE_NAME="finguard"
 
+# MARK: Detect architecture
 case "$(uname -m)" in
-    x86_64) GO_ARCH="amd64"; DEB_ARCH="amd64" ;;
+    x86_64)   GO_ARCH="amd64"; DEB_ARCH="amd64" ;;
     aarch64|arm64) GO_ARCH="arm64"; DEB_ARCH="arm64" ;;
-    armv7l) GO_ARCH="arm"; DEB_ARCH="armhf" ;;
-    i386|i686) GO_ARCH="386"; DEB_ARCH="i386" ;;
+    armv7l)   GO_ARCH="arm";   DEB_ARCH="armhf" ;;
+    i386|i686) GO_ARCH="386";  DEB_ARCH="i386" ;;
     *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;;
 esac
 
 echo "Detected architecture: $(uname -m) -> Go: $GO_ARCH, Debian: $DEB_ARCH"
 
-VERSION="1.3.7"
+VERSION="1.3.9"
 GO_VERSION="1.24.2"
+
 echo "Building FinGuard Debian package..."
 echo "Project root: $PROJECT_ROOT"
 echo "Version: $VERSION"
@@ -41,31 +43,31 @@ mkdir -p "$DEB_DIR/DEBIAN"
 
 # MARK: Check/Install Go
 echo "Checking Go installation..."
-if ! command -v go &> /dev/null || [[ "$(go version | cut -d' ' -f3)" != "go$GO_VERSION" ]]; then
+if ! command -v go &>/dev/null || [[ "$(go version | cut -d' ' -f3)" != "go$GO_VERSION" ]]; then
     echo "Installing Go $GO_VERSION for $DEB_ARCH..."
-    
+
     case "$DEB_ARCH" in
         amd64) GO_TAR_ARCH="amd64" ;;
         arm64) GO_TAR_ARCH="arm64" ;;
         armhf) GO_TAR_ARCH="armv6l" ;;
-        i386) GO_TAR_ARCH="386" ;;
+        i386)  GO_TAR_ARCH="386" ;;
         *) echo "Unsupported Go architecture for $DEB_ARCH" >&2; exit 1 ;;
     esac
-    
+
     GO_TAR="go${GO_VERSION}.linux-${GO_TAR_ARCH}.tar.gz"
     GO_URL="https://golang.org/dl/${GO_TAR}"
-    
+
     echo "Downloading Go from: $GO_URL"
     if ! wget --timeout=30 -q "$GO_URL" -O "/tmp/${GO_TAR}"; then
         echo "Failed to download Go. Check internet connection and Go version availability."
         exit 1
     fi
-    
+
     echo "Installing Go to /usr/local/go..."
     sudo rm -rf /usr/local/go
     sudo tar -C /usr/local -xzf "/tmp/${GO_TAR}"
     rm "/tmp/${GO_TAR}"
-    
+
     export PATH="/usr/local/go/bin:$PATH"
     echo "Go installed: $(go version)"
 else
@@ -77,7 +79,10 @@ echo "Building FinGuard binary with version $VERSION for $GO_ARCH..."
 cd "$PROJECT_ROOT"
 mkdir -p bin
 export PATH="/usr/local/go/bin:$PATH"
-if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build -ldflags "-X github.com/JPKribs/FinGuard/version.Version=$VERSION" -o "bin/finguard" ./cmd/finguard; then
+
+if ! CGO_ENABLED=0 GOOS=linux GOARCH="$GO_ARCH" go build \
+    -ldflags "-X github.com/JPKribs/FinGuard/version.Version=$VERSION" \
+    -o "bin/finguard" ./cmd/finguard; then
     echo "Build failed. Check Go installation and project compilation."
     exit 1
 fi
@@ -125,6 +130,7 @@ chmod 640 "$DEB_DIR/etc/finguard/config.yaml"
 echo "Creating default config files..."
 echo "services: []" > "$DEB_DIR/etc/finguard/services.yaml"
 echo "tunnels: []" > "$DEB_DIR/etc/finguard/wireguard.yaml"
+
 cat > "$DEB_DIR/etc/finguard/update.yaml" << 'EOF'
 enabled: true
 schedule: "0 3 * * *"
@@ -140,7 +146,7 @@ echo "Creating backup directories..."
 mkdir -p "$DEB_DIR/etc/finguard/backups"
 
 # MARK: Copy systemd service
-echo "Creating systemd service that uses the correct binary path..."
+echo "Creating systemd service..."
 cp "$SCRIPT_DIR/finguard.service" "$DEB_DIR/etc/systemd/system/finguard.service"
 chmod 644 "$DEB_DIR/etc/systemd/system/finguard.service"
 
@@ -152,7 +158,6 @@ if [ -f "$SCRIPT_DIR/avahi.service" ]; then
 else
     echo "WARNING: avahi.service not found in $SCRIPT_DIR"
 fi
-
 
 # MARK: Copy Debian control file
 echo "Copying Debian control file..."

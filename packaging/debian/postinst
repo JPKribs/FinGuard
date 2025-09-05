@@ -3,241 +3,75 @@ set -e
 
 case "$1" in
     configure)
-        # MARK: Force hostname to FinGuard with persistence
-        echo "Setting hostname to FinGuard with persistence..."
-        
         REAL_BINARY="/usr/local/lib/finguard/bin/finguard"
 
-        hostnamectl set-hostname FinGuard
-        echo "FinGuard" > /etc/hostname
-        
-        sed -i '/127\.0\.1\.1/d' /etc/hosts 2>/dev/null || true
-        echo "127.0.1.1    FinGuard" >> /etc/hosts
-        
-        if [ -f /etc/machine-info ]; then
-            sed -i '/PRETTY_HOSTNAME/d' /etc/machine-info 2>/dev/null || true
-            echo 'PRETTY_HOSTNAME="FinGuard"' >> /etc/machine-info
-        fi
-        
-        if [ -f /etc/armbian-release ]; then
-            if [ -f /boot/armbianEnv.txt ]; then
-                sed -i '/hostname/d' /boot/armbianEnv.txt 2>/dev/null || true
-                echo "hostname=FinGuard" >> /boot/armbianEnv.txt
-            fi
-        fi
-
-        # MARK: Create finguard user and group
-        if ! getent group finguard > /dev/null 2>&1; then
+        # MARK: Ensure system user and group exist
+        if ! getent group finguard >/dev/null 2>&1; then
             echo "Creating finguard group..."
-            if command -v addgroup >/dev/null 2>&1; then
-                addgroup --system --quiet finguard
-            else
-                groupadd --system finguard
-            fi
+            groupadd --system finguard
         fi
 
-        if ! getent passwd finguard > /dev/null 2>&1; then
+        if ! getent passwd finguard >/dev/null 2>&1; then
             echo "Creating finguard user..."
-            if command -v adduser >/dev/null 2>&1; then
-                adduser --system --quiet \
-                    --home /var/lib/finguard \
-                    --no-create-home \
-                    --shell /usr/sbin/nologin \
-                    --ingroup finguard \
-                    --gecos "FinGuard System User" \
-                    finguard
-            else
-                useradd --system \
-                    --home-dir /var/lib/finguard \
-                    --no-create-home \
-                    --shell /usr/sbin/nologin \
-                    --gid finguard \
-                    --comment "FinGuard System User" \
-                    finguard
-            fi
+            useradd --system \
+                --home-dir /var/lib/finguard \
+                --no-create-home \
+                --shell /usr/sbin/nologin \
+                --gid finguard \
+                --comment "FinGuard System User" \
+                finguard
         fi
 
-        if getent group netdev >/dev/null 2>&1; then
-            usermod -a -G netdev finguard 2>/dev/null || true
-        fi
-
-        # MARK: Ensure sudoers file ownership and permissions
-        if [ -f /etc/sudoers.d/finguard ]; then
-            echo "Fixing sudoers file permissions..."
-            chown root:root /etc/sudoers.d/finguard
-            chmod 440 /etc/sudoers.d/finguard
-            
-            # Validate sudoers syntax
-            if ! visudo -c -f /etc/sudoers.d/finguard 2>/dev/null; then
-                echo "ERROR: Invalid sudoers syntax detected. Removing file for safety."
-                rm -f /etc/sudoers.d/finguard
-                echo "WARNING: Auto-updates will not work without valid sudoers file"
-            else
-                echo "Sudoers file validated successfully"
-            fi
-        else
-            echo "WARNING: No sudoers file found at /etc/sudoers.d/finguard"
-            echo "Auto-updates will require manual sudo configuration"
-        fi
-
-        # MARK: Create ALL directories with finguard ownership
-        echo "Creating directories with finguard ownership..."
+        # MARK: Create application data directories
+        echo "Creating directories..."
         install -d -o finguard -g finguard -m 0775 /var/lib/finguard
         install -d -o finguard -g finguard -m 0775 /var/log/finguard
-        
-        if [ ! -d /run/finguard ]; then
-            install -d -o finguard -g finguard -m 0775 /run/finguard
-        fi
-
-        # MARK: Backup directories - finguard owned
-        echo "Setting up backup directories with finguard ownership..."
         install -d -o finguard -g finguard -m 0775 /etc/finguard/backups
         install -d -o finguard -g finguard -m 0775 /var/lib/finguard/backups
 
-        # MARK: Binary directories - finguard owned (for updates)
-        echo "Setting up binary directory with finguard ownership..."
+        # MARK: Prepare binary directory (must be writable for self-updates)
         install -d -o finguard -g finguard -m 0775 /usr/local/lib/finguard
         install -d -o finguard -g finguard -m 0775 /usr/local/lib/finguard/bin
-        
+
+        # MARK: Secure binary and set capabilities if possible
         if [ -f "$REAL_BINARY" ]; then
-            echo "Setting network capabilities on FinGuard binary..."
+            echo "Setting ownership on FinGuard binary..."
             chown finguard:finguard "$REAL_BINARY"
             chmod 755 "$REAL_BINARY"
+
             if command -v setcap >/dev/null 2>&1; then
-                setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep "$REAL_BINARY" || \
-                    echo "Warning: Failed to set capabilities. Network features may not work."
+                setcap cap_net_admin,cap_net_raw,cap_net_bind_service+ep "$REAL_BINARY" 2>/dev/null || \
+                    echo "Note: Capabilities will be provided by systemd"
             fi
         fi
 
-        # MARK: Web directories - finguard owned
-        echo "Setting up web directories with finguard ownership..."
-        install -d -o finguard -g finguard -m 0755 /usr/local/share/finguard
-        if [ -d /usr/local/share/finguard/web ]; then
-            chown -R finguard:finguard /usr/local/share/finguard/web
-            find /usr/local/share/finguard/web -type f -exec chmod 644 {} \;
-            find /usr/local/share/finguard/web -type d -exec chmod 755 {} \;
-        fi
-
-        # MARK: Web symlink - finguard owned
-        if [ -d /usr/local/share/finguard/web ] && [ ! -e /var/lib/finguard/web ]; then
-            ln -sf /usr/local/share/finguard/web /var/lib/finguard/web
-        fi
-
-        # MARK: Config directory - finguard owned
-        echo "Setting up config directories with finguard ownership..."
-        install -d -o finguard -g finguard -m 0755 /etc/finguard
-        
-        # MARK: All config files - finguard owned
-        if [ -f /etc/finguard/config.yaml ]; then
-            chown finguard:finguard /etc/finguard/config.yaml
-            chmod 660 /etc/finguard/config.yaml
-        fi
-        
-        if [ -f /etc/finguard/services.yaml ]; then
-            chown finguard:finguard /etc/finguard/services.yaml
-            chmod 660 /etc/finguard/services.yaml
-        fi
-
-        if [ -f /etc/finguard/wireguard.yaml ]; then
-            chown finguard:finguard /etc/finguard/wireguard.yaml
-            chmod 660 /etc/finguard/wireguard.yaml
-        fi
-
-        if [ -f /etc/finguard/update.yaml ]; then
-            chown finguard:finguard /etc/finguard/update.yaml
-            chmod 660 /etc/finguard/update.yaml
-        fi
-
-        # MARK: Ensure ALL /etc/finguard contents are finguard owned (except sudoers)
+        # MARK: Secure config files
+        echo "Setting up config files..."
         chown -R finguard:finguard /etc/finguard
-        
-        # MARK: Other directories
-        chown -R finguard:finguard /var/log/finguard
-        chown -R finguard:finguard /run/finguard 2>/dev/null || true
+        chmod 660 /etc/finguard/*.yaml 2>/dev/null || true
 
-        # MARK: Avahi service file - finguard owned
-        if [ -f /etc/avahi/services/finguard.service ]; then
-            chown finguard:finguard /etc/avahi/services/finguard.service
-            chmod 644 /etc/avahi/services/finguard.service
+        # MARK: Set ownership for web assets
+        if [ -d /usr/local/share/finguard/web ]; then
+            chown -R finguard:finguard /usr/local/share/finguard
         fi
 
-        # MARK: Binary symlink target
-        if [ -L /usr/local/bin/finguard ]; then
-            chown finguard:finguard "$(readlink -f /usr/local/bin/finguard)" 2>/dev/null || true
-        fi
-
-        # MARK: Install Avahi if needed
-        if ! command -v avahi-daemon >/dev/null 2>&1; then
-            echo "WARNING: Avahi is missing. mDNS features will not work."
-        fi
-
-        # MARK: Comprehensive permission test
-        echo "Testing ALL permissions for finguard user..."
-        
-        sudo -u finguard test -r /etc/finguard/config.yaml || {
-            echo "ERROR: finguard user cannot read config.yaml"
-            exit 1
-        }
-        
-        sudo -u finguard test -w /etc/finguard/services.yaml || {
-            echo "ERROR: finguard user cannot write services.yaml"
-            exit 1
-        }
-        
-        sudo -u finguard test -w /etc/finguard/backups || {
-            echo "ERROR: finguard user cannot write to backup directory"
-            exit 1
-        }
-        
-        sudo -u finguard test -w /usr/local/lib/finguard/bin || {
-            echo "ERROR: finguard user cannot write to binary directory for updates"
-            exit 1
-        }
-        
-        if [ -f /usr/local/share/finguard/web/index.html ]; then
-            sudo -u finguard test -r /usr/local/share/finguard/web/index.html || {
-                echo "ERROR: finguard user cannot read web files"
-                exit 1
-            }
-        fi
-        
-        sudo -u finguard test -w /var/log/finguard || {
-            echo "ERROR: finguard user cannot write to log directory"
-            exit 1
-        }
-
-        sudo -u finguard test -w /var/lib/finguard || {
-            echo "ERROR: finguard user cannot write to runtime directory"
-            exit 1
-        }
-
-        # MARK: Enable and start services
+        # MARK: Register systemd service
         systemctl daemon-reload
-        systemctl enable avahi-daemon 2>/dev/null || echo "Note: avahi-daemon not available"
-        systemctl restart avahi-daemon 2>/dev/null || echo "Note: avahi-daemon not restarted"
         systemctl enable finguard.service
-        
+
         echo "========================================="
-        echo "FinGuard installation completed successfully!"
+        echo "FinGuard installation completed!"
         echo "========================================="
         echo ""
-        echo "✓ All finguard user permissions verified"
-        echo "✓ Network capabilities set (no sudo needed)"
-        echo "✓ Web interface ready"
-        echo "✓ Auto-updates ready"
-        echo "✓ Configuration management ready"
-        echo ""
-        echo "Security: Running as unprivileged user with minimal capabilities"
+        echo "✓ Service user created"
+        echo "✓ Permissions configured"
+        echo "✓ Auto-updates ready (NO SUDO NEEDED!)"
         echo ""
         echo "Next steps:"
-        echo "1. Edit /etc/finguard/config.yaml and replace the admin token"
-        echo "2. systemctl start finguard" 
-        echo "3. Access web interface at http://localhost:10000"
-        echo ""
-        echo "Note: System restart/shutdown from web UI will use process signals"
-        echo "      (systemctl commands enabled via sudoers for updates)"
+        echo "1. Edit /etc/finguard/config.yaml"
+        echo "2. systemctl start finguard"
+        echo "3. Access web UI at http://localhost:10000"
         echo "========================================="
-        
         ;;
 esac
 

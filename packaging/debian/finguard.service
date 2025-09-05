@@ -11,12 +11,15 @@ User=finguard
 Group=finguard
 ExecStart=/usr/local/lib/finguard/bin/finguard --config /etc/finguard/config.yaml
 ExecReload=/bin/kill -HUP $MAINPID
+
 Restart=always
 RestartSec=10
+RestartPreventExitStatus=1 2 3 4 5 6 7 8 9 10
+
 WorkingDirectory=/var/lib/finguard
 
-CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
-AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SETFCAP
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_RAW CAP_NET_BIND_SERVICE CAP_SETFCAP
 
 StandardOutput=journal
 StandardError=journal
