@@ -247,6 +247,14 @@ main() {
         exit 1
     fi
     
+    local hostname="${1:-FinGuard}"
+    
+    if [ "$#" -eq 0 ]; then
+        echo "No hostname provided, using default: FinGuard"
+        echo "Usage: $0 [hostname] - next time you can specify a custom hostname"
+        echo ""
+    fi
+    
     echo "=== Backing up current configuration ==="
     backup_sources_list
     
@@ -272,7 +280,10 @@ main() {
     set_timezone
     
     echo "=== Setting hostname ==="
-    set_hostname
+    set_hostname "$hostname"
+    
+    echo "=== Installing WireGuard ==="
+    install_wireguard
     
     echo "=== Creating update script ==="
     create_update_script
@@ -286,7 +297,7 @@ main() {
     echo "- eMMC longevity optimizations applied (swap disabled, minimal logging, tmpfs)"
     echo "- Locale set to en_US.UTF-8"
     echo "- Timezone set to Mountain Time"
-    echo "- Hostname set to FinGuard"
+    echo "- Hostname set to $hostname"
     echo "- WireGuard installed and ready"
     echo "- Update script created at /usr/local/bin/system-update.sh"
     echo "- Automated updates scheduled for Wednesdays at 3 AM"
